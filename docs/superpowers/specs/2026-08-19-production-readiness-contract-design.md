@@ -4,7 +4,7 @@
 
 Revise `docs/SPEC.md` so it serves as an enforceable production contract for the initial officially hosted, multi-tenant GlyphQuire SaaS. The revision will centralize release-blocking P0 requirements and post-launch P1 improvements in a new Production Readiness Contract, while adding only the necessary normative details and cross-references to existing subject chapters.
 
-The initial production workload is at most five concurrent users. P0 therefore emphasizes data integrity, tenant isolation, recoverability, secure implementation evidence, and repeatable release operations rather than high availability or large-scale capacity.
+The typical initial production workload is one active user working on a personal notebook, with at most five concurrent users as a burst ceiling. P0 therefore emphasizes data integrity, tenant isolation, recoverability, secure implementation evidence, and repeatable release operations rather than high availability or large-scale capacity.
 
 ## Priority Semantics
 
@@ -53,7 +53,7 @@ glyphquire-spec: 1
 
 Versionless input is handled only through an explicit legacy-import policy. The system must not guess a version and perform a destructive migration. Import, restore, and document migration require `baseRevision`; conflict returns `409`. A successful operation creates a new monotonically increasing revision with actor, timestamp, and reason. It never rewinds or overwrites history. Failure preserves the original Markdown.
 
-Search is eventually consistent. Under the P0 workload, a saved revision must normally become searchable within 60 seconds. Failed jobs retry, then enter a dead-letter state and alert an operator. Results must exclude unauthorized, deleted, and cross-workspace content. Operators can rebuild one note or one workspace.
+Search is eventually consistent. Under the approved P0 benchmark environment and workload, every successfully saved revision must become searchable within 60 seconds. Outside that profile this is an engineering target, not an external SLA. Failed jobs retry, then enter a dead-letter state and alert an operator. Results must exclude unauthorized, deleted, and cross-workspace content. Operators can rebuild one note or one workspace.
 
 Declarative Custom Block definitions are workspace-scoped, immutable after publication, and versioned. Disabling or deleting a definition leaves source Markdown round-trippable and displays an unsupported placeholder. Executable third-party blocks are not P0.
 
@@ -69,7 +69,7 @@ P0 editing uses optimistic concurrency rather than CRDT. A `409` must not overwr
 - WHATWG HTML and W3C Content Security Policy specifications for iframe sandboxing, `postMessage`, and CSP; and
 - SLSA 1.2 Build Level 1 for release provenance.
 
-Referenced versions are fixed until explicitly reviewed. A security compliance matrix records each relevant requirement as applicable, implemented with evidence, or excepted. An exception records rationale, risk, compensating control, and approver. Release evidence includes applicable automated tests and scans plus required manual verification. GlyphQuire-specific trust boundaries—workspace isolation, sandbox origin, untrusted Markdown and UGC, and executable runtime semantics—remain directly specified in `SPEC.md`.
+Referenced versions are fixed until explicitly reviewed. Versioned standards use their exact version; living documents use a direct official URL plus a review date and upstream repository commit. A security compliance matrix records each relevant requirement as applicable, implemented with evidence, or excepted. An exception records rationale, risk, compensating control, and approver. Release evidence includes applicable automated tests and scans plus required manual verification. GlyphQuire-specific trust boundaries—workspace isolation, sandbox origin, untrusted Markdown and UGC, and executable runtime semantics—remain directly specified in `SPEC.md`.
 
 ## Recoverability and Data Lifecycle
 
@@ -85,9 +85,15 @@ A production release is identified by a Git tag, immutable Docker image digest, 
 
 ## Performance and Operations Acceptance
 
-Release testing uses five concurrent users. A 100 KB Markdown document must remain interactively usable; a 1 MB document must open, save, and export. In the representative test environment, ordinary API requests have p95 latency below 500 ms and autosave server responses below one second. A 30-minute workload must not accumulate errors or an unbounded queue backlog. Parser work must not cause prolonged UI-thread blocking. These are release gates, not external SLAs.
+Release benchmarks run on Linux x86-64 with 4 vCPU and 8 GB RAM. Docker Compose runs API, Worker, PostgreSQL, and Object Storage on that host; clients use the same test network. Test data contains five workspaces with 1,000 notes each. Reports record CPU, RAM, image digest, data volume, and test version. This profile makes results reproducible and does not prescribe the production topology.
 
-P0 operations include structured logs, request/job correlation identifiers, error tracking, health and readiness checks, and notifications for sustained API failure, backup failure, dead-letter jobs, and database or disk capacity. The repository provides deploy, rollback, restore, and queue-recovery runbooks. Formal on-call, burn-rate alerting, and distributed tracing are P1.
+The common case measures one active user; the stress case uses five concurrent users. For a 100 KB document, input-to-render latency is p95 below 100 ms and Visual/Source mode switching is p95 below one second. A 1 MB document opens, saves, and exports with p95 below five seconds for each operation. Continuous typing produces no main-thread task longer than 200 ms. Full parse/validation above 100 KB runs in a Web Worker or uses interruptible processing.
+
+The 30-minute stress profile has every user continuously edit one 100 KB note, autosave every two seconds, search every ten seconds, and upload one 5 MB asset every five minutes. The run permits no data loss, revision regression, unexpected `5xx`, or dead-letter job. After traffic stops, the search/index queue drains within 60 seconds. Every successful autosave revision must be readable through the API and match its expected content hash.
+
+Latency is computed separately for `GET note`, `PUT autosave`, and `GET search`, with at least 500 samples per route after a two-minute warm-up. Reports include p50, p95, and p99. `GET note` and `GET search` require p95 below 500 ms; `PUT autosave` requires p95 below one second. A timeout, unexpected `5xx`, or data-integrity failure fails the gate regardless of percentiles. These are release gates, not external SLAs.
+
+P0 operations include structured logs, request/job correlation identifiers, error tracking, and health and readiness checks. Notifications fire after three consecutive health/readiness failures or five minutes of continuous failure; immediately for any backup failure, dead-letter job, or oldest queue job above five minutes; at 80% database/disk use as warning and 90% as critical. Production notifications reach the configured operator channel within five minutes after a condition is met and send a recovery notification when cleared. The repository provides deploy, rollback, restore, and queue-recovery runbooks. Formal on-call, burn-rate alerting, and distributed tracing are P1.
 
 ## API, Browser, and Accessibility Contract
 
