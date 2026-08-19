@@ -94,7 +94,7 @@ Keep workspace authorization enforcement in `docs/SPEC.md`; this file owns only 
 
 Add `glyphquire-spec: 1` frontmatter to the canonical Example Document in §53. Update parser/serializer conformance and required fixture categories so every canonical valid-document fixture includes the marker. Versionless examples and fixtures must be explicitly labeled `legacy` or `invalid`; they must never appear as canonical valid documents.
 
-Require conformance tests to cover a missing marker, a non-positive/non-integer marker, an unsupported future marker, and a database/Markdown version mismatch.
+Require parser conformance and fixture categories to state that canonical valid documents include the marker. Define stable negative fixture category IDs: `missing-version-marker`, `invalid-version-non-positive`, `invalid-version-non-integer`, `unsupported-future-version`, and `metadata-version-mismatch`.
 
 - [ ] **Step 5: Verify the Markdown-format contract**
 
@@ -102,11 +102,14 @@ Run:
 
 ```bash
 rg -n "glyphquire-spec|legacy input|MUST NOT guess|published definition version|unsupported placeholder|Cross-workspace|outside P0|unsupported future|version mismatch" docs/MARKDOWN_SPEC.md
-rg -n "Markdown itself does not require visible frontmatter|Version comes from note metadata/database/import context" docs/MARKDOWN_SPEC.md
+! rg -n "Markdown itself does not require visible frontmatter|Version comes from note metadata/database/import context" docs/MARKDOWN_SPEC.md
+rg -n -U '^## 53\. Example Document\n\n````md\n---\nglyphquire-spec: 1\n---' docs/MARKDOWN_SPEC.md
+rg -n -U '^## 55\. Parser Conformance[\s\S]{0,3000}canonical valid documents[\s\S]{0,300}glyphquire-spec' docs/MARKDOWN_SPEC.md
+rg -n -U '^## 59\. Required Fixture Categories[\s\S]{0,3000}missing-version-marker[\s\S]{0,300}invalid-version-non-positive[\s\S]{0,300}invalid-version-non-integer[\s\S]{0,300}unsupported-future-version[\s\S]{0,300}metadata-version-mismatch' docs/MARKDOWN_SPEC.md
 git diff --check -- docs/MARKDOWN_SPEC.md
 ```
 
-Expected: the positive search finds every required phrase; the superseded-rule search returns no matches; the §53 canonical example begins with `glyphquire-spec: 1`; `git diff --check` exits 0.
+Expected: the positive and three section-scoped searches succeed; the superseded-rule search succeeds because it finds no matches; `git diff --check` exits 0.
 
 - [ ] **Step 6: Commit the format contract**
 
@@ -209,8 +212,8 @@ Run:
 
 ```bash
 rg -n "parse\(markdown: string\)|importLegacy|deny-by-default|exactly one workspace|PostgreSQL transaction|NoteOperationIdentity|older revision|REVISION_CONFLICT|60 seconds|rebuild one|cursor pagination|idempotency keys|local draft" docs/SPEC.md
-rg -n "parse\(markdown: string, version\?" docs/SPEC.md
-rg -n "所有 mutation API 必須" docs/SPEC.md
+! rg -n "parse\(markdown: string, version\?" docs/SPEC.md
+! rg -n "所有 mutation API 必須" docs/SPEC.md
 git diff --check -- docs/SPEC.md
 ```
 
@@ -246,7 +249,7 @@ git commit -m "docs: close production data invariants"
 In §§15 and 32, retain GlyphQuire-specific trust boundaries and add direct links to:
 
 ```text
-https://owasp.org/www-project-application-security-verification-standard/ — OWASP ASVS 5.0.0 Level 2
+https://github.com/OWASP/ASVS/releases/tag/v5.0.0_release — OWASP ASVS 5.0.0 Level 2
 https://pages.nist.gov/800-63-4/sp800-63b/ — NIST SP 800-63B-4
 https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
 https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
@@ -289,7 +292,17 @@ Define a release by Git tag, immutable Docker image digest, database migration v
 
 In §40, define the benchmark environment as Linux x86-64, 4 vCPU, 8 GB RAM, with API, Worker, PostgreSQL, and Object Storage under Docker Compose on one host; clients use the same test network. Seed five workspaces with 1,000 notes each and record CPU, RAM, image digest, data volume, and test version.
 
-Define the common case as one active user and the burst case as five. Require 100 KB input-to-render p95 below 100 ms, Visual/Source switch p95 below one second, and 1 MB open/save/export p95 below five seconds per operation. Continuous typing allows no main-thread task over 200 ms. Full parse/validation above 100 KB uses a Web Worker or interruptible processing.
+Define the common case as one active user and the burst case as five. Instrument UI boundaries with Playwright performance marks:
+
+```text
+100 KB input: discard 100 warm-ups; measure 1,000 samples from InputEvent dispatch through the next animation frame containing the rendered change; p95 < 100 ms.
+Visual/Source switch: discard 10 warm-ups; measure 100 samples from triggering action until the target editor accepts input; p95 < 1 second.
+1 MB open: discard 5 warm-ups; measure 100 samples from request dispatch until the editor accepts input; p95 < 5 seconds.
+1 MB save: discard 5 warm-ups; measure 100 samples from request dispatch until server acknowledgment and saved UI state; p95 < 5 seconds.
+1 MB export: discard 5 warm-ups; measure 100 samples from action until a downloadable blob is ready; p95 < 5 seconds.
+```
+
+Continuous typing allows no main-thread task over 200 ms. Full parse/validation above 100 KB uses a Web Worker or interruptible processing.
 
 Define the 30-minute burst workload: each user edits one 100 KB note, autosaves every two seconds, searches every ten seconds, and uploads one 5 MB asset every five minutes. Permit no data loss, revision regression, unexpected `5xx`, or dead-letter job. After traffic stops, the search/index queue drains within 60 seconds. Read back every successful autosave revision and verify the expected content hash.
 
@@ -297,7 +310,7 @@ Compute latency separately for `GET note`, `PUT autosave`, and `GET search`, usi
 
 - [ ] **Step 5: Set minimum observability and operational artifacts**
 
-In §§28–30, require structured logs, request/job correlation identifiers, error tracking, and health/readiness checks. Notify after three consecutive health/readiness failures or five continuous minutes; immediately for any backup failure, dead-letter job, or oldest queue job above five minutes; at 80% database/disk use as warning and 90% as critical. Deliver production notification to the configured operator channel within five minutes after a condition is met and send recovery notification when cleared. Require deploy, rollback, restore, and queue-recovery runbooks. Mark formal on-call, burn-rate alerts, and distributed tracing P1.
+In §§28–30, require structured logs, request/job correlation identifiers, error tracking, and health/readiness checks. Probe every 30 seconds with a five-second timeout. Alert after three consecutive failures or when failures reach 50% within five minutes; require three consecutive successes for recovery. Readiness failure stops new traffic and health failure invokes the restart policy. Notify immediately for any backup failure, dead-letter job, or oldest queue job above five minutes; at 80% database/disk use as warning and 90% as critical. Deliver production notification to the configured operator channel within five minutes after a condition is met and send recovery notification when cleared. Require deploy, rollback, restore, and queue-recovery runbooks. Mark formal on-call, burn-rate alerts, and distributed tracing P1.
 
 - [ ] **Step 6: Set browser and accessibility evidence**
 
@@ -308,8 +321,21 @@ In §§36.5 and 41, require the latest two stable Chrome, Firefox, Safari, and E
 Run:
 
 ```bash
-rg -n "ASVS 5.0.0|800-63B-4|SLSA 1.2|Reviewed: 2026-08-19|Upstream commit: [0-9a-f]{40}|compliance matrix|30-day|monthly full restore|24 hours|GitHub Actions|image digest|expand/contract|4 vCPU|500 samples|content hash|200 ms|three consecutive|80%|WCAG 2.2 AA|VoiceOver|NVDA" docs/SPEC.md
-rg -n "真正 production SLO|deploy migration.*deploy app|Password policy.*implementation" docs/SPEC.md
+rg -n "ASVS 5.0.0|800-63B-4|SLSA 1.2|Reviewed: 2026-08-19|Upstream commit: [0-9a-f]{40}|compliance matrix|30-day|monthly full restore|24 hours|GitHub Actions|image digest|expand/contract|4 vCPU|1,000 samples|500 samples|content hash|200 ms|every 30 seconds|50% within five minutes|80%|WCAG 2.2 AA|VoiceOver|NVDA" docs/SPEC.md
+test "$(rg -c 'Reviewed: 2026-08-19' docs/SPEC.md)" -eq 8
+test "$(rg -c 'Upstream commit: [0-9a-f]{40}' docs/SPEC.md)" -eq 8
+rg -F "https://github.com/OWASP/ASVS/releases/tag/v5.0.0_release" docs/SPEC.md
+rg -F "https://pages.nist.gov/800-63-4/sp800-63b/" docs/SPEC.md
+rg -F "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html" docs/SPEC.md
+rg -F "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html" docs/SPEC.md
+rg -F "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html" docs/SPEC.md
+rg -F "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html" docs/SPEC.md
+rg -F "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html" docs/SPEC.md
+rg -F "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html" docs/SPEC.md
+rg -F "https://html.spec.whatwg.org/" docs/SPEC.md
+rg -F "https://www.w3.org/TR/CSP3/" docs/SPEC.md
+rg -F "https://slsa.dev/spec/v1.2/" docs/SPEC.md
+! rg -n "真正 production SLO|deploy migration.*deploy app|Password policy.*implementation" docs/SPEC.md
 git diff --check -- docs/SPEC.md
 ```
 
@@ -385,7 +411,7 @@ rg -n '^## [0-9]+\.' docs/SPEC.md
 rg -n "Production Readiness Contract|Release blocker|Required evidence|not a delivery commitment|five concurrent|availability SLA|self-hosted production|multi-region|CRDT|executable third-party" docs/SPEC.md
 test "$(rg -c '^\| P0-[0-9]{2} \|' docs/SPEC.md)" -eq 14
 test "$(rg -c '^- P1-[0-9]{2}:' docs/SPEC.md)" -eq 12
-rg -n "Deployment target: Local-first / self-hosted|第一階段以本地部署與 self-hosted 為優先|第一版可完整 self-host|Local production/self-hosted 必須支援" docs/SPEC.md
+! rg -n "Deployment target: Local-first / self-hosted|第一階段以本地部署與 self-hosted 為優先|第一版可完整 self-host|Local production/self-hosted 必須支援" docs/SPEC.md
 git diff --check -- docs/SPEC.md docs/MARKDOWN_SPEC.md
 ```
 
@@ -416,7 +442,7 @@ git commit -m "docs: add production readiness contract"
 Run:
 
 ```bash
-rg -n "Markdown itself does not require visible frontmatter|所有 mutation API 必須|真正 production SLO 應|Password policy 與 account enumeration 防護由 security implementation 詳訂|deploy migration.*deploy app|Deployment target: Local-first / self-hosted|第一階段以本地部署與 self-hosted 為優先|第一版可完整 self-host|Local production/self-hosted 必須支援|parse\(markdown: string, version\?" docs/SPEC.md docs/MARKDOWN_SPEC.md
+! rg -n "Markdown itself does not require visible frontmatter|所有 mutation API 必須|真正 production SLO 應|Password policy 與 account enumeration 防護由 security implementation 詳訂|deploy migration.*deploy app|Deployment target: Local-first / self-hosted|第一階段以本地部署與 self-hosted 為優先|第一版可完整 self-host|Local production/self-hosted 必須支援|parse\(markdown: string, version\?" docs/SPEC.md docs/MARKDOWN_SPEC.md
 ```
 
 Expected: no matches.
@@ -461,7 +487,7 @@ Reject the result if a Contract row contains full duplicated normative prose ins
 Run:
 
 ```bash
-curl -L --fail --silent --show-error --output /dev/null https://owasp.org/www-project-application-security-verification-standard/
+curl -L --fail --silent --show-error --output /dev/null https://github.com/OWASP/ASVS/releases/tag/v5.0.0_release
 curl -L --fail --silent --show-error --output /dev/null https://pages.nist.gov/800-63-4/sp800-63b/
 curl -L --fail --silent --show-error --output /dev/null https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
 curl -L --fail --silent --show-error --output /dev/null https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
@@ -472,6 +498,8 @@ curl -L --fail --silent --show-error --output /dev/null https://cheatsheetseries
 curl -L --fail --silent --show-error --output /dev/null https://html.spec.whatwg.org/
 curl -L --fail --silent --show-error --output /dev/null https://www.w3.org/TR/CSP3/
 curl -L --fail --silent --show-error --output /dev/null https://slsa.dev/spec/v1.2/
+test "$(rg -c 'Reviewed: 2026-08-19' docs/SPEC.md)" -eq 8
+test "$(rg -c 'Upstream commit: [0-9a-f]{40}' docs/SPEC.md)" -eq 8
 ```
 
 Expected: all commands exit 0.
