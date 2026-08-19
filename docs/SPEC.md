@@ -1,7 +1,7 @@
 # SPEC.md — Extensible Markdown Notes Platform
 
-> Status: Draft v0.2 — ADR decisions incorporated  
-> Deployment target: Local-first / self-hosted, Cloudflare-ready  
+> Status: Draft v0.3 — Production Readiness Contract added
+> Deployment target: Officially hosted multi-tenant SaaS; Cloudflare-ready
 > Primary language: TypeScript  
 > Last updated: 2026-08-19
 
@@ -9,7 +9,9 @@
 
 本文件定義一套以 Markdown 為 canonical document format 的可擴充網頁筆記平台。產品目標是讓一般使用者以接近 Obsidian 的 Markdown 與少量延伸語法建立具有高度視覺風格、互動效果與可組合元件的筆記，同時讓進階使用者可在受控邊界內建立自訂 block、theme 與互動 runtime。
 
-系統第一階段以本地部署與 self-hosted 為優先，架構不得綁死 Node.js-only API、單一 object storage、單一 job queue 或單一部署供應商。後續預計可將 frontend/API/worker 等服務遷移至 Cloudflare Workers 生態，並以 Hyperdrive 連接 PostgreSQL、R2 作為 object storage、Cloudflare Queues 作為背景任務佇列。
+P0 production target 為官方託管的多租戶 SaaS。典型工作負載為一位活躍使用者的個人筆記本，突發上限為五位同時使用者。架構不得綁死 Node.js-only API、單一 object storage、單一 job queue 或單一部署供應商。Docker Compose 為支援的本地開發與全端預覽路徑。Self-hosted production support 為 P1，非 P0 release promise。後續預計可將 frontend/API/worker 等服務遷移至 Cloudflare Workers 生態，並以 Hyperdrive 連接 PostgreSQL、R2 作為 object storage、Cloudflare Queues 作為背景任務佇列。Cloudflare portability 維持為架構約束，非 P0 必要 runtime。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
 
 ---
 
@@ -40,7 +42,7 @@
 7. Theme 與文件內容解耦。
 8. 進階使用者可定義受控的 custom components / themes。
 9. JavaScript、p5.js、Canvas 等互動內容必須執行於隔離 runtime，不得直接執行於主應用程式 origin。
-10. 第一版可完整 self-host，且核心 domain/service layer 應可搬遷到 Cloudflare Workers。
+10. P0 production 為官方託管的多租戶 SaaS；核心 domain/service layer 應可搬遷到 Cloudflare Workers。Self-hosted production support 為 P1。
 
 ### 2.2 非目標
 
@@ -309,13 +311,16 @@ Browser
 
 ```ts
 export interface DocumentEngine {
-  parse(markdown: string, version?: number): ParseResult;
+  parse(markdown: string): ParseResult;
+  importLegacy(markdown: string, assumedVersion: number): ParseResult;
   validate(document: DocumentNode): ValidationResult;
   serialize(document: DocumentNode): string;
   migrate(markdown: string, from: number, to: number): MigrationResult;
   extractText(document: DocumentNode): string;
 }
 ```
+
+`parse` MUST read `glyphquire-spec` from canonical Markdown。Only the explicitly named `importLegacy` accepts a caller-selected version；its result and diagnostics MUST preserve the original input。Format rules：see `MARKDOWN_SPEC.md` §47。
 
 ### 7.3 Round-trip invariant
 
@@ -540,6 +545,15 @@ interface EditorState {
 }
 ```
 
+Conflict recovery：
+
+- `409 REVISION_CONFLICT` MUST NOT overwrite server content。
+- Client MUST retain the unsent local draft across browser reload or crash。
+- UI MUST support comparison、copying 或 manual merge before resubmission。
+- Automatic three-way merge、CRDT 與 real-time collaboration are outside P0。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
+
 ---
 
 ## 11. Component System
@@ -576,6 +590,8 @@ interface ComponentDefinition<TProps> {
 - canvas
 
 ### 11.3 Custom Block API
+
+Detailed requirement: see `MARKDOWN_SPEC.md` §29 for definition lifecycle and unsupported placeholders。Detailed requirement: see §16 for workspace-scoped resolution。
 
 v1 提供 built-in block presets，並允許使用者建立 declarative custom blocks。
 
@@ -818,7 +834,7 @@ v1 支援：
 - password reset
 - optional social login
 
-Password policy 與 account enumeration 防護由 security implementation 詳訂。
+Detailed requirement: see §32 Security Requirements。
 
 ---
 
@@ -847,7 +863,7 @@ public
 
 ### 16.3 Policy
 
-所有 mutation API 必須 server-side authorization。
+Authorization is deny-by-default。所有 read、list、search、mutation、restore、asset resolution、share access 與 worker execution MUST perform server-side authorization。
 
 禁止依賴 frontend hidden buttons 作為安全控制。
 
@@ -858,6 +874,15 @@ authorize(actor, action, resource)
 ```
 
 作為統一 policy entry point。
+
+Tenant invariants：
+
+- Every note、asset、theme、share link、search record 與 job MUST belong to exactly one workspace。
+- Every server and worker operation MUST derive workspace scope from trusted server-side context and apply it to the resource query。
+- Resource owner MUST be a current workspace member；ownership MUST be transferred before that member leaves。
+- Cross-workspace asset and Custom Block references MUST be rejected。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
 
 ---
 
@@ -891,6 +916,8 @@ audit_logs
 
 ### 17.2 Notes
 
+Detailed requirement: see §16 for workspace ownership and tenant isolation。
+
 ```ts
 interface NoteRow {
   id: string;
@@ -914,6 +941,8 @@ interface NoteRow {
 ```
 
 ### 17.3 Optimistic concurrency
+
+Detailed requirement: see §10.3 for client conflict recovery、§18 for transactional autosave、and §19 for history semantics。
 
 更新：
 
@@ -942,6 +971,8 @@ request：
 
 ## 18. Autosave
 
+Autosave is the sole authority for transactional note persistence。
+
 ### 18.1 Client behavior
 
 建議：
@@ -953,7 +984,7 @@ request：
 
 ### 18.2 Server behavior
 
-每次 autosave：
+每次 autosave MUST perform the following in one PostgreSQL transaction：
 
 1. authorization
 2. validate document size
@@ -962,6 +993,18 @@ request：
 5. increment revision
 6. selectively create version snapshot
 7. enqueue search-index job when needed
+
+Revision validation MUST use compare-and-swap。Durable Graphile Worker enqueue commits or rolls back with the note update and optional snapshot。
+
+```ts
+type NoteOperationIdentity = {
+  noteId: string;
+  revision: number;
+  operation: string;
+};
+```
+
+Handler MUST be idempotent by `NoteOperationIdentity`。A job for an older revision MUST NOT replace derived state for a newer revision。
 
 ### 18.3 Version snapshot policy
 
@@ -976,9 +1019,13 @@ snapshot trigger：
 - before restore
 - before major import
 
+Production release priority and evidence: see §49 Production Readiness Contract。
+
 ---
 
 ## 19. Version History
+
+Version History is the sole authority for import、restore 與 document migration revision semantics。
 
 `note_versions`：
 
@@ -1006,9 +1053,23 @@ v1 支援：
 - named versions
 - branch/fork
 
+Import、restore 與 document migration MUST submit `baseRevision`。A mismatch returns `409 REVISION_CONFLICT`。
+
+Successful operation MUST：
+
+- create a new monotonically increasing revision
+- record actor、timestamp 與 reason
+- preserve the previous revision rather than rewind or overwrite history
+
+Failure MUST preserve the original Markdown。Marker validation and legacy import：see `MARKDOWN_SPEC.md` §47。Detailed requirement: see §10.3 for client conflict recovery。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
+
 ---
 
 ## 20. Full-text Search
+
+Full-text Search is the sole authority for index consistency and recovery。Detailed requirement: see §16 for tenant isolation。
 
 v1 採 Hybrid Search。
 
@@ -1058,7 +1119,19 @@ interface SearchPort {
 
 未來可替換為 dedicated search backend，而不改變 API/domain contract。
 
+Consistency contract：
+
+- Saved content and revision history are immediately authoritative。
+- Under the approved P0 benchmark environment and workload, every successfully saved revision MUST become searchable within 60 seconds；outside that profile this is an engineering target rather than an external SLA。
+- Query-time authorization MUST exclude unauthorized、deleted 與 cross-workspace content。
+- Failed indexing MUST retry and then enter dead-letter state with an operator alert。
+- Operator MUST be able to rebuild one note or one workspace。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
+
 ## 21. Asset Manager
+
+Detailed requirement: see §16 for workspace authorization。Detailed requirement: see §33 for retention and deletion lifecycle。
 
 ### 21.1 Supported assets
 
@@ -1146,6 +1219,8 @@ R2Adapter
 
 ## 22. Import / Export
 
+Detailed requirement: see §19 for `baseRevision`、conflict and history semantics。Detailed requirement: see §33 for export and deletion lifecycle。
+
 ### 22.1 Import v1
 
 - Markdown
@@ -1158,6 +1233,7 @@ Import 必須：
 - limit file count
 - validate custom syntax
 - preserve unsupported syntax when possible
+- require `baseRevision` when importing into an existing note
 
 ### 22.2 Export v1
 
@@ -1190,6 +1266,8 @@ Share link 儲存 random opaque token hash。
 ---
 
 ## 24. API Design
+
+API Design is the sole authority for the first-party HTTP contract。
 
 Base：
 
@@ -1229,11 +1307,23 @@ POST   /api/v1/themes
 
 Hono RPC 作為 first-party frontend type-safe client。
 
-External/public API 若後期提供，應另行維護 stable HTTP/OpenAPI contract，不將 Hono RPC internal types 直接視為永久 public API。
+P0 only commits to the first-party `/api/v1` interface。Every request and response MUST have a shared schema。
+
+- List and search operations MUST use cursor pagination and deterministic ordering。
+- Retriable create、upload 與 export operations MUST accept idempotency keys。
+- Mutation MUST use revision or equivalent conditional request。
+- Error codes MUST remain backward compatible within `/api/v1`。
+- Breaking contract requires a new API version or an explicit migration。
+
+Public API credentials、third-party tokens 與 long-term SDK compatibility are P1。Hono RPC internal types are not a permanent public contract。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
 
 ---
 
 ## 25. Input Validation
+
+Detailed requirement: see §24 for the first-party API contract。
 
 API boundary 與 runtime message boundary 均使用 schema validation。
 
@@ -1257,6 +1347,8 @@ const body = await c.req.json() as SomeType;
 ---
 
 ## 26. Error Model
+
+Detailed requirement: see §24 for version and compatibility rules。
 
 API error：
 
@@ -1289,6 +1381,8 @@ production response 不回傳 stack trace。
 ---
 
 ## 27. Background Jobs
+
+Detailed requirement: see §16 for tenant isolation、§18 for note-operation identity and transactional enqueue、and §20 for search freshness and rebuild behavior。
 
 ### 27.1 Jobs v1
 
@@ -1328,6 +1422,8 @@ Consumer 不得假設 exactly-once delivery。
 
 ## 28. Logging
 
+Detailed requirement: see §30 for operational monitoring。Detailed requirement: see §33 for log retention and prohibited content。
+
 使用 structured JSON logging。
 
 必要欄位：
@@ -1357,6 +1453,8 @@ errorCode?
 
 ## 29. Error Tracking
 
+Detailed requirement: see §30 for operational monitoring and alert delivery。
+
 建立 `ErrorReporter` abstraction。
 
 Local：
@@ -1371,7 +1469,11 @@ Production：
 
 ---
 
-## 30. Metrics
+## 30. Operational Monitoring
+
+Operational Monitoring is the sole authority for production probes、alerts and runbooks。
+
+### Metrics
 
 v1 至少：
 
@@ -1403,6 +1505,26 @@ v1 至少：
 - timeout
 - message rejection
 
+### Health、readiness and alert routing
+
+| ID | Condition | Threshold | Required action |
+|---|---|---|---|
+| OPS-PROBE-01 | cadence | every 30 seconds | timeout 5 seconds |
+| OPS-ALERT-01 | consecutive failure | 3 consecutive failures | alert |
+| OPS-ALERT-02 | rolling failure | 50% failures within 5 minutes | alert |
+| OPS-RECOVERY-01 | recovery | 3 consecutive successes | recovery notification |
+| OPS-ROUTING-01 | readiness failure | stop new traffic | stop new traffic |
+| OPS-ROUTING-02 | health failure | invoke restart policy | invoke restart policy |
+| OPS-DELIVERY-01 | notification delivery | configured operator channel within 5 minutes after condition is met | deliver notification |
+
+Backup failure、dead-letter job 或 oldest queue job above five minutes MUST alert immediately。Database/disk usage MUST warn at 80% and alert critical at 90%。
+
+Repository MUST provide deploy、rollback、restore and queue-recovery runbooks。Formal on-call、burn-rate alerts and distributed tracing are P1。
+
+Detailed requirement: see §20 for search-specific freshness and rebuild behavior。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
+
 ---
 
 ## 31. Rate Limiting
@@ -1424,6 +1546,40 @@ Rate-limit storage 必須抽象，避免綁死單一 local implementation。
 ---
 
 ## 32. Security Requirements
+
+Security Requirements is the sole authority for the security implementation baseline。GlyphQuire implementation MUST comply with applicable requirements from these fixed baselines：
+
+- [OWASP ASVS 5.0.0](https://github.com/OWASP/ASVS/releases/tag/v5.0.0_release) Level 2
+- [NIST SP 800-63B-4](https://pages.nist.gov/800-63-4/sp800-63b/) for authentication and session management
+- [SLSA 1.2](https://slsa.dev/spec/v1.2/) Build Level 1 for release provenance
+
+Living implementation references：
+
+| Reference | Direct URL | Reviewed | Upstream commit |
+|---|---|---|---|
+| Authentication | https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| Session Management | https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| CSRF | https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| XSS Prevention | https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| SSRF Prevention | https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| File Upload | https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| WHATWG HTML | https://html.spec.whatwg.org/ | 2026-08-19 | 40814ebfef1506a621a4af1ebd7e80c048cc396e |
+| W3C CSP Level 3 | https://www.w3.org/TR/CSP3/ | 2026-08-19 | e81d712e979255b8291579854e168f0021b5b0da |
+
+Pinned review records：
+
+- Authentication — Reviewed: 2026-08-19；Upstream commit: 6b8819da79e0537d072e04296ffa3adfc94ba881
+- Session Management — Reviewed: 2026-08-19；Upstream commit: 6b8819da79e0537d072e04296ffa3adfc94ba881
+- CSRF — Reviewed: 2026-08-19；Upstream commit: 6b8819da79e0537d072e04296ffa3adfc94ba881
+- XSS Prevention — Reviewed: 2026-08-19；Upstream commit: 6b8819da79e0537d072e04296ffa3adfc94ba881
+- SSRF Prevention — Reviewed: 2026-08-19；Upstream commit: 6b8819da79e0537d072e04296ffa3adfc94ba881
+- File Upload — Reviewed: 2026-08-19；Upstream commit: 6b8819da79e0537d072e04296ffa3adfc94ba881
+- WHATWG HTML — Reviewed: 2026-08-19；Upstream commit: 40814ebfef1506a621a4af1ebd7e80c048cc396e
+- W3C CSP Level 3 — Reviewed: 2026-08-19；Upstream commit: e81d712e979255b8291579854e168f0021b5b0da
+
+A baseline refresh MUST update the direct URL、review date and official commit before compliance review。
+
+Implementation MUST maintain a security compliance matrix。Each relevant requirement is marked `applicable`、`implemented` with evidence、or `documented exception`。Exception MUST record rationale、risk、compensating control and approver。Release evidence includes applicable automated tests/scans and required manual verification。External control catalogs are referenced, not copied into this specification。
 
 ### 32.1 Web
 
@@ -1481,24 +1637,39 @@ R2_TOKEN
 SMTP_PASSWORD
 ```
 
----
-
-## 33. Backups
-
-Local production/self-hosted 必須支援：
-
-- PostgreSQL scheduled backup
-- object storage backup strategy
-- migration backup before destructive schema change
-- restore procedure
-- backup retention policy
-- periodic restore test
-
-「有 backup file」不視為完整 backup strategy；必須可驗證 restore。
+Production release priority and evidence: see §49 Production Readiness Contract。
 
 ---
 
-## 34. Local Deployment
+## 33. Backups and Data Lifecycle
+
+Backups and Data Lifecycle is the sole authority for production recoverability、export、retention and deletion。
+
+Official hosted production MUST：
+
+- create encrypted PostgreSQL and Object Storage backups at least daily
+- retain backups for 30 days
+- create an additional backup before destructive migration
+- run a full restore drill monthly
+- verify notes、revisions、asset relationships and content hashes after restore
+- retain each drill result
+
+Maximum accepted data-loss window is 24 hours。This is a recovery target, not an availability SLA。「有 backup file」不視為完整 strategy；restore evidence is required。
+
+Data lifecycle：
+
+- User export MUST include Markdown、assets and required metadata。
+- Deleted note remains recoverable for 30 days and is then permanently deleted。
+- Confirmed account/workspace deletion MUST remove primary records、versions、assets、search records、share links and pending jobs within 30 days。
+- Revoked share link MUST stop working immediately。
+- Backup copies expire through the 30-day retention cycle；historical backups are not modified record-by-record。
+- Audit/security logs are retained for 90 days and MUST NOT contain document bodies、credentials or secrets。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
+
+---
+
+## 34. Local Development and Preview Deployment
 
 ### 34.1 Docker Compose services
 
@@ -1565,7 +1736,7 @@ docker compose up --build
 
 ## 35. Cloudflare Migration Strategy
 
-Cloudflare 不是 v1 runtime requirement，但從 v1 開始遵守 portability constraints。
+Cloudflare portability 維持為架構約束，非 P0 必要 runtime。從 v1 開始遵守 portability constraints。
 
 ### 35.1 Mapping
 
@@ -1633,6 +1804,8 @@ v1 採 SPA-first：
 
 ## 36. Testing Strategy
 
+Detailed requirement: see §40 for the benchmark profile and §41 for browser/accessibility evidence。
+
 ### 36.1 Unit tests
 
 優先覆蓋：
@@ -1684,6 +1857,8 @@ Document Engine 適合 property-based testing：
 
 ### 36.5 Browser E2E
 
+Detailed requirement: see §41 for supported browsers and accessibility evidence。
+
 Playwright：
 
 - create note
@@ -1699,9 +1874,11 @@ Playwright：
 
 ---
 
-## 37. Quality Gates
+## 37. Release and Migration Contract
 
-Pull Request 必須通過：
+Release and Migration Contract is the sole authority for CI、release identity、deployment approval、rollback and migration compatibility。
+
+GitHub Actions Pull Request workflow MUST pass：
 
 ```text
 typecheck
@@ -1712,11 +1889,26 @@ document golden tests
 build
 ```
 
-Main branch 額外執行核心 Playwright E2E。
+Main branch MUST additionally run core Playwright E2E and security baseline checks。
+
+Production release identity MUST include：
+
+- Git tag
+- immutable Docker image digest
+- database migration version
+- document migration version
+
+Production deployment MUST require manual approval and health/readiness checks。Previous image MUST remain deployable；failed health checks trigger application rollback。
+
+Schema changes MUST use expand/contract compatibility so old and new application versions can operate during the deployment window。Data recovery uses forward repair plus preserved source/snapshots；destructive schema rollback is not the default recovery strategy。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
 
 ---
 
 ## 38. Database Migrations
+
+Detailed requirement: see §37 for release、compatibility and recovery policy。
 
 Drizzle migration files 必須納入 version control。
 
@@ -1728,8 +1920,10 @@ schema change
 → inspect SQL
 → test against disposable DB
 → backup
-→ deploy migration
-→ deploy app
+→ deploy backward-compatible expand migration
+→ deploy compatible application
+→ verify health and data
+→ remove old schema only in a later contract migration
 ```
 
 禁止 production startup 自動執行未審查 schema push。
@@ -1737,6 +1931,8 @@ schema change
 ---
 
 ## 39. Document Migrations
+
+Detailed requirement: see §19 for revision/history semantics and §37 for release/recovery policy。
 
 Database migration 與 document migration 分開。
 
@@ -1768,20 +1964,57 @@ migrateDocument(markdown, 1, 2)
 
 ## 40. Performance Targets
 
-初期 engineering target：
+Performance Targets is the sole authority for release benchmark behavior。These are release gates, not an external SLA。
 
-- 100 KB Markdown 文件：一般操作保持流暢
-- 1 MB Markdown：可開啟，不保證所有高成本功能即時執行
-- parse/validation 不得在大文件上長時間阻塞 UI thread
-- expensive parsing 可移至 Web Worker
-- autosave 不傳送不必要的 derived HTML
-- asset upload 不經 frontend base64 塞入 JSON API
+### 40.1 Reference environment
 
-真正 production SLO 應在取得實測 workload 後制定，不先虛構精確 latency 保證。
+- Linux x86-64、4 vCPU、8 GB RAM
+- API、Worker、PostgreSQL and Object Storage run under Docker Compose on one host
+- client and server use the same test network
+- five workspaces with 1,000 notes each
+- report records CPU、RAM、image digest、data volume and test version
+
+Typical case is one active personal-notebook user；burst ceiling is five concurrent users。This benchmark profile does not prescribe production topology。
+
+### 40.2 UI measurements
+
+Playwright performance marks MUST implement these exact boundaries：
+
+| ID | Operation | Warm-up | Samples | Measurement boundary | Gate |
+|---|---|---|---|---|---|
+| PERF-UI-01 | 100 KB input | 100 warm-ups | 1,000 samples | InputEvent dispatch -> next animation frame containing rendered change | p95 < 100 ms |
+| PERF-UI-02 | Visual/Source switch | 10 warm-ups | 100 samples | triggering action -> target editor accepts input | p95 < 1 second |
+| PERF-UI-03 | 1 MB open | 5 warm-ups | 100 samples | request dispatch -> editor accepts input | p95 < 5 seconds |
+| PERF-UI-04 | 1 MB save | 5 warm-ups | 100 samples | request dispatch -> server acknowledgment and saved UI state | p95 < 5 seconds |
+| PERF-UI-05 | 1 MB export | 5 warm-ups | 100 samples | action -> downloadable blob ready | p95 < 5 seconds |
+
+Continuous typing MUST produce no main-thread task above 200 ms。Full parse/validation above 100 KB MUST run in a Web Worker or use interruptible processing。
+
+### 40.3 Thirty-minute burst workload
+
+Each of five users continuously edits one 100 KB note、autosaves every two seconds、searches every ten seconds and uploads one 5 MB asset every five minutes。
+
+The run permits no data loss、revision regression、unexpected `5xx` or dead-letter job。After traffic stops, search/index queue MUST drain within 60 seconds。Every successful autosave revision MUST be readable through the API and match its expected content hash。
+
+### 40.4 API sampling
+
+Measure `GET note`、`PUT autosave` and `GET search` separately。Each route requires at least 500 samples after a two-minute warm-up；report p50、p95 and p99。
+
+- `GET note` p95 < 500 ms
+- `GET search` p95 < 500 ms
+- `PUT autosave` p95 < 1 second
+
+Any timeout、unexpected `5xx` or data-integrity failure fails the gate regardless of percentiles。Autosave MUST NOT send unnecessary derived HTML；asset upload MUST NOT embed frontend base64 in the JSON API。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
 
 ---
 
-## 41. Accessibility
+## 41. Accessibility and Browser Support
+
+Accessibility and Browser Support is the sole authority for supported clients and accessibility evidence。
+
+P0 supports the latest two stable releases of Chrome、Firefox、Safari and Edge。Desktop receives full editing support。Mobile MUST support reading and basic management；a complete mobile visual editor is P1。
 
 v1 built-in components 必須：
 
@@ -1793,11 +2026,20 @@ v1 built-in components 必須：
 - toggle 使用正確 `aria-expanded`
 - interactive runtime 提供 fallback/title
 
+Built-in UI MUST meet WCAG 2.2 AA。Release evidence MUST include：
+
+- axe checks in CI
+- keyboard-only core flows
+- visible-focus and reduced-motion checks
+- one core-flow smoke test using VoiceOver or NVDA
+
 動畫 theme 必須尊重：
 
 ```css
 @media (prefers-reduced-motion: reduce)
 ```
+
+Production release priority and evidence: see §49 Production Readiness Contract。
 
 ---
 
@@ -1813,7 +2055,7 @@ Document content 本身不做強制 translation。
 
 ## 43. Product v1 Scope
 
-v1 完成條件：
+v1 product feature scope（功能範圍，非 release blocker 優先級；release blocker 由 §49 Production Readiness Contract 定義）：
 
 1. 註冊、登入、登出。
 2. 建立、讀取、更新、刪除筆記。
@@ -1836,12 +2078,14 @@ v1 完成條件：
 14. PostgreSQL FTS。
 15. import/export Markdown。
 16. read-only share link。
-17. Docker Compose local deployment。
-18. backup/restore documentation。
+17. Docker Compose local development and preview。
+18. backup/restore。
 19. structured logging。
 20. rate limiting。
 21. sandbox security tests。
 22. core E2E tests。
+
+Production readiness requirements (P0/P1 priority, evidence, and acceptance criteria): see §49。
 
 ---
 
@@ -1910,6 +2154,8 @@ v1 完成條件：
 
 ### Phase 6 — Production Hardening
 
+Production release requires passing all P0 items in §49 Production Readiness Contract。
+
 - observability
 - backups
 - rate limits
@@ -1917,12 +2163,14 @@ v1 完成條件：
 - accessibility
 - performance profiling
 - deployment docs
+- compliance matrix
+- runbooks
 
 ---
 
 ## 45. Later Features
 
-後期僅保留 roadmap，不納入 v1 acceptance criteria：
+後期僅保留 roadmap，不納入 v1 acceptance criteria。P1 production-readiness items 列於 §49.4；以下為 product feature roadmap：
 
 - Y.js collaborative editing
 - presence / remote cursor
@@ -1953,6 +2201,7 @@ v1 完成條件：
 - organization/enterprise roles
 - passkeys / 2FA
 - SSO
+- self-hosted production documentation and support
 - Cloudflare deployment profile
 - independent public renderer / pre-rendering when SEO becomes a product requirement
 - Cloudflare Queues adapter
@@ -2100,9 +2349,68 @@ Markdown grammar 的正式定義、built-in directive names、attributes、nesti
 - security boundary reviewed if handling user content/code
 - documentation updated
 
+Production release priority and evidence: see §49 Production Readiness Contract。
+
 ---
 
-## 49. Implementation Order Warning
+## 49. Production Readiness Contract
+
+Production Readiness Contract is the sole consolidated release checklist for the first officially hosted, multi-tenant GlyphQuire SaaS。
+
+### 49.1 Priority Semantics
+
+- **P0** blocks the first official production release。Every P0 item requires observable acceptance evidence；unsupported claims such as "considered" or "supported" do not pass。
+- **P1** does not block the first release, but the P0 architecture MUST leave a compatible evolution path。P1 is not a delivery commitment without a later approved plan。
+
+### 49.2 Workload and Non-Promises
+
+The typical initial workload is one active personal-notebook user；burst ceiling is five concurrent users。
+
+P0 explicitly does NOT promise：
+
+- an availability SLA
+- high availability
+- active multi-region failover
+- operation beyond the stated workload
+
+### 49.3 P0 Evidence Table
+
+| P0-01 | Deployment scope | Officially hosted multi-tenant SaaS with five-user burst ceiling | §1 Purpose | CI + Docker Compose integration test |
+|---|---|---|---|---|
+| P0-02 | Transactional persistence | Autosave: authorization, revision CAS, note update, snapshot, durable enqueue in one PostgreSQL transaction | §18 Autosave | Integration test with concurrent revision |
+| P0-03 | Tenant isolation | Every resource belongs to exactly one workspace; every operation applies workspace scope server-side | §16 Authorization | Integration test exercising cross-workspace rejection |
+| P0-04 | Markdown/version history | Self-describing `glyphquire-spec` marker; import/restore/migration require `baseRevision`; monotonic revisions; failure preserves source | §19 Version History; `MARKDOWN_SPEC.md` §47 | Golden tests + integration test for conflict/restore |
+| P0-05 | Security baseline | OWASP ASVS 5.0.0 L2, NIST 800-63B-4, SLSA 1.2 Build L1; living reference pins; compliance matrix | §32 Security Requirements | Compliance matrix + automated scans + manual verification report |
+| P0-06 | Backup/data lifecycle | Encrypted daily backups; 30-day retention; monthly restore drill; 24-hour RPO; deletion lifecycle | §33 Backups and Data Lifecycle | Restore drill report with content-hash verification |
+| P0-07 | CI/release/migration | GitHub Actions gates; Git tag + image digest + migration versions; manual approval; expand/contract compatibility | §37 Release and Migration Contract | CI run + deployment log + rollback test |
+| P0-08 | Small-workload performance | Reproducible benchmark: 4 vCPU/8 GB; UI p95 gates; 30-min burst with five users; API p95 gates | §40 Performance Targets | Load report with environment/digest/data-volume record |
+| P0-09 | Observability/runbooks | Structured logs; health/readiness probes; alert rules; notification delivery within 5 min | §30 Operational Monitoring | Runbooks (deploy, rollback, restore, queue-recovery) + alert test |
+| P0-10 | Search consistency | 60-second freshness under P0 workload; query-time authorization; dead-letter handling; operator rebuild | §20 Full-text Search | Integration test + dead-letter scenario + rebuild test |
+| P0-11 | First-party API | `/api/v1` shared schemas; cursor pagination; idempotency keys; conditional mutations; backward-compatible errors | §24 API Design | Contract test suite |
+| P0-12 | Custom Blocks | Workspace-scoped; immutable published versions; unsupported placeholder; round-trip preservation | §11.3 Custom Block API; `MARKDOWN_SPEC.md` §29 | Golden tests + integration test |
+| P0-13 | Conflict recovery | `409` never overwrites; client retains draft across reload/crash; UI supports comparison/merge | §10.3 Dirty State | E2E test with simulated conflict + reload |
+| P0-14 | Browser/accessibility | Latest 2 stable Chrome/Firefox/Safari/Edge; WCAG 2.2 AA; axe CI; keyboard flows; screen-reader smoke | §41 Accessibility and Browser Support | axe report + keyboard-only E2E + VoiceOver or NVDA smoke test |
+
+### 49.4 P1 Items
+
+The following are explicitly non-blocking for the first production release：
+
+- P1-01: Self-hosted production support — Docker Compose remains the local dev/preview path; formal self-hosted production documentation and support is P1。
+- P1-02: High availability — active-active or active-passive failover。
+- P1-03: Multi-region operation — cross-region replication and routing。
+- P1-04: Formal availability SLO — external uptime commitments。
+- P1-05: Distributed tracing — request-level cross-service trace propagation。
+- P1-06: Complete operational dashboards — full Grafana/Prometheus dashboards beyond P0 probes and alerts。
+- P1-07: Formal incident severity/on-call/escalation — structured incident management processes。
+- P1-08: Public API and third-party tokens/SDKs — stable third-party developer contracts beyond first-party `/api/v1`。
+- P1-09: Complete mobile visual editing — full Milkdown editing on mobile; P0 requires reading and basic management only。
+- P1-10: Real-time collaboration/CRDT/automatic three-way merge — Y.js, presence, remote cursors。
+- P1-11: Executable third-party plugins — sandboxed third-party block execution。
+- P1-12: Scaling beyond five concurrent users — horizontal scaling, connection pooling, caching for larger workloads。
+
+---
+
+## 50. Implementation Order Warning
 
 不得先大量製作漂亮 UI 再回頭決定 Markdown grammar。
 
@@ -2123,7 +2431,7 @@ Milkdown node view、動畫、theme、p5 runtime 都建立於這個 contract 之
 
 ---
 
-## 50. Initial Success Criterion
+## 51. Initial Success Criterion
 
 第一個真正 vertical slice 應完成以下流程：
 

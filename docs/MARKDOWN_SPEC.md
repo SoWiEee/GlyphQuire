@@ -1076,9 +1076,23 @@ interface CustomBlockNode {
 }
 ```
 
+Definition lifecycle：
+
+- 每個 declarative definition MUST belong to exactly one workspace。
+- Published definition version MUST be immutable。
+- Schema、renderer behavior 或 capability 變更 MUST publish a new positive integer `definitionVersion`。
+- Built-in names remain reserved and MUST NOT be shadowed。
+- Disabled、deleted、unknown 或 unavailable definition MUST render an unsupported placeholder while preserving the original directive for round-trip serialization。
+- Cross-workspace definition resolution is invalid。
+- Executable third-party blocks are outside P0。
+
+Production release priority and evidence: see `SPEC.md` §49 Production Readiness Contract。
+
 ---
 
 ## 30. Custom Block Constraints
+
+Detailed requirement: see §29。
 
 v0.1 user definition MAY specify：
 
@@ -1483,21 +1497,27 @@ Actual allowlist is security policy, not author-controlled。
 
 ## 47. Specification Version
 
-Database note stores：
+Canonical GlyphQuire Markdown MUST include the reserved YAML frontmatter field `glyphquire-spec` with a positive integer version：
 
-```ts
-schemaVersion: 1
+```yaml
+---
+glyphquire-spec: 1
+---
 ```
 
-Markdown itself does not require visible frontmatter version marker in v0.1。
+Parser MUST expose this version to the migration layer。Standalone Markdown and exported bundles MUST retain it。
 
-Version comes from note metadata/database/import context。
+Versionless input is legacy input。Import MUST follow an explicit legacy policy and MUST NOT guess a version before destructive migration。
 
-Standalone exported bundle SHOULD include manifest metadata with spec version。
+Database metadata MAY duplicate the version for indexing。A database/Markdown version mismatch is an error；Markdown remains authoritative。
+
+Application revision history、legacy import 與 production evidence：see `SPEC.md` §19。
 
 ---
 
 ## 48. Migration
+
+Canonical version identity：see §47。
 
 Concept：
 
@@ -1521,6 +1541,8 @@ Migration MUST：
 
 ## 49. Block Versioning
 
+Canonical notebook version identity：see §47。Declarative definition lifecycle：see §29。
+
 Built-in semantic nodes carry their own definition version：
 
 ```ts
@@ -1539,7 +1561,7 @@ Notebook Spec version
 → block definition versions
 ```
 
-User custom blocks record definition version in their registry metadata。
+User custom blocks record definition version in their registry metadata。Notebook Spec version and definition version mapping MUST be deterministic。
 
 ---
 
@@ -1599,6 +1621,10 @@ Canonical Notebook Markdown export MUST preserve directives。
 ## 53. Example Document
 
 ````md
+---
+glyphquire-spec: 1
+---
+
 # GPU Scheduling
 
 This note studies heterogeneous GPU scheduling.
@@ -1702,6 +1728,10 @@ A conforming parser MUST：
 - perform semantic transform
 - preserve unknown directive information
 - return diagnostics without process crash for malformed input
+- canonical valid documents MUST include `glyphquire-spec`
+- expose the positive integer spec version to the migration layer
+- reject unsupported future versions without destructive guessing
+- report database/Markdown version mismatch
 
 ---
 
@@ -1714,6 +1744,7 @@ A conforming serializer MUST：
 - handle nested directive fences
 - retain unknown directives when possible
 - preserve `asset://` logical references
+- ensure canonical serialization emits or retains `glyphquire-spec`
 - never depend on Vue/DOM
 
 ---
@@ -1748,6 +1779,16 @@ before activation。
 # Testing Fixtures
 
 ## 59. Required Fixture Categories
+
+Canonical valid documents MUST include `glyphquire-spec`。Version handling MUST include：
+
+```text
+missing-version-marker
+invalid-version-non-positive
+invalid-version-non-integer
+unsupported-future-version
+metadata-version-mismatch
+```
 
 Every built-in directive MUST include：
 
