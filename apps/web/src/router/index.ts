@@ -1,0 +1,40 @@
+import { createRouter, createWebHistory } from "vue-router";
+
+export const router = createRouter({
+  history: createWebHistory(),
+  routes: [
+    {
+      path: "/login",
+      component: () => import("@/layouts/AuthLayout.vue"),
+      children: [
+        {
+          path: "",
+          name: "login",
+          component: () => import("@/pages/LoginPage.vue"),
+        },
+      ],
+    },
+    {
+      path: "/register",
+      component: () => import("@/layouts/AuthLayout.vue"),
+      children: [
+        {
+          path: "",
+          name: "register",
+          component: () => import("@/pages/RegisterPage.vue"),
+        },
+      ],
+    },
+    {
+      path: "/",
+      component: () => import("@/layouts/AppLayout.vue"),
+      children: [
+        {
+          path: "",
+          name: "home",
+          component: () => import("@/pages/HomePage.vue"),
+        },
+      ],
+    },
+  ],
+});
