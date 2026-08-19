@@ -832,7 +832,7 @@ v1 支援：
 - password reset
 - optional social login
 
-Password policy 與 account enumeration 防護由 security implementation 詳訂。
+Detailed requirement: see §32 Security Requirements。
 
 ---
 
@@ -1420,6 +1420,8 @@ Consumer 不得假設 exactly-once delivery。
 
 ## 28. Logging
 
+Detailed requirement: see §30 for operational monitoring。Detailed requirement: see §33 for log retention and prohibited content。
+
 使用 structured JSON logging。
 
 必要欄位：
@@ -1449,6 +1451,8 @@ errorCode?
 
 ## 29. Error Tracking
 
+Detailed requirement: see §30 for operational monitoring and alert delivery。
+
 建立 `ErrorReporter` abstraction。
 
 Local：
@@ -1463,7 +1467,11 @@ Production：
 
 ---
 
-## 30. Metrics
+## 30. Operational Monitoring
+
+Operational Monitoring is the sole authority for production probes、alerts and runbooks。
+
+### Metrics
 
 v1 至少：
 
@@ -1495,6 +1503,26 @@ v1 至少：
 - timeout
 - message rejection
 
+### Health、readiness and alert routing
+
+| ID | Condition | Threshold | Required action |
+|---|---|---|---|
+| OPS-PROBE-01 | cadence | every 30 seconds | timeout 5 seconds |
+| OPS-ALERT-01 | consecutive failure | 3 consecutive failures | alert |
+| OPS-ALERT-02 | rolling failure | 50% failures within 5 minutes | alert |
+| OPS-RECOVERY-01 | recovery | 3 consecutive successes | recovery notification |
+| OPS-ROUTING-01 | readiness failure | stop new traffic | stop new traffic |
+| OPS-ROUTING-02 | health failure | invoke restart policy | invoke restart policy |
+| OPS-DELIVERY-01 | notification delivery | configured operator channel within 5 minutes after condition is met | deliver notification |
+
+Backup failure、dead-letter job 或 oldest queue job above five minutes MUST alert immediately。Database/disk usage MUST warn at 80% and alert critical at 90%。
+
+Repository MUST provide deploy、rollback、restore and queue-recovery runbooks。Formal on-call、burn-rate alerts and distributed tracing are P1。
+
+Detailed requirement: see §20 for search-specific freshness and rebuild behavior。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
+
 ---
 
 ## 31. Rate Limiting
@@ -1516,6 +1544,40 @@ Rate-limit storage 必須抽象，避免綁死單一 local implementation。
 ---
 
 ## 32. Security Requirements
+
+Security Requirements is the sole authority for the security implementation baseline。GlyphQuire implementation MUST comply with applicable requirements from these fixed baselines：
+
+- [OWASP ASVS 5.0.0](https://github.com/OWASP/ASVS/releases/tag/v5.0.0_release) Level 2
+- [NIST SP 800-63B-4](https://pages.nist.gov/800-63-4/sp800-63b/) for authentication and session management
+- [SLSA 1.2](https://slsa.dev/spec/v1.2/) Build Level 1 for release provenance
+
+Living implementation references：
+
+| Reference | Direct URL | Reviewed | Upstream commit |
+|---|---|---|---|
+| Authentication | https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| Session Management | https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| CSRF | https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| XSS Prevention | https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| SSRF Prevention | https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| File Upload | https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| WHATWG HTML | https://html.spec.whatwg.org/ | 2026-08-19 | 40814ebfef1506a621a4af1ebd7e80c048cc396e |
+| W3C CSP Level 3 | https://www.w3.org/TR/CSP3/ | 2026-08-19 | e81d712e979255b8291579854e168f0021b5b0da |
+
+Pinned review records：
+
+- Authentication — Reviewed: 2026-08-19；Upstream commit: 6b8819da79e0537d072e04296ffa3adfc94ba881
+- Session Management — Reviewed: 2026-08-19；Upstream commit: 6b8819da79e0537d072e04296ffa3adfc94ba881
+- CSRF — Reviewed: 2026-08-19；Upstream commit: 6b8819da79e0537d072e04296ffa3adfc94ba881
+- XSS Prevention — Reviewed: 2026-08-19；Upstream commit: 6b8819da79e0537d072e04296ffa3adfc94ba881
+- SSRF Prevention — Reviewed: 2026-08-19；Upstream commit: 6b8819da79e0537d072e04296ffa3adfc94ba881
+- File Upload — Reviewed: 2026-08-19；Upstream commit: 6b8819da79e0537d072e04296ffa3adfc94ba881
+- WHATWG HTML — Reviewed: 2026-08-19；Upstream commit: 40814ebfef1506a621a4af1ebd7e80c048cc396e
+- W3C CSP Level 3 — Reviewed: 2026-08-19；Upstream commit: e81d712e979255b8291579854e168f0021b5b0da
+
+A baseline refresh MUST update the direct URL、review date and official commit before compliance review。
+
+Implementation MUST maintain a security compliance matrix。Each relevant requirement is marked `applicable`、`implemented` with evidence、or `documented exception`。Exception MUST record rationale、risk、compensating control and approver。Release evidence includes applicable automated tests/scans and required manual verification。External control catalogs are referenced, not copied into this specification。
 
 ### 32.1 Web
 
@@ -1573,20 +1635,35 @@ R2_TOKEN
 SMTP_PASSWORD
 ```
 
+Production release priority and evidence: see §49 Production Readiness Contract。
+
 ---
 
-## 33. Backups
+## 33. Backups and Data Lifecycle
 
-Local production/self-hosted 必須支援：
+Backups and Data Lifecycle is the sole authority for production recoverability、export、retention and deletion。
 
-- PostgreSQL scheduled backup
-- object storage backup strategy
-- migration backup before destructive schema change
-- restore procedure
-- backup retention policy
-- periodic restore test
+Official hosted production MUST：
 
-「有 backup file」不視為完整 backup strategy；必須可驗證 restore。
+- create encrypted PostgreSQL and Object Storage backups at least daily
+- retain backups for 30 days
+- create an additional backup before destructive migration
+- run a full restore drill monthly
+- verify notes、revisions、asset relationships and content hashes after restore
+- retain each drill result
+
+Maximum accepted data-loss window is 24 hours。This is a recovery target, not an availability SLA。「有 backup file」不視為完整 strategy；restore evidence is required。
+
+Data lifecycle：
+
+- User export MUST include Markdown、assets and required metadata。
+- Deleted note remains recoverable for 30 days and is then permanently deleted。
+- Confirmed account/workspace deletion MUST remove primary records、versions、assets、search records、share links and pending jobs within 30 days。
+- Revoked share link MUST stop working immediately。
+- Backup copies expire through the 30-day retention cycle；historical backups are not modified record-by-record。
+- Audit/security logs are retained for 90 days and MUST NOT contain document bodies、credentials or secrets。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
 
 ---
 
@@ -1725,6 +1802,8 @@ v1 採 SPA-first：
 
 ## 36. Testing Strategy
 
+Detailed requirement: see §40 for the benchmark profile and §41 for browser/accessibility evidence。
+
 ### 36.1 Unit tests
 
 優先覆蓋：
@@ -1776,6 +1855,8 @@ Document Engine 適合 property-based testing：
 
 ### 36.5 Browser E2E
 
+Detailed requirement: see §41 for supported browsers and accessibility evidence。
+
 Playwright：
 
 - create note
@@ -1791,9 +1872,11 @@ Playwright：
 
 ---
 
-## 37. Quality Gates
+## 37. Release and Migration Contract
 
-Pull Request 必須通過：
+Release and Migration Contract is the sole authority for CI、release identity、deployment approval、rollback and migration compatibility。
+
+GitHub Actions Pull Request workflow MUST pass：
 
 ```text
 typecheck
@@ -1804,11 +1887,26 @@ document golden tests
 build
 ```
 
-Main branch 額外執行核心 Playwright E2E。
+Main branch MUST additionally run core Playwright E2E and security baseline checks。
+
+Production release identity MUST include：
+
+- Git tag
+- immutable Docker image digest
+- database migration version
+- document migration version
+
+Production deployment MUST require manual approval and health/readiness checks。Previous image MUST remain deployable；failed health checks trigger application rollback。
+
+Schema changes MUST use expand/contract compatibility so old and new application versions can operate during the deployment window。Data recovery uses forward repair plus preserved source/snapshots；destructive schema rollback is not the default recovery strategy。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
 
 ---
 
 ## 38. Database Migrations
+
+Detailed requirement: see §37 for release、compatibility and recovery policy。
 
 Drizzle migration files 必須納入 version control。
 
@@ -1820,8 +1918,10 @@ schema change
 → inspect SQL
 → test against disposable DB
 → backup
-→ deploy migration
-→ deploy app
+→ deploy backward-compatible expand migration
+→ deploy compatible application
+→ verify health and data
+→ remove old schema only in a later contract migration
 ```
 
 禁止 production startup 自動執行未審查 schema push。
@@ -1829,6 +1929,8 @@ schema change
 ---
 
 ## 39. Document Migrations
+
+Detailed requirement: see §19 for revision/history semantics and §37 for release/recovery policy。
 
 Database migration 與 document migration 分開。
 
@@ -1860,20 +1962,57 @@ migrateDocument(markdown, 1, 2)
 
 ## 40. Performance Targets
 
-初期 engineering target：
+Performance Targets is the sole authority for release benchmark behavior。These are release gates, not an external SLA。
 
-- 100 KB Markdown 文件：一般操作保持流暢
-- 1 MB Markdown：可開啟，不保證所有高成本功能即時執行
-- parse/validation 不得在大文件上長時間阻塞 UI thread
-- expensive parsing 可移至 Web Worker
-- autosave 不傳送不必要的 derived HTML
-- asset upload 不經 frontend base64 塞入 JSON API
+### 40.1 Reference environment
 
-真正 production SLO 應在取得實測 workload 後制定，不先虛構精確 latency 保證。
+- Linux x86-64、4 vCPU、8 GB RAM
+- API、Worker、PostgreSQL and Object Storage run under Docker Compose on one host
+- client and server use the same test network
+- five workspaces with 1,000 notes each
+- report records CPU、RAM、image digest、data volume and test version
+
+Typical case is one active personal-notebook user；burst ceiling is five concurrent users。This benchmark profile does not prescribe production topology。
+
+### 40.2 UI measurements
+
+Playwright performance marks MUST implement these exact boundaries：
+
+| ID | Operation | Warm-up | Samples | Measurement boundary | Gate |
+|---|---|---|---|---|---|
+| PERF-UI-01 | 100 KB input | 100 warm-ups | 1,000 samples | InputEvent dispatch -> next animation frame containing rendered change | p95 < 100 ms |
+| PERF-UI-02 | Visual/Source switch | 10 warm-ups | 100 samples | triggering action -> target editor accepts input | p95 < 1 second |
+| PERF-UI-03 | 1 MB open | 5 warm-ups | 100 samples | request dispatch -> editor accepts input | p95 < 5 seconds |
+| PERF-UI-04 | 1 MB save | 5 warm-ups | 100 samples | request dispatch -> server acknowledgment and saved UI state | p95 < 5 seconds |
+| PERF-UI-05 | 1 MB export | 5 warm-ups | 100 samples | action -> downloadable blob ready | p95 < 5 seconds |
+
+Continuous typing MUST produce no main-thread task above 200 ms。Full parse/validation above 100 KB MUST run in a Web Worker or use interruptible processing。
+
+### 40.3 Thirty-minute burst workload
+
+Each of five users continuously edits one 100 KB note、autosaves every two seconds、searches every ten seconds and uploads one 5 MB asset every five minutes。
+
+The run permits no data loss、revision regression、unexpected `5xx` or dead-letter job。After traffic stops, search/index queue MUST drain within 60 seconds。Every successful autosave revision MUST be readable through the API and match its expected content hash。
+
+### 40.4 API sampling
+
+Measure `GET note`、`PUT autosave` and `GET search` separately。Each route requires at least 500 samples after a two-minute warm-up；report p50、p95 and p99。
+
+- `GET note` p95 < 500 ms
+- `GET search` p95 < 500 ms
+- `PUT autosave` p95 < 1 second
+
+Any timeout、unexpected `5xx` or data-integrity failure fails the gate regardless of percentiles。Autosave MUST NOT send unnecessary derived HTML；asset upload MUST NOT embed frontend base64 in the JSON API。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
 
 ---
 
-## 41. Accessibility
+## 41. Accessibility and Browser Support
+
+Accessibility and Browser Support is the sole authority for supported clients and accessibility evidence。
+
+P0 supports the latest two stable releases of Chrome、Firefox、Safari and Edge。Desktop receives full editing support。Mobile MUST support reading and basic management；a complete mobile visual editor is P1。
 
 v1 built-in components 必須：
 
@@ -1885,11 +2024,20 @@ v1 built-in components 必須：
 - toggle 使用正確 `aria-expanded`
 - interactive runtime 提供 fallback/title
 
+Built-in UI MUST meet WCAG 2.2 AA。Release evidence MUST include：
+
+- axe checks in CI
+- keyboard-only core flows
+- visible-focus and reduced-motion checks
+- one core-flow smoke test using VoiceOver or NVDA
+
 動畫 theme 必須尊重：
 
 ```css
 @media (prefers-reduced-motion: reduce)
 ```
+
+Production release priority and evidence: see §49 Production Readiness Contract。
 
 ---
 
