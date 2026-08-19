@@ -34,8 +34,8 @@ export function diagnostic(
   extra?: Pick<DocumentDiagnostic, "range" | "block" | "attribute">,
 ): DocumentDiagnostic {
   const result: DocumentDiagnostic = { code, severity, message };
-  if (extra?.range) result.range = extra.range;
-  if (extra?.block) result.block = extra.block;
-  if (extra?.attribute) result.attribute = extra.attribute;
+  if (extra?.range !== undefined) result.range = extra.range;
+  if (extra?.block !== undefined) result.block = extra.block;
+  if (extra?.attribute !== undefined) result.attribute = extra.attribute;
   return result;
 }
