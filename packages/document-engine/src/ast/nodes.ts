@@ -9,6 +9,9 @@ export interface NotebookDocument {
   children: BlockNode[];
 }
 
+// Some members (ListItemNode, TabNode, ColumnNode, etc.) are structural
+// child-only nodes reachable only via specific parents, not arbitrary
+// document children.
 export type BlockNode =
   | ParagraphNode
   | HeadingNode
@@ -192,6 +195,8 @@ export interface UnknownDirectiveNode {
   directiveType: "container" | "leaf" | "text";
   name: string;
   attributes: Record<string, string>;
+  /** Preserved raw markdown/source for round-trip (spec §14). */
+  source?: string;
   children: BlockNode[];
 }
 
