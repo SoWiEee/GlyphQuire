@@ -1,0 +1,31 @@
+{
+  "name": "@glyphquire/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./app": {
+      "import": "./src/app.ts",
+      "types": "./src/app.ts"
+    }
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "hono": "^4.7.0",
+    "@hono/node-server": "^1.14.0",
+    "zod": "^3.25.0",
+    "@glyphquire/database": "workspace:*",
+    "@glyphquire/auth": "workspace:*",
+    "@glyphquire/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}

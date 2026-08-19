@@ -15,7 +15,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "hono": "^4.7.0"
+    "hono": "^4.7.0",
+    "@glyphquire/api": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.8.0"
