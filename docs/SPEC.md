@@ -1,7 +1,7 @@
 # SPEC.md — Extensible Markdown Notes Platform
 
-> Status: Draft v0.2 — ADR decisions incorporated  
-> Deployment target: Local-first / self-hosted, Cloudflare-ready  
+> Status: Draft v0.3 — Production Readiness Contract added
+> Deployment target: Officially hosted multi-tenant SaaS; Cloudflare-ready
 > Primary language: TypeScript  
 > Last updated: 2026-08-19
 
@@ -9,7 +9,9 @@
 
 本文件定義一套以 Markdown 為 canonical document format 的可擴充網頁筆記平台。產品目標是讓一般使用者以接近 Obsidian 的 Markdown 與少量延伸語法建立具有高度視覺風格、互動效果與可組合元件的筆記，同時讓進階使用者可在受控邊界內建立自訂 block、theme 與互動 runtime。
 
-系統第一階段以本地部署與 self-hosted 為優先，架構不得綁死 Node.js-only API、單一 object storage、單一 job queue 或單一部署供應商。後續預計可將 frontend/API/worker 等服務遷移至 Cloudflare Workers 生態，並以 Hyperdrive 連接 PostgreSQL、R2 作為 object storage、Cloudflare Queues 作為背景任務佇列。
+P0 production target 為官方託管的多租戶 SaaS。典型工作負載為一位活躍使用者的個人筆記本，突發上限為五位同時使用者。架構不得綁死 Node.js-only API、單一 object storage、單一 job queue 或單一部署供應商。Docker Compose 為支援的本地開發與全端預覽路徑。Self-hosted production support 為 P1，非 P0 release promise。後續預計可將 frontend/API/worker 等服務遷移至 Cloudflare Workers 生態，並以 Hyperdrive 連接 PostgreSQL、R2 作為 object storage、Cloudflare Queues 作為背景任務佇列。Cloudflare portability 維持為架構約束，非 P0 必要 runtime。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
 
 ---
 
@@ -40,7 +42,7 @@
 7. Theme 與文件內容解耦。
 8. 進階使用者可定義受控的 custom components / themes。
 9. JavaScript、p5.js、Canvas 等互動內容必須執行於隔離 runtime，不得直接執行於主應用程式 origin。
-10. 第一版可完整 self-host，且核心 domain/service layer 應可搬遷到 Cloudflare Workers。
+10. P0 production 為官方託管的多租戶 SaaS；核心 domain/service layer 應可搬遷到 Cloudflare Workers。Self-hosted production support 為 P1。
 
 ### 2.2 非目標
 
@@ -1667,7 +1669,7 @@ Production release priority and evidence: see §49 Production Readiness Contract
 
 ---
 
-## 34. Local Deployment
+## 34. Local Development and Preview Deployment
 
 ### 34.1 Docker Compose services
 
@@ -1734,7 +1736,7 @@ docker compose up --build
 
 ## 35. Cloudflare Migration Strategy
 
-Cloudflare 不是 v1 runtime requirement，但從 v1 開始遵守 portability constraints。
+Cloudflare portability 維持為架構約束，非 P0 必要 runtime。從 v1 開始遵守 portability constraints。
 
 ### 35.1 Mapping
 
@@ -2053,7 +2055,7 @@ Document content 本身不做強制 translation。
 
 ## 43. Product v1 Scope
 
-v1 完成條件：
+v1 product feature scope（功能範圍，非 release blocker 優先級；release blocker 由 §49 Production Readiness Contract 定義）：
 
 1. 註冊、登入、登出。
 2. 建立、讀取、更新、刪除筆記。
@@ -2076,12 +2078,14 @@ v1 完成條件：
 14. PostgreSQL FTS。
 15. import/export Markdown。
 16. read-only share link。
-17. Docker Compose local deployment。
-18. backup/restore documentation。
+17. Docker Compose local development and preview。
+18. backup/restore。
 19. structured logging。
 20. rate limiting。
 21. sandbox security tests。
 22. core E2E tests。
+
+Production readiness requirements (P0/P1 priority, evidence, and acceptance criteria): see §49。
 
 ---
 
@@ -2150,6 +2154,8 @@ v1 完成條件：
 
 ### Phase 6 — Production Hardening
 
+Production release requires passing all P0 items in §49 Production Readiness Contract。
+
 - observability
 - backups
 - rate limits
@@ -2157,12 +2163,14 @@ v1 完成條件：
 - accessibility
 - performance profiling
 - deployment docs
+- compliance matrix
+- runbooks
 
 ---
 
 ## 45. Later Features
 
-後期僅保留 roadmap，不納入 v1 acceptance criteria：
+後期僅保留 roadmap，不納入 v1 acceptance criteria。P1 production-readiness items 列於 §49.4；以下為 product feature roadmap：
 
 - Y.js collaborative editing
 - presence / remote cursor
@@ -2193,6 +2201,7 @@ v1 完成條件：
 - organization/enterprise roles
 - passkeys / 2FA
 - SSO
+- self-hosted production documentation and support
 - Cloudflare deployment profile
 - independent public renderer / pre-rendering when SEO becomes a product requirement
 - Cloudflare Queues adapter
@@ -2340,9 +2349,68 @@ Markdown grammar 的正式定義、built-in directive names、attributes、nesti
 - security boundary reviewed if handling user content/code
 - documentation updated
 
+Production release priority and evidence: see §49 Production Readiness Contract。
+
 ---
 
-## 49. Implementation Order Warning
+## 49. Production Readiness Contract
+
+Production Readiness Contract is the sole consolidated release checklist for the first officially hosted, multi-tenant GlyphQuire SaaS。
+
+### 49.1 Priority Semantics
+
+- **P0** blocks the first official production release。Every P0 item requires observable acceptance evidence；unsupported claims such as "considered" or "supported" do not pass。
+- **P1** does not block the first release, but the P0 architecture MUST leave a compatible evolution path。P1 is not a delivery commitment without a later approved plan。
+
+### 49.2 Workload and Non-Promises
+
+The typical initial workload is one active personal-notebook user；burst ceiling is five concurrent users。
+
+P0 explicitly does NOT promise：
+
+- an availability SLA
+- high availability
+- active multi-region failover
+- operation beyond the stated workload
+
+### 49.3 P0 Evidence Table
+
+| P0-01 | Deployment scope | Officially hosted multi-tenant SaaS with five-user burst ceiling | §1 Purpose | CI + Docker Compose integration test |
+|---|---|---|---|---|
+| P0-02 | Transactional persistence | Autosave: authorization, revision CAS, note update, snapshot, durable enqueue in one PostgreSQL transaction | §18 Autosave | Integration test with concurrent revision |
+| P0-03 | Tenant isolation | Every resource belongs to exactly one workspace; every operation applies workspace scope server-side | §16 Authorization | Integration test exercising cross-workspace rejection |
+| P0-04 | Markdown/version history | Self-describing `glyphquire-spec` marker; import/restore/migration require `baseRevision`; monotonic revisions; failure preserves source | §19 Version History; `MARKDOWN_SPEC.md` §47 | Golden tests + integration test for conflict/restore |
+| P0-05 | Security baseline | OWASP ASVS 5.0.0 L2, NIST 800-63B-4, SLSA 1.2 Build L1; living reference pins; compliance matrix | §32 Security Requirements | Compliance matrix + automated scans + manual verification report |
+| P0-06 | Backup/data lifecycle | Encrypted daily backups; 30-day retention; monthly restore drill; 24-hour RPO; deletion lifecycle | §33 Backups and Data Lifecycle | Restore drill report with content-hash verification |
+| P0-07 | CI/release/migration | GitHub Actions gates; Git tag + image digest + migration versions; manual approval; expand/contract compatibility | §37 Release and Migration Contract | CI run + deployment log + rollback test |
+| P0-08 | Small-workload performance | Reproducible benchmark: 4 vCPU/8 GB; UI p95 gates; 30-min burst with five users; API p95 gates | §40 Performance Targets | Load report with environment/digest/data-volume record |
+| P0-09 | Observability/runbooks | Structured logs; health/readiness probes; alert rules; notification delivery within 5 min | §30 Operational Monitoring | Runbooks (deploy, rollback, restore, queue-recovery) + alert test |
+| P0-10 | Search consistency | 60-second freshness under P0 workload; query-time authorization; dead-letter handling; operator rebuild | §20 Full-text Search | Integration test + dead-letter scenario + rebuild test |
+| P0-11 | First-party API | `/api/v1` shared schemas; cursor pagination; idempotency keys; conditional mutations; backward-compatible errors | §24 API Design | Contract test suite |
+| P0-12 | Custom Blocks | Workspace-scoped; immutable published versions; unsupported placeholder; round-trip preservation | §11.3 Custom Block API; `MARKDOWN_SPEC.md` §29 | Golden tests + integration test |
+| P0-13 | Conflict recovery | `409` never overwrites; client retains draft across reload/crash; UI supports comparison/merge | §10.3 Dirty State | E2E test with simulated conflict + reload |
+| P0-14 | Browser/accessibility | Latest 2 stable Chrome/Firefox/Safari/Edge; WCAG 2.2 AA; axe CI; keyboard flows; screen-reader smoke | §41 Accessibility and Browser Support | axe report + keyboard-only E2E + VoiceOver or NVDA smoke test |
+
+### 49.4 P1 Items
+
+The following are explicitly non-blocking for the first production release：
+
+- P1-01: Self-hosted production support — Docker Compose remains the local dev/preview path; formal self-hosted production documentation and support is P1。
+- P1-02: High availability — active-active or active-passive failover。
+- P1-03: Multi-region operation — cross-region replication and routing。
+- P1-04: Formal availability SLO — external uptime commitments。
+- P1-05: Distributed tracing — request-level cross-service trace propagation。
+- P1-06: Complete operational dashboards — full Grafana/Prometheus dashboards beyond P0 probes and alerts。
+- P1-07: Formal incident severity/on-call/escalation — structured incident management processes。
+- P1-08: Public API and third-party tokens/SDKs — stable third-party developer contracts beyond first-party `/api/v1`。
+- P1-09: Complete mobile visual editing — full Milkdown editing on mobile; P0 requires reading and basic management only。
+- P1-10: Real-time collaboration/CRDT/automatic three-way merge — Y.js, presence, remote cursors。
+- P1-11: Executable third-party plugins — sandboxed third-party block execution。
+- P1-12: Scaling beyond five concurrent users — horizontal scaling, connection pooling, caching for larger workloads。
+
+---
+
+## 50. Implementation Order Warning
 
 不得先大量製作漂亮 UI 再回頭決定 Markdown grammar。
 
@@ -2363,7 +2431,7 @@ Milkdown node view、動畫、theme、p5 runtime 都建立於這個 contract 之
 
 ---
 
-## 50. Initial Success Criterion
+## 51. Initial Success Criterion
 
 第一個真正 vertical slice 應完成以下流程：
 
