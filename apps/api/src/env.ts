@@ -1,4 +1,4 @@
-import { z } from "zod";
+import type { z } from "zod";
 import { databaseEnvSchema, authEnvSchema, appEnvSchema } from "@glyphquire/shared";
 
 const envSchema = databaseEnvSchema.merge(authEnvSchema).merge(appEnvSchema);
