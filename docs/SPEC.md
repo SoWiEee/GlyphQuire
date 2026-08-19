@@ -309,13 +309,16 @@ Browser
 
 ```ts
 export interface DocumentEngine {
-  parse(markdown: string, version?: number): ParseResult;
+  parse(markdown: string): ParseResult;
+  importLegacy(markdown: string, assumedVersion: number): ParseResult;
   validate(document: DocumentNode): ValidationResult;
   serialize(document: DocumentNode): string;
   migrate(markdown: string, from: number, to: number): MigrationResult;
   extractText(document: DocumentNode): string;
 }
 ```
+
+`parse` MUST read `glyphquire-spec` from canonical Markdown。Only the explicitly named `importLegacy` accepts a caller-selected version；its result and diagnostics MUST preserve the original input。Format rules：see `MARKDOWN_SPEC.md` §47。
 
 ### 7.3 Round-trip invariant
 
@@ -540,6 +543,15 @@ interface EditorState {
 }
 ```
 
+Conflict recovery：
+
+- `409 REVISION_CONFLICT` MUST NOT overwrite server content。
+- Client MUST retain the unsent local draft across browser reload or crash。
+- UI MUST support comparison、copying 或 manual merge before resubmission。
+- Automatic three-way merge、CRDT 與 real-time collaboration are outside P0。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
+
 ---
 
 ## 11. Component System
@@ -576,6 +588,8 @@ interface ComponentDefinition<TProps> {
 - canvas
 
 ### 11.3 Custom Block API
+
+Detailed requirement: see `MARKDOWN_SPEC.md` §29 for definition lifecycle and unsupported placeholders。Detailed requirement: see §16 for workspace-scoped resolution。
 
 v1 提供 built-in block presets，並允許使用者建立 declarative custom blocks。
 
@@ -847,7 +861,7 @@ public
 
 ### 16.3 Policy
 
-所有 mutation API 必須 server-side authorization。
+Authorization is deny-by-default。所有 read、list、search、mutation、restore、asset resolution、share access 與 worker execution MUST perform server-side authorization。
 
 禁止依賴 frontend hidden buttons 作為安全控制。
 
@@ -858,6 +872,15 @@ authorize(actor, action, resource)
 ```
 
 作為統一 policy entry point。
+
+Tenant invariants：
+
+- Every note、asset、theme、share link、search record 與 job MUST belong to exactly one workspace。
+- Every server and worker operation MUST derive workspace scope from trusted server-side context and apply it to the resource query。
+- Resource owner MUST be a current workspace member；ownership MUST be transferred before that member leaves。
+- Cross-workspace asset and Custom Block references MUST be rejected。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
 
 ---
 
@@ -891,6 +914,8 @@ audit_logs
 
 ### 17.2 Notes
 
+Detailed requirement: see §16 for workspace ownership and tenant isolation。
+
 ```ts
 interface NoteRow {
   id: string;
@@ -914,6 +939,8 @@ interface NoteRow {
 ```
 
 ### 17.3 Optimistic concurrency
+
+Detailed requirement: see §10.3 for client conflict recovery、§18 for transactional autosave、and §19 for history semantics。
 
 更新：
 
@@ -942,6 +969,8 @@ request：
 
 ## 18. Autosave
 
+Autosave is the sole authority for transactional note persistence。
+
 ### 18.1 Client behavior
 
 建議：
@@ -953,7 +982,7 @@ request：
 
 ### 18.2 Server behavior
 
-每次 autosave：
+每次 autosave MUST perform the following in one PostgreSQL transaction：
 
 1. authorization
 2. validate document size
@@ -962,6 +991,18 @@ request：
 5. increment revision
 6. selectively create version snapshot
 7. enqueue search-index job when needed
+
+Revision validation MUST use compare-and-swap。Durable Graphile Worker enqueue commits or rolls back with the note update and optional snapshot。
+
+```ts
+type NoteOperationIdentity = {
+  noteId: string;
+  revision: number;
+  operation: string;
+};
+```
+
+Handler MUST be idempotent by `NoteOperationIdentity`。A job for an older revision MUST NOT replace derived state for a newer revision。
 
 ### 18.3 Version snapshot policy
 
@@ -976,9 +1017,13 @@ snapshot trigger：
 - before restore
 - before major import
 
+Production release priority and evidence: see §49 Production Readiness Contract。
+
 ---
 
 ## 19. Version History
+
+Version History is the sole authority for import、restore 與 document migration revision semantics。
 
 `note_versions`：
 
@@ -1006,9 +1051,23 @@ v1 支援：
 - named versions
 - branch/fork
 
+Import、restore 與 document migration MUST submit `baseRevision`。A mismatch returns `409 REVISION_CONFLICT`。
+
+Successful operation MUST：
+
+- create a new monotonically increasing revision
+- record actor、timestamp 與 reason
+- preserve the previous revision rather than rewind or overwrite history
+
+Failure MUST preserve the original Markdown。Marker validation and legacy import：see `MARKDOWN_SPEC.md` §47。Detailed requirement: see §10.3 for client conflict recovery。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
+
 ---
 
 ## 20. Full-text Search
+
+Full-text Search is the sole authority for index consistency and recovery。Detailed requirement: see §16 for tenant isolation。
 
 v1 採 Hybrid Search。
 
@@ -1058,7 +1117,19 @@ interface SearchPort {
 
 未來可替換為 dedicated search backend，而不改變 API/domain contract。
 
+Consistency contract：
+
+- Saved content and revision history are immediately authoritative。
+- Under the approved P0 benchmark environment and workload, every successfully saved revision MUST become searchable within 60 seconds；outside that profile this is an engineering target rather than an external SLA。
+- Query-time authorization MUST exclude unauthorized、deleted 與 cross-workspace content。
+- Failed indexing MUST retry and then enter dead-letter state with an operator alert。
+- Operator MUST be able to rebuild one note or one workspace。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
+
 ## 21. Asset Manager
+
+Detailed requirement: see §16 for workspace authorization。Detailed requirement: see §33 for retention and deletion lifecycle。
 
 ### 21.1 Supported assets
 
@@ -1146,6 +1217,8 @@ R2Adapter
 
 ## 22. Import / Export
 
+Detailed requirement: see §19 for `baseRevision`、conflict and history semantics。Detailed requirement: see §33 for export and deletion lifecycle。
+
 ### 22.1 Import v1
 
 - Markdown
@@ -1158,6 +1231,7 @@ Import 必須：
 - limit file count
 - validate custom syntax
 - preserve unsupported syntax when possible
+- require `baseRevision` when importing into an existing note
 
 ### 22.2 Export v1
 
@@ -1190,6 +1264,8 @@ Share link 儲存 random opaque token hash。
 ---
 
 ## 24. API Design
+
+API Design is the sole authority for the first-party HTTP contract。
 
 Base：
 
@@ -1229,11 +1305,23 @@ POST   /api/v1/themes
 
 Hono RPC 作為 first-party frontend type-safe client。
 
-External/public API 若後期提供，應另行維護 stable HTTP/OpenAPI contract，不將 Hono RPC internal types 直接視為永久 public API。
+P0 only commits to the first-party `/api/v1` interface。Every request and response MUST have a shared schema。
+
+- List and search operations MUST use cursor pagination and deterministic ordering。
+- Retriable create、upload 與 export operations MUST accept idempotency keys。
+- Mutation MUST use revision or equivalent conditional request。
+- Error codes MUST remain backward compatible within `/api/v1`。
+- Breaking contract requires a new API version or an explicit migration。
+
+Public API credentials、third-party tokens 與 long-term SDK compatibility are P1。Hono RPC internal types are not a permanent public contract。
+
+Production release priority and evidence: see §49 Production Readiness Contract。
 
 ---
 
 ## 25. Input Validation
+
+Detailed requirement: see §24 for the first-party API contract。
 
 API boundary 與 runtime message boundary 均使用 schema validation。
 
@@ -1257,6 +1345,8 @@ const body = await c.req.json() as SomeType;
 ---
 
 ## 26. Error Model
+
+Detailed requirement: see §24 for version and compatibility rules。
 
 API error：
 
@@ -1289,6 +1379,8 @@ production response 不回傳 stack trace。
 ---
 
 ## 27. Background Jobs
+
+Detailed requirement: see §16 for tenant isolation、§18 for note-operation identity and transactional enqueue、and §20 for search freshness and rebuild behavior。
 
 ### 27.1 Jobs v1
 
