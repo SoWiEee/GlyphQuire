@@ -293,6 +293,8 @@ Browser
 
 `packages/document-engine` 為產品最核心且不得依賴 Vue、Milkdown、CodeMirror、Tailwind、Hono 的 pure TypeScript package。
 
+實作基礎為 unified/remark 生態：parse 使用 `unified` + `remark-parse` + `remark-gfm` + `remark-directive` + `remark-frontmatter` 產生 MDAST；serialize 使用 `mdast-util-to-markdown` 及對應 GFM/directive/frontmatter extensions。Grammar 細節與 conformance：見 `MARKDOWN_SPEC.md` §4、§34。
+
 ### 7.1 Responsibilities
 
 - parse Markdown

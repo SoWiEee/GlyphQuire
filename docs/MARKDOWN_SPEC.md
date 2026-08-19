@@ -6,7 +6,9 @@
 > Base dialect: GitHub Flavored Markdown (GFM)  
 > Extension grammar: Generic Directives (`remark-directive` compatible)  
 > Architecture: Markdown → MDAST → Notebook Semantic AST  
-> Last updated: 2026-08-19
+> Parser stack: `unified` + `remark-parse` + `remark-gfm` + `remark-directive` + `remark-frontmatter`  
+> Serializer stack: `mdast-util-to-markdown` with GFM, directive, and frontmatter extensions  
+> Last updated: 2026-08-20
 
 ## 1. Purpose
 
@@ -69,10 +71,11 @@ Canonical Markdown MUST 可在沒有 Visual Editor 的情況下被讀取與編�
 Markdown source
       │
       ▼
-micromark / remark parser
+unified / remark-parse
       │
-      ├─ GFM extensions
-      └─ directive extension
+      ├─ remark-gfm (GFM extensions)
+      ├─ remark-directive (directive extension)
+      └─ remark-frontmatter (glyphquire-spec YAML)
       │
       ▼
 MDAST
@@ -86,6 +89,8 @@ Semantic validation
       ▼
 Notebook Semantic AST
 ```
+
+Concrete parser stack is `unified` + `remark-parse` + `remark-gfm` + `remark-directive` + `remark-frontmatter`; serialization uses `mdast-util-to-markdown` with the matching GFM, directive, and frontmatter extensions. Implementations MUST NOT hand-concatenate directive or attribute text (see §12, §34).
 
 Milkdown 使用獨立 side path：
 
@@ -1831,7 +1836,7 @@ unknown directives survive parse/serialize
 ## 61. ADR Summary
 
 ```text
-ADR-01  Generic directives (`remark-directive`)       Accepted
+ADR-01  Generic directives (unified/remark-directive)  Accepted
 ADR-02  MDAST + Notebook Semantic AST                 Accepted
 ADR-03  Milkdown ↔ MDAST                              Accepted
 ADR-04  Graphile Worker                               Accepted
