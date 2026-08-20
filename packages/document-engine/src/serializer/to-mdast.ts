@@ -1,6 +1,6 @@
-import type { Root, RootContent, Yaml, Image, PhrasingContent } from "mdast";
+import type { Root, RootContent, Yaml, Image } from "mdast";
 import type { ContainerDirective } from "mdast-util-directive";
-import { BlockRegistry } from "../registry/registry.js";
+import type { BlockRegistry } from "../registry/registry.js";
 import type { SerializeContext } from "../registry/types.js";
 import type { BlockNode, NotebookDocument } from "../ast/nodes.js";
 
@@ -24,6 +24,9 @@ function serializeBlock(node: BlockNode, registry: BlockRegistry, context: Seria
     case "heading":
       return { type: "heading", depth: node.depth, children: node.children };
     case "quote":
+      // Safe structural narrowing: serializeBlocks returns valid BlockContent
+      // for a blockquote's children; `never` only bypasses mdast's overly
+      // narrow declared child type, it does not mask an impossible case.
       return { type: "blockquote", children: serializeBlocks(node.children, registry, context) as never };
     case "list":
       return {
@@ -35,6 +38,8 @@ function serializeBlock(node: BlockNode, registry: BlockRegistry, context: Seria
           type: "listItem" as const,
           ...(item.checked !== undefined ? { checked: item.checked } : {}),
           spread: item.spread,
+          // Safe structural narrowing (see blockquote case above), not an
+          // impossible case.
           children: serializeBlocks(item.children, registry, context) as never,
         })),
       };
@@ -58,6 +63,8 @@ function serializeBlock(node: BlockNode, registry: BlockRegistry, context: Seria
     case "thematicBreak":
       return { type: "thematicBreak" };
     case "footnoteDefinition":
+      // Safe structural narrowing (see blockquote case above), not an
+      // impossible case.
       return { type: "footnoteDefinition", identifier: node.identifier, ...(node.label ? { label: node.label } : {}), children: serializeBlocks(node.children, registry, context) as never };
     case "definition":
       return { type: "definition", identifier: node.identifier, ...(node.label ? { label: node.label } : {}), url: node.url, ...(node.title ? { title: node.title } : {}) };
@@ -75,6 +82,10 @@ function serializeInvalid(node: Extract<BlockNode, { type: "invalid-block" }>, r
     return { type: "html", value: node.source };
   }
   // Re-emit as its original directive with preserved attributes (§15.2).
+  // Assumes container-kind: InvalidBlockNode has no `directiveType` field,
+  // so this always rebuilds a containerDirective. That is correct for every
+  // v0.1 built-in (all kind:"container"); leaf/text directives and custom
+  // blocks are deferred, so this will need revisiting once they exist.
   return { type: "containerDirective", name: node.originalType, attributes: node.attributes, children: serializeBlocks(node.children, registry, context) as ContainerDirective["children"] };
 }
 
@@ -82,8 +93,14 @@ function serializeDirectiveBlock(node: BlockNode, registry: BlockRegistry, conte
   const name = node.type === "runtime" ? node.runtime : node.type;
   const def = registry.get(name);
   if (!def) {
-    // Should not happen for built-ins; fall back to an empty paragraph to avoid data loss of siblings.
-    return { type: "paragraph", children: [] as PhrasingContent[] };
+    // Caller contract violation: the registry passed to serialize/
+    // documentToMdast must contain every block type present in the
+    // document. Silently dropping the node here would be silent data loss;
+    // there is no "serialize never throws" invariant (unlike parse), so
+    // surface the problem loudly instead.
+    throw new Error(
+      `Cannot serialize block "${name}": no definition registered. The registry passed to serialize/documentToMdast must contain every block type present in the document.`,
+    );
   }
   return def.toDirective(node, context) as unknown as RootContent;
 }
