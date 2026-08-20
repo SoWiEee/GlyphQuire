@@ -130,6 +130,25 @@ describe("parse", () => {
     expect(result.diagnostics.some((d) => d.code === "DIRECTIVE_SYNTAX_INVALID")).toBe(false);
   });
 
+  it("accepts multiline inline code containing a directive-looking source line", () => {
+    const source = '---\nglyphquire-spec: 1\n---\n\n`prefix\n:::callout{type="warning"\nsuffix`\n';
+    const result = parse(source);
+
+    expect(result.ok).toBe(true);
+    expect(result.source).toBe(source);
+    expect(result.diagnostics.some((d) => d.code === "DIRECTIVE_SYNTAX_INVALID")).toBe(false);
+  });
+
+  it("rejects a malformed opener on a bare-CR continuation line", () => {
+    const source = ["---", "glyphquire-spec: 1", "---", "", "plain", ':::callout{type="warning"', "body", ""].join("\r");
+    const result = parse(source);
+
+    expect(result.ok).toBe(false);
+    expect(result.document).toBeNull();
+    expect(result.source).toBe(source);
+    expect(result.diagnostics.some((d) => d.code === "DIRECTIVE_SYNTAX_INVALID")).toBe(true);
+  });
+
   it("retains exact legacy source and removes only the expected missing-version warning", () => {
     const source = "# Legacy  \r\n\r\nBody with trailing spaces  \r\n";
     const result = importLegacy(source, 1);

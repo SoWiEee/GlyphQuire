@@ -4,7 +4,7 @@ import remarkStringify from "remark-stringify";
 import remarkGfm from "remark-gfm";
 import remarkDirective from "remark-directive";
 import remarkFrontmatter from "remark-frontmatter";
-import type { Root } from "mdast";
+import type { PhrasingContent, Root } from "mdast";
 
 export type MdastParser = (markdown: string) => Root;
 
@@ -61,7 +61,29 @@ export function parseToMdast(markdown: string): Root {
   return result.tree;
 }
 
-const MALFORMED_BLOCK_DIRECTIVE_RE = /^ {0,3}:{2,3}[a-z][a-z0-9-]{0,63}\{/;
+const MALFORMED_BLOCK_DIRECTIVE_RE = /^( {0,3}):{2,3}[a-z][a-z0-9-]{0,63}\{/;
+
+interface SourceRange {
+  from: number;
+  to: number;
+}
+
+function collectInlineCodeRanges(
+  children: PhrasingContent[],
+  ranges: SourceRange[],
+): void {
+  for (const child of children) {
+    if (child.type === "inlineCode") {
+      const from = child.position?.start.offset;
+      const to = child.position?.end.offset;
+      if (from !== undefined && to !== undefined) ranges.push({ from, to });
+      continue;
+    }
+    if ("children" in child) {
+      collectInlineCodeRanges(child.children as PhrasingContent[], ranges);
+    }
+  }
+}
 
 /**
  * Detect the bounded directive syntax failure that remark represents as a
@@ -74,11 +96,23 @@ export function hasMalformedBlockDirective(tree: Root, markdown: string): boolea
       continue;
     }
 
-    const source = markdown.slice(node.position.start.offset, node.position.end.offset);
-    for (const line of source.split(/\r?\n/)) {
-      if (MALFORMED_BLOCK_DIRECTIVE_RE.test(line) && !line.includes("}")) {
+    const sourceStart = node.position.start.offset;
+    const source = markdown.slice(sourceStart, node.position.end.offset);
+    const inlineCodeRanges: SourceRange[] = [];
+    collectInlineCodeRanges(node.children, inlineCodeRanges);
+    const lines = source.split(/(\r\n|[\r\n])/);
+    let lineStart = sourceStart;
+    for (let index = 0; index < lines.length; index += 2) {
+      const line = lines[index] ?? "";
+      const match = MALFORMED_BLOCK_DIRECTIVE_RE.exec(line);
+      const openerStart = lineStart + (match?.[1]?.length ?? 0);
+      const isInlineCode = inlineCodeRanges.some(
+        (range) => openerStart >= range.from && openerStart < range.to,
+      );
+      if (match && !isInlineCode && !line.includes("}")) {
         return true;
       }
+      lineStart += line.length + (lines[index + 1]?.length ?? 0);
     }
   }
   return false;
