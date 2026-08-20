@@ -1,4 +1,4 @@
-import { BlockRegistry } from "./registry.js";
+import { BlockRegistry, registerBuiltin } from "./registry.js";
 import { calloutBlock } from "./blocks/callout.js";
 import { stickyBlock } from "./blocks/sticky.js";
 import { toggleBlock } from "./blocks/toggle.js";
@@ -20,7 +20,7 @@ export function createRegistry(): BlockRegistry {
     p5Block,
     canvasBlock,
   ]) {
-    registry.register(def);
+    registerBuiltin(registry, def);
   }
   return registry;
 }

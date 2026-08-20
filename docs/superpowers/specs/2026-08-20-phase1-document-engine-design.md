@@ -247,7 +247,9 @@ Built-in definitions and their capabilities:
 | Runtime | `p5`/`canvas` | `sandbox-runtime` | preserves source string; no execution (§25–26) |
 
 Reserved names (§19): `callout, sticky, toggle, tabs, tab, columns, column, p5,
-canvas`. The registry rejects attempts to register outside these in v0.1.
+canvas`. Public registry registration rejects these reserved names; non-reserved
+registry entries remain structurally supported, although declarative custom
+blocks are a Phase 1 non-goal.
 
 Attribute handling (§11): string values coerced to schema type by the validator;
 serializer emits double-quoted values in schema-defined deterministic order;
