@@ -109,4 +109,62 @@ describe("registry", () => {
       ).toThrow(/reserved/);
     }
   });
+
+  it("isolates built-in snapshots across registries", () => {
+    const first = createRegistry();
+    const stored = first.get("callout")!;
+
+    try {
+      stored.name = "custom";
+    } catch (error) {
+      expect(error).toBeInstanceOf(TypeError);
+    }
+    try {
+      stored.capabilities.push("network-request");
+    } catch (error) {
+      expect(error).toBeInstanceOf(TypeError);
+    }
+
+    const second = createRegistry();
+    expect(second.get("callout")?.name).toBe("callout");
+    expect(second.get("callout")?.capabilities).toEqual(["static"]);
+  });
+
+  it("isolates caller-owned definitions after public registration", () => {
+    const definition = {
+      ...calloutBlock,
+      name: "custom",
+      capabilities: [...calloutBlock.capabilities],
+    };
+    const registry = new BlockRegistry();
+
+    registry.register(definition);
+    definition.name = "changed";
+    definition.capabilities.push("network-request");
+
+    expect(registry.get("custom")?.name).toBe("custom");
+    expect(registry.get("custom")?.capabilities).toEqual(["static"]);
+    expect(registry.has("changed")).toBe(false);
+  });
+
+  it("returns immutable stored definition shells and capabilities", () => {
+    const registry = new BlockRegistry();
+    registry.register({
+      ...calloutBlock,
+      name: "custom",
+      capabilities: [...calloutBlock.capabilities],
+    });
+    const stored = registry.get("custom")!;
+
+    expect(Object.isFrozen(stored)).toBe(true);
+    expect(Object.isFrozen(stored.capabilities)).toBe(true);
+    expect(() => {
+      stored.name = "changed";
+    }).toThrow(TypeError);
+    expect(() => {
+      stored.capabilities.push("network-request");
+    }).toThrow(TypeError);
+    expect(stored.name).toBe("custom");
+    expect(stored.capabilities).toEqual(["static"]);
+  });
 });

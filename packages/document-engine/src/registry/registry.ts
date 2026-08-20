@@ -39,7 +39,19 @@ function insertDefinition(
   if (definitions.has(name)) {
     throw new Error(`Block "${name}" is already registered.`);
   }
-  definitions.set(name, definition);
+
+  const snapshot: BlockDefinition = {
+    name,
+    version: definition.version,
+    kind: definition.kind,
+    schema: definition.schema,
+    capabilities: [...definition.capabilities],
+    fromDirective: definition.fromDirective,
+    toDirective: definition.toDirective,
+  };
+  Object.freeze(snapshot.capabilities);
+  Object.freeze(snapshot);
+  definitions.set(name, snapshot);
 }
 
 export class BlockRegistry {
