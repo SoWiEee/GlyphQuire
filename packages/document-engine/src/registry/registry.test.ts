@@ -74,9 +74,9 @@ describe("registry", () => {
   it("keeps public registration single-argument and bypasses it for built-ins", () => {
     const originalRegister = BlockRegistry.prototype.register;
     const observedArguments: unknown[][] = [];
-    BlockRegistry.prototype.register = function (_definition) {
-      observedArguments.push(Array.from(arguments));
-      return Reflect.apply(originalRegister, this, Array.from(arguments));
+    BlockRegistry.prototype.register = function (...args) {
+      observedArguments.push(args);
+      return Reflect.apply(originalRegister, this, args);
     };
 
     let registry: BlockRegistry;
@@ -164,11 +164,11 @@ describe("registry", () => {
     }).toThrow(TypeError);
     expect(() => {
       // @ts-expect-error stored transform functions are readonly
-      stored.fromDirective = stored.fromDirective;
+      stored.fromDirective = calloutBlock.fromDirective;
     }).toThrow(TypeError);
     expect(() => {
       // @ts-expect-error stored schemas are readonly
-      stored.schema = stored.schema;
+      stored.schema = calloutBlock.schema;
     }).toThrow(TypeError);
     expect(() => {
       // @ts-expect-error stored capabilities are readonly
