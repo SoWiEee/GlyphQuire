@@ -18,6 +18,7 @@ function canonical(value: unknown): unknown {
     const source = value as Record<string, unknown>;
     const result: Record<string, unknown> = {};
     for (const key of Object.keys(source).sort()) {
+      if (key === "position") continue;
       const child = source[key];
       if (child === undefined) continue;
       result[key] = canonical(child);
