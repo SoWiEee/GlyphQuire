@@ -209,6 +209,8 @@ export interface ValidationIssue {
 export interface InvalidBlockNode {
   type: "invalid-block";
   originalType: string;
+  /** Directive kind when this invalid block came from a directive node. */
+  directiveType?: "container" | "leaf" | "text";
   attributes: Record<string, string>;
   errors: ValidationIssue[];
   /** Preserved raw markdown/source for round-trip (e.g. raw HTML value). */

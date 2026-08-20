@@ -23,6 +23,33 @@ describe("serialize", () => {
     expect(out).toContain('x="1"');
   });
 
+  it("preserves an unknown leaf directive as a leaf", () => {
+    const out = roundTrip('---\nglyphquire-spec: 1\n---\n\n::future{x="1"}\n');
+    expect(out).toContain("::future");
+    expect(out).not.toContain(":::future");
+    expect(out).toContain('x="1"');
+  });
+
+  it("preserves the leaf form of a known directive kind mismatch", () => {
+    const out = roundTrip('---\nglyphquire-spec: 1\n---\n\n::callout{type="warning"}\n');
+    expect(out).toContain("::callout");
+    expect(out).not.toContain(":::callout");
+    expect(out).toContain('type="warning"');
+  });
+
+  it("round-trips an unknown inline text directive inside its paragraph", () => {
+    const out = roundTrip('---\nglyphquire-spec: 1\n---\n\nBefore :future[inline] after.\n');
+    expect(out).toContain(":future[inline]");
+  });
+
+  it.each([
+    ["tabs", '::::tabs\n\n:::tab{title="A"}\nValid tab.\n:::\n\nSentinel tabs paragraph.\n\n::::\n'],
+    ["columns", '::::columns{count="2"}\n\n:::column\nValid column.\n:::\n\nSentinel columns paragraph.\n\n::::\n'],
+  ])("serializes the retained foreign child of %s", (_name, body) => {
+    const out = roundTrip(`---\nglyphquire-spec: 1\n---\n\n${body}`);
+    expect(out).toContain("Sentinel");
+  });
+
   it("preserves asset:// image URIs", () => {
     const out = roundTrip("---\nglyphquire-spec: 1\n---\n\n![Arch](asset://01ABC)\n");
     expect(out).toContain("asset://01ABC");

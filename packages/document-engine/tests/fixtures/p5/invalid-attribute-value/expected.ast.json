@@ -5,6 +5,7 @@
     {
       "type": "invalid-block",
       "originalType": "p5",
+      "directiveType": "container",
       "attributes": {
         "height": "not-a-number"
       },

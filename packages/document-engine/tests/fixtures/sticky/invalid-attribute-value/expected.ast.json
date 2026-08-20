@@ -5,6 +5,7 @@
     {
       "type": "invalid-block",
       "originalType": "sticky",
+      "directiveType": "container",
       "attributes": {
         "tone": "purple"
       },

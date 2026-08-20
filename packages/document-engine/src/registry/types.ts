@@ -5,7 +5,7 @@ import type {
   TextDirective,
 } from "mdast-util-directive";
 import type { RootContent } from "mdast";
-import type { BlockNode } from "../ast/nodes.js";
+import type { BlockNode, ValidationIssue } from "../ast/nodes.js";
 import type { DocumentDiagnostic } from "../validation/diagnostics.js";
 
 export type BlockCapability =
@@ -23,6 +23,23 @@ export interface TransformContext {
   /** Transform a list of MDAST block children into semantic block nodes. */
   transformChildren(children: RootContent[]): BlockNode[];
   addDiagnostic(diagnostic: DocumentDiagnostic): void;
+}
+
+/**
+ * Signals a recoverable domain-shape violation after children have already
+ * been transformed. The generic transformer can retain both the issue and
+ * every child without running child transformation a second time.
+ */
+export class BlockValidationError extends Error {
+  readonly issues: ValidationIssue[];
+  readonly children: BlockNode[];
+
+  constructor(issues: ValidationIssue[], children: BlockNode[]) {
+    super(issues[0]?.message ?? "Block validation failed.");
+    this.name = "BlockValidationError";
+    this.issues = issues;
+    this.children = children;
+  }
 }
 
 export interface SerializeContext {

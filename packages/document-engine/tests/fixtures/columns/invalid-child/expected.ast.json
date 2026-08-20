@@ -3,11 +3,18 @@
   "specVersion": 1,
   "children": [
     {
-      "type": "columns",
-      "version": 1,
-      "props": {
-        "count": 2
+      "type": "invalid-block",
+      "originalType": "columns",
+      "directiveType": "container",
+      "attributes": {
+        "count": "2"
       },
+      "errors": [
+        {
+          "code": "INVALID_CHILD",
+          "message": "\"paragraph\" is not a valid child of columns; only \"column\" children are allowed."
+        }
+      ],
       "children": [
         {
           "type": "column",
@@ -33,6 +40,15 @@
                   }
                 }
               ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "value": "Not a column, just a paragraph."
             }
           ]
         }

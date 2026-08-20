@@ -5,6 +5,7 @@
     {
       "type": "invalid-block",
       "originalType": "toggle",
+      "directiveType": "container",
       "attributes": {},
       "errors": [
         {

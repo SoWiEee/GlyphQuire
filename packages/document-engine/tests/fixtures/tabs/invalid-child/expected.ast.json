@@ -3,8 +3,16 @@
   "specVersion": 1,
   "children": [
     {
-      "type": "tabs",
-      "version": 1,
+      "type": "invalid-block",
+      "originalType": "tabs",
+      "directiveType": "container",
+      "attributes": {},
+      "errors": [
+        {
+          "code": "INVALID_CHILD",
+          "message": "\"paragraph\" is not a valid child of tabs; only \"tab\" children are allowed."
+        }
+      ],
       "children": [
         {
           "type": "tab",
@@ -33,6 +41,15 @@
                   }
                 }
               ]
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "value": "Not a tab, just a paragraph."
             }
           ]
         }

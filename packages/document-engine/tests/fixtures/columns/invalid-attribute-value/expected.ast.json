@@ -5,6 +5,7 @@
     {
       "type": "invalid-block",
       "originalType": "columns",
+      "directiveType": "container",
       "attributes": {
         "count": "5"
       },

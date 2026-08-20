@@ -28,4 +28,46 @@ describe("validateDocument", () => {
     expect(r.valid).toBe(false);
     expect(r.diagnostics[0]?.code).toBe("INVALID_PARENT");
   });
+
+  it("uses the recovered tabs scope for retained children of an invalid tabs block", () => {
+    const doc: NotebookDocument = {
+      type: "document",
+      specVersion: 1,
+      children: [{
+        type: "invalid-block",
+        originalType: "tabs",
+        directiveType: "container",
+        attributes: {},
+        errors: [{ code: "INVALID_CHILD", message: "foreign child" }],
+        children: [
+          { type: "paragraph", children: [] },
+          { type: "tab", version: 1, props: { title: "A" }, children: [] },
+        ],
+      }],
+    };
+
+    const r = validateDocument(doc);
+    expect(r.diagnostics.filter((d) => d.code === "INVALID_PARENT")).toHaveLength(0);
+  });
+
+  it("uses the recovered columns scope for retained children of an invalid columns block", () => {
+    const doc: NotebookDocument = {
+      type: "document",
+      specVersion: 1,
+      children: [{
+        type: "invalid-block",
+        originalType: "columns",
+        directiveType: "container",
+        attributes: {},
+        errors: [{ code: "INVALID_CHILD", message: "foreign child" }],
+        children: [
+          { type: "paragraph", children: [] },
+          { type: "column", version: 1, children: [] },
+        ],
+      }],
+    };
+
+    const r = validateDocument(doc);
+    expect(r.diagnostics.filter((d) => d.code === "INVALID_PARENT")).toHaveLength(0);
+  });
 });

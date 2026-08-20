@@ -5,6 +5,7 @@
     {
       "type": "invalid-block",
       "originalType": "callout",
+      "directiveType": "container",
       "attributes": {
         "type": "critical"
       },

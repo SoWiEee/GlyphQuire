@@ -1,9 +1,9 @@
 import { z } from "zod";
 import type { ContainerDirective } from "mdast-util-directive";
-import type { BlockDefinition, DirectiveMdastNode } from "../types.js";
+import { BlockValidationError, type BlockDefinition, type DirectiveMdastNode } from "../types.js";
 import type { ColumnsNode, ColumnNode, BlockNode } from "../../ast/nodes.js";
 import { readAttributes } from "../registry.js";
-import { diagnostic, DIAGNOSTIC_CODES } from "../../validation/diagnostics.js";
+import { DIAGNOSTIC_CODES } from "../../validation/diagnostics.js";
 
 const columnsSchema = z.object({
   count: z
@@ -43,19 +43,19 @@ export const columnsBlock: BlockDefinition<ColumnsNode> = {
     const parsed = columnsSchema.parse(readAttributes(node));
     const container = node as ContainerDirective;
     const transformed: BlockNode[] = context.transformChildren(container.children);
-    for (const child of transformed) {
-      if (child.type !== "column") {
-        context.addDiagnostic(
-          diagnostic(
-            DIAGNOSTIC_CODES.INVALID_CHILD,
-            "warning",
-            `"${child.type}" is not a valid child of columns and was dropped; only "column" children are allowed.`,
-            { block: "columns" },
-          ),
-        );
-      }
+    const invalidChildren = transformed.filter(
+      (child) => child.type !== "column" && !(child.type === "invalid-block" && child.originalType === "column"),
+    );
+    if (invalidChildren.length > 0) {
+      throw new BlockValidationError(
+        invalidChildren.map((child) => ({
+          code: DIAGNOSTIC_CODES.INVALID_CHILD,
+          message: `"${child.type}" is not a valid child of columns; only "column" children are allowed.`,
+        })),
+        transformed,
+      );
     }
-    const children = transformed.filter((c): c is ColumnNode => c.type === "column");
+    const children = transformed.filter((child): child is ColumnNode => child.type === "column");
     const count = (parsed.count ?? Math.min(Math.max(children.length, 2), 4)) as 2 | 3 | 4;
     const props: ColumnsNode["props"] = { count };
     if (parsed.gap !== undefined) props.gap = parsed.gap;

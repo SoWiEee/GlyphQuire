@@ -5,6 +5,7 @@
     {
       "type": "invalid-block",
       "originalType": "canvas",
+      "directiveType": "container",
       "attributes": {
         "height": "-10"
       },

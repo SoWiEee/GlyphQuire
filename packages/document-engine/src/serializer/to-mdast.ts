@@ -69,7 +69,7 @@ function serializeBlock(node: BlockNode, registry: BlockRegistry, context: Seria
     case "definition":
       return { type: "definition", identifier: node.identifier, ...(node.label ? { label: node.label } : {}), url: node.url, ...(node.title ? { title: node.title } : {}) };
     case "unknown-directive":
-      return { type: "containerDirective", name: node.name, attributes: node.attributes, children: serializeBlocks(node.children, registry, context) as ContainerDirective["children"] };
+      return serializeDirectiveByKind(node.directiveType, node.name, node.attributes, node.children, registry, context);
     case "invalid-block":
       return serializeInvalid(node, registry, context);
     default:
@@ -82,11 +82,29 @@ function serializeInvalid(node: Extract<BlockNode, { type: "invalid-block" }>, r
     return { type: "html", value: node.source };
   }
   // Re-emit as its original directive with preserved attributes (§15.2).
-  // Assumes container-kind: InvalidBlockNode has no `directiveType` field,
-  // so this always rebuilds a containerDirective. That is correct for every
-  // v0.1 built-in (all kind:"container"); leaf/text directives and custom
-  // blocks are deferred, so this will need revisiting once they exist.
-  return { type: "containerDirective", name: node.originalType, attributes: node.attributes, children: serializeBlocks(node.children, registry, context) as ContainerDirective["children"] };
+  return serializeDirectiveByKind(node.directiveType ?? "container", node.originalType, node.attributes, node.children, registry, context);
+}
+
+function serializeDirectiveByKind(
+  directiveType: "container" | "leaf" | "text",
+  name: string,
+  attributes: Record<string, string>,
+  children: BlockNode[],
+  registry: BlockRegistry,
+  context: SerializeContext,
+): RootContent {
+  if (directiveType === "leaf") {
+    return { type: "leafDirective", name, attributes, children: [] };
+  }
+  if (directiveType === "text") {
+    return { type: "textDirective", name, attributes, children: [] };
+  }
+  return {
+    type: "containerDirective",
+    name,
+    attributes,
+    children: serializeBlocks(children, registry, context) as ContainerDirective["children"],
+  };
 }
 
 function serializeDirectiveBlock(node: BlockNode, registry: BlockRegistry, context: SerializeContext): RootContent {

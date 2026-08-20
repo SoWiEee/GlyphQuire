@@ -50,13 +50,16 @@ describe("parse", () => {
     );
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error("expected a recoverable v1 document");
-    expect(r.diagnostics.some((d) => d.code === "INVALID_CHILD")).toBe(true);
-    const tabs = r.document.children.find((c) => c.type === "tabs");
+    expect(r.diagnostics.filter((d) => d.code === "INVALID_CHILD")).toHaveLength(1);
+    expect(r.diagnostics.filter((d) => d.code === "INVALID_PARENT")).toHaveLength(0);
+    const tabs = r.document.children[0];
     expect(tabs).toBeDefined();
-    // @ts-expect-error test narrowing
-    expect(tabs.children).toHaveLength(1);
-    // @ts-expect-error test narrowing
-    expect(tabs.children[0].props.title).toBe("A");
+    if (!tabs) throw new Error("expected tabs node");
+    expect(tabs.type).toBe("invalid-block");
+    if (tabs.type !== "invalid-block") throw new Error("expected invalid tabs block");
+    expect(tabs.originalType).toBe("tabs");
+    expect(tabs.children.map((child) => child.type)).toEqual(["paragraph", "tab"]);
+    expect(tabs.children[0]).toMatchObject({ type: "paragraph", children: [{ type: "text", value: "Stray paragraph." }] });
   });
 
   it("records an INVALID_CHILD diagnostic for a foreign child of columns and keeps the valid column", () => {
@@ -65,11 +68,35 @@ describe("parse", () => {
     );
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error("expected a recoverable v1 document");
-    expect(r.diagnostics.some((d) => d.code === "INVALID_CHILD")).toBe(true);
-    const columns = r.document.children.find((c) => c.type === "columns");
+    expect(r.diagnostics.filter((d) => d.code === "INVALID_CHILD")).toHaveLength(1);
+    expect(r.diagnostics.filter((d) => d.code === "INVALID_PARENT")).toHaveLength(0);
+    const columns = r.document.children[0];
     expect(columns).toBeDefined();
-    // @ts-expect-error test narrowing
-    expect(columns.children).toHaveLength(1);
+    if (!columns) throw new Error("expected columns node");
+    expect(columns.type).toBe("invalid-block");
+    if (columns.type !== "invalid-block") throw new Error("expected invalid columns block");
+    expect(columns.originalType).toBe("columns");
+    expect(columns.children.map((child) => child.type)).toEqual(["paragraph", "column"]);
+    expect(columns.children[0]).toMatchObject({ type: "paragraph", children: [{ type: "text", value: "Stray paragraph." }] });
+  });
+
+  it("retains the original leaf kind when a known container directive is used as a leaf", () => {
+    const r = parse('---\nglyphquire-spec: 1\n---\n\n::callout{type="warning"}\n');
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error("expected a recoverable v1 document");
+    const invalid = r.document.children[0];
+    expect(invalid).toBeDefined();
+    if (!invalid) throw new Error("expected invalid node");
+    expect(invalid.type).toBe("invalid-block");
+    if (invalid.type !== "invalid-block") throw new Error("expected invalid directive");
+    expect(invalid.directiveType).toBe("leaf");
+    expect(invalid.originalType).toBe("callout");
+    expect(invalid.errors).toContainEqual(expect.objectContaining({ code: "DIRECTIVE_KIND_MISMATCH" }));
+    expect(r.diagnostics).toContainEqual(expect.objectContaining({
+      code: "DIRECTIVE_KIND_MISMATCH",
+      severity: "error",
+    }));
   });
 
   it("emits DIRECTIVE_UNKNOWN exactly once for an unknown directive nested in a known block", () => {

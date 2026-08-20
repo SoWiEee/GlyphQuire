@@ -6,4 +6,6 @@ glyphquire-spec: 1
 :::column
 Valid column.
 :::
+
+Not a column, just a paragraph.
 ::::

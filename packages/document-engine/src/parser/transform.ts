@@ -18,7 +18,7 @@ import type {
   ContainerDirective,
 } from "mdast-util-directive";
 import { ZodError } from "zod";
-import type { TransformContext, DirectiveMdastNode } from "../registry/types.js";
+import { BlockValidationError, type TransformContext, type DirectiveMdastNode } from "../registry/types.js";
 import { readAttributes, directiveTypeOf, type BlockRegistry } from "../registry/registry.js";
 import {
   diagnostic,
@@ -197,16 +197,46 @@ function transformDirective(
     return { type: "unknown-directive", directiveType: kind, name, attributes, children: fallbackChildren() } satisfies UnknownDirectiveNode;
   }
 
+  if (def.kind !== kind) {
+    const issue = {
+      code: DIAGNOSTIC_CODES.DIRECTIVE_KIND_MISMATCH,
+      message: `Directive "${name}" is declared as a ${def.kind} directive but was used as a ${kind} directive.`,
+    };
+    addDiagnostic(diagnostic(issue.code, "error", issue.message, { block: name }));
+    return {
+      type: "invalid-block",
+      originalType: name,
+      directiveType: kind,
+      attributes,
+      errors: [issue],
+      children: fallbackChildren(),
+    } satisfies InvalidBlockNode;
+  }
+
   try {
     return def.fromDirective(node, context);
   } catch (error) {
+    if (error instanceof BlockValidationError) {
+      for (const issue of error.issues) {
+        addDiagnostic(diagnostic(issue.code, "warning", issue.message, { block: name, attribute: issue.attribute }));
+      }
+      return {
+        type: "invalid-block",
+        originalType: name,
+        directiveType: kind,
+        attributes,
+        errors: error.issues,
+        children: error.children,
+      } satisfies InvalidBlockNode;
+    }
+
     const issues = error instanceof ZodError
       ? error.issues.map((i) => ({ code: DIAGNOSTIC_CODES.ATTRIBUTE_INVALID_VALUE, message: i.message, attribute: i.path.join(".") || undefined }))
       : [{ code: DIAGNOSTIC_CODES.ATTRIBUTE_INVALID_VALUE, message: String(error), attribute: undefined }];
     for (const issue of issues) {
       addDiagnostic(diagnostic(issue.code, "error", issue.message, { block: name, attribute: issue.attribute }));
     }
-    const invalid: InvalidBlockNode = { type: "invalid-block", originalType: name, attributes, errors: issues, children: fallbackChildren() };
+    const invalid: InvalidBlockNode = { type: "invalid-block", originalType: name, directiveType: kind, attributes, errors: issues, children: fallbackChildren() };
     return invalid;
   }
 }

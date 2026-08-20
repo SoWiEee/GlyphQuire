@@ -6,4 +6,6 @@ glyphquire-spec: 1
 :::tab{title="A"}
 Valid tab.
 :::
+
+Not a tab, just a paragraph.
 ::::
