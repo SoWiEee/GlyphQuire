@@ -34,5 +34,9 @@ export function createProcessor(): Processor<Root, undefined, undefined, Root, s
 
 /** Parse markdown into MDAST. Never throws on arbitrary UTF-8. */
 export function parseToMdast(markdown: string): Root {
-  return createProcessor().parse(markdown);
+  try {
+    return createProcessor().parse(markdown);
+  } catch {
+    return { type: "root", children: [] } as Root;
+  }
 }

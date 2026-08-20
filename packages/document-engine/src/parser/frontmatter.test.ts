@@ -30,4 +30,10 @@ describe("extractSpecVersion", () => {
     expect(r.version).toBeNull();
     expect(r.diagnostics[0]?.code).toBe("SPEC_VERSION_INVALID");
   });
+
+  it("rejects frontmatter that is not valid YAML", () => {
+    const r = version("---\nglyphquire-spec: [1, 2\n---\n");
+    expect(r.version).toBeNull();
+    expect(r.diagnostics[0]?.code).toBe("SPEC_VERSION_INVALID");
+  });
 });
