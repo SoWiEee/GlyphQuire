@@ -31,8 +31,6 @@ function collectBlocks(nodes: BlockNode[], parts: string[]): void {
         collectBlocks(node.children, parts);
         break;
       case "list":
-        for (const item of node.children) collectBlocks(item.children, parts);
-        break;
       case "listItem":
         collectBlocks(node.children, parts);
         break;
@@ -67,8 +65,15 @@ function collectBlocks(nodes: BlockNode[], parts: string[]): void {
         collectBlocks(node.children, parts);
         break;
       // code, thematicBreak, definition, runtime: excluded from search text
-      default:
+      case "code":
+      case "thematicBreak":
+      case "definition":
+      case "runtime":
         break;
+      default: {
+        const _exhaustive: never = node;
+        return _exhaustive;
+      }
     }
   }
 }
