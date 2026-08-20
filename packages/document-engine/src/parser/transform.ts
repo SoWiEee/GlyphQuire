@@ -14,11 +14,13 @@ import type {
   Html,
   PhrasingContent,
 } from "mdast";
-import type {
-  ContainerDirective,
-} from "mdast-util-directive";
+import type { ContainerDirective } from "mdast-util-directive";
 import { ZodError } from "zod";
-import { BlockValidationError, type TransformContext, type DirectiveMdastNode } from "../registry/types.js";
+import {
+  BlockValidationError,
+  type TransformContext,
+  type DirectiveMdastNode,
+} from "../registry/types.js";
 import { readAttributes, directiveTypeOf, type BlockRegistry } from "../registry/registry.js";
 import {
   diagnostic,
@@ -55,11 +57,10 @@ function transformNodes(
   addDiagnostic: (d: DocumentDiagnostic) => void,
   sharedContext?: TransformContext,
 ): BlockNode[] {
-  const context: TransformContext =
-    sharedContext ?? {
-      transformChildren: (children) => transformNodes(children, registry, addDiagnostic),
-      addDiagnostic,
-    };
+  const context: TransformContext = sharedContext ?? {
+    transformChildren: (children) => transformNodes(children, registry, addDiagnostic),
+    addDiagnostic,
+  };
   const result: BlockNode[] = [];
   for (const node of nodes) {
     const mapped = transformNode(node, registry, context, addDiagnostic);
@@ -80,7 +81,11 @@ function transformNode(
     case "paragraph":
       return transformParagraph(node);
     case "heading":
-      return { type: "heading", depth: (node as Heading).depth, children: node.children as PhrasingContent[] };
+      return {
+        type: "heading",
+        depth: (node as Heading).depth,
+        children: node.children as PhrasingContent[],
+      };
     case "blockquote":
       return { type: "quote", children: context.transformChildren((node as Blockquote).children) };
     case "list":
@@ -98,7 +103,11 @@ function transformNode(
       return { type: "thematicBreak" };
     case "footnoteDefinition": {
       const fn = node as FootnoteDefinition;
-      const out = { type: "footnoteDefinition", identifier: fn.identifier, children: context.transformChildren(fn.children) } as BlockNode;
+      const out = {
+        type: "footnoteDefinition",
+        identifier: fn.identifier,
+        children: context.transformChildren(fn.children),
+      } as BlockNode;
       if (fn.label) (out as { label?: string }).label = fn.label;
       return out;
     }
@@ -144,8 +153,14 @@ function transformList(node: List, context: TransformContext): BlockNode {
     }
     return li;
   });
-  const out = { type: "list" as const, ordered: node.ordered ?? false, spread: node.spread ?? false, children };
-  if (node.start !== null && node.start !== undefined) (out as { start?: number }).start = node.start;
+  const out = {
+    type: "list" as const,
+    ordered: node.ordered ?? false,
+    spread: node.spread ?? false,
+    children,
+  };
+  if (node.start !== null && node.start !== undefined)
+    (out as { start?: number }).start = node.start;
   return out;
 }
 
@@ -161,11 +176,21 @@ function transformTable(node: Table): TableNode {
   return { type: "table", align, children: rows };
 }
 
-function transformHtml(node: Html, addDiagnostic: (d: DocumentDiagnostic) => void): InvalidBlockNode {
+function transformHtml(
+  node: Html,
+  addDiagnostic: (d: DocumentDiagnostic) => void,
+): InvalidBlockNode {
   addDiagnostic(
     diagnostic(DIAGNOSTIC_CODES.RAW_HTML_DISABLED, "warning", "Raw HTML is disabled in v0.1."),
   );
-  return { type: "invalid-block", originalType: "html", attributes: {}, errors: [{ code: DIAGNOSTIC_CODES.RAW_HTML_DISABLED, message: "Raw HTML is disabled." }], source: node.value, children: [] };
+  return {
+    type: "invalid-block",
+    originalType: "html",
+    attributes: {},
+    errors: [{ code: DIAGNOSTIC_CODES.RAW_HTML_DISABLED, message: "Raw HTML is disabled." }],
+    source: node.value,
+    children: [],
+  };
 }
 
 function transformDirective(
@@ -187,14 +212,37 @@ function transformDirective(
       : [];
 
   if (!DIRECTIVE_NAME_RE.test(name)) {
-    addDiagnostic(diagnostic(DIAGNOSTIC_CODES.DIRECTIVE_INVALID_NAME, "error", `Invalid directive name "${name}".`, { block: name }));
-    return { type: "unknown-directive", directiveType: kind, name, attributes, children: fallbackChildren() } satisfies UnknownDirectiveNode;
+    addDiagnostic(
+      diagnostic(
+        DIAGNOSTIC_CODES.DIRECTIVE_INVALID_NAME,
+        "error",
+        `Invalid directive name "${name}".`,
+        { block: name },
+      ),
+    );
+    return {
+      type: "unknown-directive",
+      directiveType: kind,
+      name,
+      attributes,
+      children: fallbackChildren(),
+    } satisfies UnknownDirectiveNode;
   }
 
   const def = registry.get(name);
   if (!def) {
-    addDiagnostic(diagnostic(DIAGNOSTIC_CODES.DIRECTIVE_UNKNOWN, "warning", `Unknown directive "${name}".`, { block: name }));
-    return { type: "unknown-directive", directiveType: kind, name, attributes, children: fallbackChildren() } satisfies UnknownDirectiveNode;
+    addDiagnostic(
+      diagnostic(DIAGNOSTIC_CODES.DIRECTIVE_UNKNOWN, "warning", `Unknown directive "${name}".`, {
+        block: name,
+      }),
+    );
+    return {
+      type: "unknown-directive",
+      directiveType: kind,
+      name,
+      attributes,
+      children: fallbackChildren(),
+    } satisfies UnknownDirectiveNode;
   }
 
   if (def.kind !== kind) {
@@ -218,7 +266,12 @@ function transformDirective(
   } catch (error) {
     if (error instanceof BlockValidationError) {
       for (const issue of error.issues) {
-        addDiagnostic(diagnostic(issue.code, "warning", issue.message, { block: name, attribute: issue.attribute }));
+        addDiagnostic(
+          diagnostic(issue.code, "warning", issue.message, {
+            block: name,
+            attribute: issue.attribute,
+          }),
+        );
       }
       return {
         type: "invalid-block",
@@ -230,19 +283,36 @@ function transformDirective(
       } satisfies InvalidBlockNode;
     }
 
-    const issues = error instanceof ZodError
-      ? error.issues.map((i) => ({
-        code: i.code === "invalid_type" && i.received === "undefined"
-          ? DIAGNOSTIC_CODES.ATTRIBUTE_REQUIRED
-          : DIAGNOSTIC_CODES.ATTRIBUTE_INVALID_VALUE,
-        message: i.message,
-        attribute: i.path.join(".") || undefined,
-      }))
-      : [{ code: DIAGNOSTIC_CODES.ATTRIBUTE_INVALID_VALUE, message: String(error), attribute: undefined }];
+    const issues =
+      error instanceof ZodError
+        ? error.issues.map((i) => ({
+            code:
+              i.code === "invalid_type" && i.received === "undefined"
+                ? DIAGNOSTIC_CODES.ATTRIBUTE_REQUIRED
+                : DIAGNOSTIC_CODES.ATTRIBUTE_INVALID_VALUE,
+            message: i.message,
+            attribute: i.path.join(".") || undefined,
+          }))
+        : [
+            {
+              code: DIAGNOSTIC_CODES.ATTRIBUTE_INVALID_VALUE,
+              message: String(error),
+              attribute: undefined,
+            },
+          ];
     for (const issue of issues) {
-      addDiagnostic(diagnostic(issue.code, "error", issue.message, { block: name, attribute: issue.attribute }));
+      addDiagnostic(
+        diagnostic(issue.code, "error", issue.message, { block: name, attribute: issue.attribute }),
+      );
     }
-    const invalid: InvalidBlockNode = { type: "invalid-block", originalType: name, directiveType: kind, attributes, errors: issues, children: fallbackChildren() };
+    const invalid: InvalidBlockNode = {
+      type: "invalid-block",
+      originalType: name,
+      directiveType: kind,
+      attributes,
+      errors: issues,
+      children: fallbackChildren(),
+    };
     return invalid;
   }
 }

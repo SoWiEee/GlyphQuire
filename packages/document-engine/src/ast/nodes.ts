@@ -75,7 +75,7 @@ export interface CodeNode {
 
 export interface TableNode {
   type: "table";
-  align: (AlignType)[];
+  align: AlignType[];
   children: TableRowNode[];
 }
 

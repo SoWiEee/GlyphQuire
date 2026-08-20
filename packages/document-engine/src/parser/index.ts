@@ -7,7 +7,11 @@ import { extractSpecVersion } from "./frontmatter.js";
 import { transformRoot } from "./transform.js";
 import { validateDocument } from "../validation/validate.js";
 import { CURRENT_SPEC_VERSION } from "../migration/migrate.js";
-import { diagnostic, DIAGNOSTIC_CODES, type DocumentDiagnostic } from "../validation/diagnostics.js";
+import {
+  diagnostic,
+  DIAGNOSTIC_CODES,
+  type DocumentDiagnostic,
+} from "../validation/diagnostics.js";
 
 export interface AcceptedParseResult {
   ok: true;
@@ -46,11 +50,13 @@ function parseInternal(
 
   const parsed = parseMarkdown(markdown, parser);
   if (!parsed.ok) {
-    add(diagnostic(
-      DIAGNOSTIC_CODES.DIRECTIVE_SYNTAX_INVALID,
-      "error",
-      "Markdown could not be parsed safely.",
-    ));
+    add(
+      diagnostic(
+        DIAGNOSTIC_CODES.DIRECTIVE_SYNTAX_INVALID,
+        "error",
+        "Markdown could not be parsed safely.",
+      ),
+    );
     return rejected(markdown, diagnostics, null);
   }
 
@@ -76,20 +82,24 @@ function parseInternal(
 
   const specVersion = versionInfo.version ?? assumedVersion ?? null;
   if (specVersion !== null && specVersion > CURRENT_SPEC_VERSION) {
-    add(diagnostic(
-      DIAGNOSTIC_CODES.UNSUPPORTED_SPEC_VERSION,
-      "error",
-      `Spec version ${specVersion} is newer than supported (${CURRENT_SPEC_VERSION}).`,
-    ));
+    add(
+      diagnostic(
+        DIAGNOSTIC_CODES.UNSUPPORTED_SPEC_VERSION,
+        "error",
+        `Spec version ${specVersion} is newer than supported (${CURRENT_SPEC_VERSION}).`,
+      ),
+    );
     return rejected(markdown, diagnostics, specVersion);
   }
 
   if (hasMalformedBlockDirective(tree, markdown)) {
-    add(diagnostic(
-      DIAGNOSTIC_CODES.DIRECTIVE_SYNTAX_INVALID,
-      "error",
-      "A block directive attribute opener is missing its closing brace.",
-    ));
+    add(
+      diagnostic(
+        DIAGNOSTIC_CODES.DIRECTIVE_SYNTAX_INVALID,
+        "error",
+        "A block directive attribute opener is missing its closing brace.",
+      ),
+    );
     return rejected(markdown, diagnostics, specVersion);
   }
 
@@ -153,9 +163,14 @@ export function importLegacy(
     );
   }
 
-  return parseInternal(markdown, registry, (source) => {
-    const result = parseMarkdown(source);
-    if (!result.ok) throw new Error("Markdown could not be parsed safely.");
-    return result.tree;
-  }, assumedVersion);
+  return parseInternal(
+    markdown,
+    registry,
+    (source) => {
+      const result = parseMarkdown(source);
+      if (!result.ok) throw new Error("Markdown could not be parsed safely.");
+      return result.tree;
+    },
+    assumedVersion,
+  );
 }

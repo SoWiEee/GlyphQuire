@@ -5,19 +5,34 @@ import type { SerializeContext } from "../registry/types.js";
 import type { BlockNode, NotebookDocument } from "../ast/nodes.js";
 
 export function documentToMdast(document: NotebookDocument, registry: BlockRegistry): Root {
-  const context: SerializeContext = { serializeChildren: (children) => serializeBlocks(children, registry) };
+  const context: SerializeContext = {
+    serializeChildren: (children) => serializeBlocks(children, registry),
+  };
   const frontmatter: Yaml = { type: "yaml", value: `glyphquire-spec: ${document.specVersion}` };
-  return { type: "root", children: [frontmatter, ...serializeBlocks(document.children, registry, context)] };
+  return {
+    type: "root",
+    children: [frontmatter, ...serializeBlocks(document.children, registry, context)],
+  };
 }
 
-function serializeBlocks(nodes: BlockNode[], registry: BlockRegistry, shared?: SerializeContext): RootContent[] {
-  const context: SerializeContext = shared ?? { serializeChildren: (children) => serializeBlocks(children, registry) };
+function serializeBlocks(
+  nodes: BlockNode[],
+  registry: BlockRegistry,
+  shared?: SerializeContext,
+): RootContent[] {
+  const context: SerializeContext = shared ?? {
+    serializeChildren: (children) => serializeBlocks(children, registry),
+  };
   const out: RootContent[] = [];
   for (const node of nodes) out.push(serializeBlock(node, registry, context));
   return out;
 }
 
-function serializeBlock(node: BlockNode, registry: BlockRegistry, context: SerializeContext): RootContent {
+function serializeBlock(
+  node: BlockNode,
+  registry: BlockRegistry,
+  context: SerializeContext,
+): RootContent {
   switch (node.type) {
     case "paragraph":
       return { type: "paragraph", children: node.children };
@@ -27,7 +42,10 @@ function serializeBlock(node: BlockNode, registry: BlockRegistry, context: Seria
       // Safe structural narrowing: serializeBlocks returns valid BlockContent
       // for a blockquote's children; `never` only bypasses mdast's overly
       // narrow declared child type, it does not mask an impossible case.
-      return { type: "blockquote", children: serializeBlocks(node.children, registry, context) as never };
+      return {
+        type: "blockquote",
+        children: serializeBlocks(node.children, registry, context) as never,
+      };
     case "list":
       return {
         type: "list",
@@ -44,14 +62,22 @@ function serializeBlock(node: BlockNode, registry: BlockRegistry, context: Seria
         })),
       };
     case "code":
-      return { type: "code", ...(node.lang ? { lang: node.lang } : {}), ...(node.meta ? { meta: node.meta } : {}), value: node.value };
+      return {
+        type: "code",
+        ...(node.lang ? { lang: node.lang } : {}),
+        ...(node.meta ? { meta: node.meta } : {}),
+        value: node.value,
+      };
     case "table":
       return {
         type: "table",
         align: node.align,
         children: node.children.map((row) => ({
           type: "tableRow" as const,
-          children: row.children.map((cell) => ({ type: "tableCell" as const, children: cell.children })),
+          children: row.children.map((cell) => ({
+            type: "tableCell" as const,
+            children: cell.children,
+          })),
         })),
       };
     case "image": {
@@ -65,11 +91,29 @@ function serializeBlock(node: BlockNode, registry: BlockRegistry, context: Seria
     case "footnoteDefinition":
       // Safe structural narrowing (see blockquote case above), not an
       // impossible case.
-      return { type: "footnoteDefinition", identifier: node.identifier, ...(node.label ? { label: node.label } : {}), children: serializeBlocks(node.children, registry, context) as never };
+      return {
+        type: "footnoteDefinition",
+        identifier: node.identifier,
+        ...(node.label ? { label: node.label } : {}),
+        children: serializeBlocks(node.children, registry, context) as never,
+      };
     case "definition":
-      return { type: "definition", identifier: node.identifier, ...(node.label ? { label: node.label } : {}), url: node.url, ...(node.title ? { title: node.title } : {}) };
+      return {
+        type: "definition",
+        identifier: node.identifier,
+        ...(node.label ? { label: node.label } : {}),
+        url: node.url,
+        ...(node.title ? { title: node.title } : {}),
+      };
     case "unknown-directive":
-      return serializeDirectiveByKind(node.directiveType, node.name, node.attributes, node.children, registry, context);
+      return serializeDirectiveByKind(
+        node.directiveType,
+        node.name,
+        node.attributes,
+        node.children,
+        registry,
+        context,
+      );
     case "invalid-block":
       return serializeInvalid(node, registry, context);
     default:
@@ -77,12 +121,23 @@ function serializeBlock(node: BlockNode, registry: BlockRegistry, context: Seria
   }
 }
 
-function serializeInvalid(node: Extract<BlockNode, { type: "invalid-block" }>, registry: BlockRegistry, context: SerializeContext): RootContent {
+function serializeInvalid(
+  node: Extract<BlockNode, { type: "invalid-block" }>,
+  registry: BlockRegistry,
+  context: SerializeContext,
+): RootContent {
   if (node.originalType === "html" && node.source !== undefined) {
     return { type: "html", value: node.source };
   }
   // Re-emit as its original directive with preserved attributes (§15.2).
-  return serializeDirectiveByKind(node.directiveType ?? "container", node.originalType, node.attributes, node.children, registry, context);
+  return serializeDirectiveByKind(
+    node.directiveType ?? "container",
+    node.originalType,
+    node.attributes,
+    node.children,
+    registry,
+    context,
+  );
 }
 
 function serializeDirectiveByKind(
@@ -107,7 +162,11 @@ function serializeDirectiveByKind(
   };
 }
 
-function serializeDirectiveBlock(node: BlockNode, registry: BlockRegistry, context: SerializeContext): RootContent {
+function serializeDirectiveBlock(
+  node: BlockNode,
+  registry: BlockRegistry,
+  context: SerializeContext,
+): RootContent {
   const name = node.type === "runtime" ? node.runtime : node.type;
   const def = registry.get(name);
   if (!def) {
