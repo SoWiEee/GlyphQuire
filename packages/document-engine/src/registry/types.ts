@@ -48,11 +48,15 @@ export interface SerializeContext {
 }
 
 export interface BlockDefinition<TNode extends BlockNode = BlockNode> {
-  name: string;
-  version: number;
-  kind: "container" | "leaf" | "text";
-  schema: ZodType;
-  capabilities: BlockCapability[];
-  fromDirective(node: DirectiveMdastNode, context: TransformContext): TNode;
-  toDirective(node: TNode, context: SerializeContext): DirectiveMdastNode;
+  readonly name: string;
+  readonly version: number;
+  readonly kind: "container" | "leaf" | "text";
+  readonly schema: ZodType;
+  readonly capabilities: readonly BlockCapability[];
+  readonly fromDirective: {
+    bivarianceHack(node: DirectiveMdastNode, context: TransformContext): TNode;
+  }["bivarianceHack"];
+  readonly toDirective: {
+    bivarianceHack(node: TNode, context: SerializeContext): DirectiveMdastNode;
+  }["bivarianceHack"];
 }

@@ -115,12 +115,12 @@ describe("registry", () => {
     const stored = first.get("callout")!;
 
     try {
-      stored.name = "custom";
+      Reflect.set(stored, "name", "custom");
     } catch (error) {
       expect(error).toBeInstanceOf(TypeError);
     }
     try {
-      stored.capabilities.push("network-request");
+      Reflect.apply(Array.prototype.push, stored.capabilities, ["network-request"]);
     } catch (error) {
       expect(error).toBeInstanceOf(TypeError);
     }
@@ -159,9 +159,19 @@ describe("registry", () => {
     expect(Object.isFrozen(stored)).toBe(true);
     expect(Object.isFrozen(stored.capabilities)).toBe(true);
     expect(() => {
+      // @ts-expect-error stored definition names are readonly
       stored.name = "changed";
     }).toThrow(TypeError);
     expect(() => {
+      // @ts-expect-error stored transform functions are readonly
+      stored.fromDirective = stored.fromDirective;
+    }).toThrow(TypeError);
+    expect(() => {
+      // @ts-expect-error stored schemas are readonly
+      stored.schema = stored.schema;
+    }).toThrow(TypeError);
+    expect(() => {
+      // @ts-expect-error stored capabilities are readonly
       stored.capabilities.push("network-request");
     }).toThrow(TypeError);
     expect(stored.name).toBe("custom");
