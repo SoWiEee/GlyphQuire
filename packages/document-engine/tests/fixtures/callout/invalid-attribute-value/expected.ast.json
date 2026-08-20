@@ -1,0 +1,43 @@
+{
+  "type": "document",
+  "specVersion": 1,
+  "children": [
+    {
+      "type": "invalid-block",
+      "originalType": "callout",
+      "attributes": {
+        "type": "critical"
+      },
+      "errors": [
+        {
+          "code": "ATTRIBUTE_INVALID_VALUE",
+          "message": "Invalid enum value. Expected 'info' | 'note' | 'tip' | 'warning' | 'danger' | 'success', received 'critical'",
+          "attribute": "type"
+        }
+      ],
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "value": "Body text.",
+              "position": {
+                "start": {
+                  "line": 6,
+                  "column": 1,
+                  "offset": 56
+                },
+                "end": {
+                  "line": 6,
+                  "column": 11,
+                  "offset": 66
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

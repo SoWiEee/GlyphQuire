@@ -1,0 +1,42 @@
+{
+  "type": "document",
+  "specVersion": 1,
+  "children": [
+    {
+      "type": "tabs",
+      "version": 1,
+      "children": [
+        {
+          "type": "tab",
+          "version": 1,
+          "props": {
+            "title": "Valid"
+          },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Content A.",
+                  "position": {
+                    "start": {
+                      "line": 8,
+                      "column": 1,
+                      "offset": 60
+                    },
+                    "end": {
+                      "line": 8,
+                      "column": 11,
+                      "offset": 70
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

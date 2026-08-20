@@ -1,0 +1,93 @@
+{
+  "type": "document",
+  "specVersion": 1,
+  "children": [
+    {
+      "type": "tabs",
+      "version": 1,
+      "children": [
+        {
+          "type": "tab",
+          "version": 1,
+          "props": {
+            "title": "A"
+          },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "First paragraph.",
+                  "position": {
+                    "start": {
+                      "line": 8,
+                      "column": 1,
+                      "offset": 56
+                    },
+                    "end": {
+                      "line": 8,
+                      "column": 17,
+                      "offset": 72
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Second paragraph.",
+                  "position": {
+                    "start": {
+                      "line": 10,
+                      "column": 1,
+                      "offset": 74
+                    },
+                    "end": {
+                      "line": 10,
+                      "column": 18,
+                      "offset": 91
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "version": 1,
+          "props": {
+            "title": "B"
+          },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Only paragraph.",
+                  "position": {
+                    "start": {
+                      "line": 14,
+                      "column": 1,
+                      "offset": 115
+                    },
+                    "end": {
+                      "line": 14,
+                      "column": 16,
+                      "offset": 130
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "type": "document",
+  "specVersion": 1,
+  "children": [
+    {
+      "type": "runtime",
+      "version": 1,
+      "runtime": "canvas",
+      "props": {
+        "height": 500,
+        "network": [
+          "https://example.com"
+        ],
+        "autoplay": true
+      },
+      "source": "const ctx = canvas.getContext(\"2d\");\nctx.fillStyle = \"red\";\nctx.fillRect(0, 0, 500, 500);"
+    }
+  ]
+}

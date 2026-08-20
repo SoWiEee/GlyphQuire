@@ -1,0 +1,19 @@
+{
+  "type": "document",
+  "specVersion": 1,
+  "children": [
+    {
+      "type": "runtime",
+      "version": 1,
+      "runtime": "p5",
+      "props": {
+        "height": 400,
+        "network": [
+          "https://example.com"
+        ],
+        "autoplay": true
+      },
+      "source": "function setup() {\n  createCanvas(600, 400);\n}\n\nfunction draw() {\n  background(245);\n  circle(mouseX, mouseY, 30);\n}"
+    }
+  ]
+}

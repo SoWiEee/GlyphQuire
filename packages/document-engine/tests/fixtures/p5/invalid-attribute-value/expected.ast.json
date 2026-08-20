@@ -1,0 +1,27 @@
+{
+  "type": "document",
+  "specVersion": 1,
+  "children": [
+    {
+      "type": "invalid-block",
+      "originalType": "p5",
+      "attributes": {
+        "height": "not-a-number"
+      },
+      "errors": [
+        {
+          "code": "ATTRIBUTE_INVALID_VALUE",
+          "message": "Expected number, received nan",
+          "attribute": "height"
+        }
+      ],
+      "children": [
+        {
+          "type": "code",
+          "value": "function setup() {\n  createCanvas(200, 200);\n}",
+          "lang": "js"
+        }
+      ]
+    }
+  ]
+}

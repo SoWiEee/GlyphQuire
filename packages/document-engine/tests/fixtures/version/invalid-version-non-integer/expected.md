@@ -1,0 +1,3 @@
+---
+glyphquire-spec: 1
+---

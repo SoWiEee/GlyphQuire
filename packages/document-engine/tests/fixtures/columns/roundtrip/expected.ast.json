@@ -1,0 +1,91 @@
+{
+  "type": "document",
+  "specVersion": 1,
+  "children": [
+    {
+      "type": "columns",
+      "version": 1,
+      "props": {
+        "count": 2,
+        "gap": "sm"
+      },
+      "children": [
+        {
+          "type": "column",
+          "version": 1,
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "First paragraph.",
+                  "position": {
+                    "start": {
+                      "line": 8,
+                      "column": 1,
+                      "offset": 71
+                    },
+                    "end": {
+                      "line": 8,
+                      "column": 17,
+                      "offset": 87
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Second paragraph.",
+                  "position": {
+                    "start": {
+                      "line": 10,
+                      "column": 1,
+                      "offset": 89
+                    },
+                    "end": {
+                      "line": 10,
+                      "column": 18,
+                      "offset": 106
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "column",
+          "version": 1,
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Only paragraph.",
+                  "position": {
+                    "start": {
+                      "line": 14,
+                      "column": 1,
+                      "offset": 122
+                    },
+                    "end": {
+                      "line": 14,
+                      "column": 16,
+                      "offset": 137
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
