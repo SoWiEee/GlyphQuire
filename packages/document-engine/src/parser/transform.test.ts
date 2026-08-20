@@ -33,4 +33,36 @@ describe("parse", () => {
   it("never throws on arbitrary input", () => {
     expect(() => parse("  not ::: valid {{{")).not.toThrow();
   });
+
+  it("records an INVALID_CHILD diagnostic for a foreign child of tabs and keeps the valid tab", () => {
+    const r = parse(
+      '---\nglyphquire-spec: 1\n---\n\n:::tabs\nStray paragraph.\n\n:::tab{title="A"}\nHi\n:::\n:::\n',
+    );
+    expect(r.diagnostics.some((d) => d.code === "INVALID_CHILD")).toBe(true);
+    const tabs = r.document.children.find((c) => c.type === "tabs");
+    expect(tabs).toBeDefined();
+    // @ts-expect-error test narrowing
+    expect(tabs.children).toHaveLength(1);
+    // @ts-expect-error test narrowing
+    expect(tabs.children[0].props.title).toBe("A");
+  });
+
+  it("records an INVALID_CHILD diagnostic for a foreign child of columns and keeps the valid column", () => {
+    const r = parse(
+      '---\nglyphquire-spec: 1\n---\n\n:::columns\nStray paragraph.\n\n:::column\nHi\n:::\n:::\n',
+    );
+    expect(r.diagnostics.some((d) => d.code === "INVALID_CHILD")).toBe(true);
+    const columns = r.document.children.find((c) => c.type === "columns");
+    expect(columns).toBeDefined();
+    // @ts-expect-error test narrowing
+    expect(columns.children).toHaveLength(1);
+  });
+
+  it("emits DIRECTIVE_UNKNOWN exactly once for an unknown directive nested in a known block", () => {
+    const r = parse(
+      '---\nglyphquire-spec: 1\n---\n\n:::callout{type="info"}\n:::future{}\n:::\n:::\n',
+    );
+    const occurrences = r.diagnostics.filter((d) => d.code === "DIRECTIVE_UNKNOWN");
+    expect(occurrences).toHaveLength(1);
+  });
 });

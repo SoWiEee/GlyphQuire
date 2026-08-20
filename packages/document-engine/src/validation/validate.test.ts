@@ -14,4 +14,18 @@ describe("validateDocument", () => {
     const doc: NotebookDocument = { type: "document", specVersion: 1, children: [{ type: "tabs", version: 1, children: [{ type: "tab", version: 1, props: { title: "A" }, children: [] }] }] };
     expect(validateDocument(doc).valid).toBe(true);
   });
+
+  it("flags an empty tabs block as invalid child", () => {
+    const doc: NotebookDocument = { type: "document", specVersion: 1, children: [{ type: "tabs", version: 1, children: [] }] };
+    const r = validateDocument(doc);
+    expect(r.valid).toBe(false);
+    expect(r.diagnostics[0]?.code).toBe("INVALID_CHILD");
+  });
+
+  it("flags a column outside columns as invalid parent", () => {
+    const doc: NotebookDocument = { type: "document", specVersion: 1, children: [{ type: "column", version: 1, children: [] }] };
+    const r = validateDocument(doc);
+    expect(r.valid).toBe(false);
+    expect(r.diagnostics[0]?.code).toBe("INVALID_PARENT");
+  });
 });
