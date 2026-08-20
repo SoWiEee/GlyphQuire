@@ -1,0 +1,42 @@
+{
+  "type": "document",
+  "specVersion": 1,
+  "children": [
+    {
+      "type": "columns",
+      "version": 1,
+      "props": {
+        "count": 2
+      },
+      "children": [
+        {
+          "type": "column",
+          "version": 1,
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Valid column.",
+                  "position": {
+                    "start": {
+                      "line": 8,
+                      "column": 1,
+                      "offset": 62
+                    },
+                    "end": {
+                      "line": 8,
+                      "column": 14,
+                      "offset": 75
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

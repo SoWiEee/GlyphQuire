@@ -1,0 +1,102 @@
+{
+  "type": "document",
+  "specVersion": 1,
+  "children": [
+    {
+      "type": "tabs",
+      "version": 1,
+      "children": [
+        {
+          "type": "tab",
+          "version": 1,
+          "props": {
+            "title": "Vue"
+          },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Vue content.",
+                  "position": {
+                    "start": {
+                      "line": 8,
+                      "column": 1,
+                      "offset": 58
+                    },
+                    "end": {
+                      "line": 8,
+                      "column": 13,
+                      "offset": 70
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "version": 1,
+          "props": {
+            "title": "Svelte"
+          },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Svelte content.",
+                  "position": {
+                    "start": {
+                      "line": 12,
+                      "column": 1,
+                      "offset": 99
+                    },
+                    "end": {
+                      "line": 12,
+                      "column": 16,
+                      "offset": 114
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tab",
+          "version": 1,
+          "props": {
+            "title": "React"
+          },
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "React content.",
+                  "position": {
+                    "start": {
+                      "line": 16,
+                      "column": 1,
+                      "offset": 142
+                    },
+                    "end": {
+                      "line": 16,
+                      "column": 15,
+                      "offset": 156
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

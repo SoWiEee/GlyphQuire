@@ -1,0 +1,36 @@
+{
+  "type": "document",
+  "specVersion": 1,
+  "children": [
+    {
+      "type": "callout",
+      "version": 1,
+      "props": {
+        "type": "info"
+      },
+      "children": [
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "value": "Body text.",
+              "position": {
+                "start": {
+                  "line": 6,
+                  "column": 1,
+                  "offset": 39
+                },
+                "end": {
+                  "line": 6,
+                  "column": 11,
+                  "offset": 49
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

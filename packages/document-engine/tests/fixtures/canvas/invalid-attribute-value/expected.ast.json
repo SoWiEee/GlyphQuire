@@ -1,0 +1,27 @@
+{
+  "type": "document",
+  "specVersion": 1,
+  "children": [
+    {
+      "type": "invalid-block",
+      "originalType": "canvas",
+      "attributes": {
+        "height": "-10"
+      },
+      "errors": [
+        {
+          "code": "ATTRIBUTE_INVALID_VALUE",
+          "message": "Number must be greater than 0",
+          "attribute": "height"
+        }
+      ],
+      "children": [
+        {
+          "type": "code",
+          "value": "const ctx = canvas.getContext(\"2d\");\nctx.fillRect(0, 0, 100, 100);",
+          "lang": "js"
+        }
+      ]
+    }
+  ]
+}

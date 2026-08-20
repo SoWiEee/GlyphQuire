@@ -1,0 +1,17 @@
+{
+  "type": "document",
+  "specVersion": 1,
+  "children": [
+    {
+      "type": "runtime",
+      "version": 1,
+      "runtime": "p5",
+      "props": {
+        "height": 400,
+        "network": [],
+        "autoplay": false
+      },
+      "source": "function setup() {\n  createCanvas(200, 200);\n}"
+    }
+  ]
+}
