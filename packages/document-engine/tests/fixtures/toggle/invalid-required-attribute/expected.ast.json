@@ -9,7 +9,7 @@
       "attributes": {},
       "errors": [
         {
-          "code": "ATTRIBUTE_INVALID_VALUE",
+          "code": "ATTRIBUTE_REQUIRED",
           "message": "Required",
           "attribute": "title"
         }

@@ -40,6 +40,25 @@ describe("parse", () => {
     expect(r.document.children.some((c) => c.type === "invalid-block")).toBe(true);
   });
 
+  it("distinguishes a missing required attribute from a present invalid value", () => {
+    const missing = parse('---\nglyphquire-spec: 1\n---\n\n:::toggle\nHidden\n:::\n');
+    expect(missing.ok).toBe(true);
+    if (!missing.ok) throw new Error("expected a recoverable v1 document");
+    expect(missing.diagnostics).toContainEqual(expect.objectContaining({
+      code: "ATTRIBUTE_REQUIRED",
+      attribute: "title",
+    }));
+
+    const invalid = parse('---\nglyphquire-spec: 1\n---\n\n:::toggle{title="Details" open="yes"}\nHidden\n:::\n');
+    expect(invalid.ok).toBe(true);
+    if (!invalid.ok) throw new Error("expected a recoverable v1 document");
+    expect(invalid.diagnostics).toContainEqual(expect.objectContaining({
+      code: "ATTRIBUTE_INVALID_VALUE",
+      attribute: "open",
+    }));
+    expect(invalid.diagnostics.some((item) => item.code === "ATTRIBUTE_REQUIRED")).toBe(false);
+  });
+
   it("never throws on arbitrary input", () => {
     expect(() => parse("  not ::: valid {{{")).not.toThrow();
   });
@@ -88,7 +107,7 @@ describe("parse", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error("expected a recoverable v1 document");
     expect(r.diagnostics).toContainEqual(expect.objectContaining({
-      code: "ATTRIBUTE_INVALID_VALUE",
+      code: "ATTRIBUTE_REQUIRED",
       attribute: "title",
     }));
     expect(r.diagnostics.filter((d) => d.code === "INVALID_CHILD")).toHaveLength(0);

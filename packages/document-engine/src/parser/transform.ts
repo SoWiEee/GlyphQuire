@@ -231,7 +231,13 @@ function transformDirective(
     }
 
     const issues = error instanceof ZodError
-      ? error.issues.map((i) => ({ code: DIAGNOSTIC_CODES.ATTRIBUTE_INVALID_VALUE, message: i.message, attribute: i.path.join(".") || undefined }))
+      ? error.issues.map((i) => ({
+        code: i.code === "invalid_type" && i.received === "undefined"
+          ? DIAGNOSTIC_CODES.ATTRIBUTE_REQUIRED
+          : DIAGNOSTIC_CODES.ATTRIBUTE_INVALID_VALUE,
+        message: i.message,
+        attribute: i.path.join(".") || undefined,
+      }))
       : [{ code: DIAGNOSTIC_CODES.ATTRIBUTE_INVALID_VALUE, message: String(error), attribute: undefined }];
     for (const issue of issues) {
       addDiagnostic(diagnostic(issue.code, "error", issue.message, { block: name, attribute: issue.attribute }));

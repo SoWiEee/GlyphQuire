@@ -1,0 +1,57 @@
+{
+  "type": "document",
+  "specVersion": 1,
+  "children": [
+    {
+      "type": "invalid-block",
+      "originalType": "tabs",
+      "directiveType": "container",
+      "attributes": {},
+      "errors": [
+        {
+          "code": "INVALID_CHILD",
+          "message": "\"paragraph\" is not a valid child of tabs; only \"tab\" children are allowed."
+        },
+        {
+          "code": "INVALID_CHILD",
+          "message": "\"paragraph\" is not a valid child of tabs; only \"tab\" children are allowed."
+        }
+      ],
+      "children": [
+        {
+          "type": "invalid-block",
+          "originalType": "tab",
+          "directiveType": "leaf",
+          "attributes": {
+            "title": "Leaf form"
+          },
+          "errors": [
+            {
+              "code": "DIRECTIVE_KIND_MISMATCH",
+              "message": "Directive \"tab\" is declared as a container directive but was used as a leaf directive."
+            }
+          ],
+          "children": []
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "value": "First foreign paragraph."
+            }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "children": [
+            {
+              "type": "text",
+              "value": "Second foreign paragraph."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
