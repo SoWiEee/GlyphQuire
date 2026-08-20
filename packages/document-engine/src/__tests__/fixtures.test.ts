@@ -27,18 +27,32 @@ describe("golden fixtures", () => {
     const label = caseDir.slice(fixturesRoot.length);
     it(`matches expected AST and markdown: ${label}`, () => {
       const input = readFileSync(join(caseDir, "input.md"), "utf8");
-      const { document } = engine.parse(input);
+      const result = engine.parse(input);
+
+      if (!result.ok) {
+        expect(result.document).toBeNull();
+        expect(result.source).toBe(input);
+
+        const astPath = join(caseDir, "expected.ast.json");
+        if (existsSync(astPath)) {
+          expect(JSON.parse(readFileSync(astPath, "utf8"))).toBeNull();
+        }
+
+        const mdPath = join(caseDir, "expected.md");
+        expect(existsSync(mdPath)).toBe(false);
+        return;
+      }
 
       const astPath = join(caseDir, "expected.ast.json");
       if (existsSync(astPath)) {
         const expected = JSON.parse(readFileSync(astPath, "utf8"));
-        expect(semanticNormalize(document)).toEqual(semanticNormalize(expected));
+        expect(semanticNormalize(result.document)).toEqual(semanticNormalize(expected));
       }
 
       const mdPath = join(caseDir, "expected.md");
       if (existsSync(mdPath)) {
         const expectedMd = readFileSync(mdPath, "utf8");
-        expect(engine.serialize(document)).toBe(expectedMd);
+        expect(engine.serialize(result.document)).toBe(expectedMd);
       }
     });
   }

@@ -5,7 +5,9 @@ import { documentToMdast } from "./to-mdast.js";
 import { BlockRegistry } from "../registry/registry.js";
 
 function roundTrip(md: string): string {
-  return serialize(parse(md).document);
+  const result = parse(md);
+  if (!result.ok) throw new Error("expected a valid v1 document");
+  return serialize(result.document);
 }
 
 describe("serialize", () => {
@@ -32,7 +34,9 @@ describe("serialize", () => {
   });
 
   it("throws instead of silently dropping a directive block whose definition is missing from the registry", () => {
-    const { document } = parse('---\nglyphquire-spec: 1\n---\n\n:::callout{type="warning"}\nHi\n:::\n');
+    const result = parse('---\nglyphquire-spec: 1\n---\n\n:::callout{type="warning"}\nHi\n:::\n');
+    if (!result.ok) throw new Error("expected a valid v1 document");
+    const { document } = result;
     const emptyRegistry = new BlockRegistry();
     expect(() => documentToMdast(document, emptyRegistry)).toThrow(/Cannot serialize block "callout"/);
     expect(() => serialize(document, emptyRegistry)).toThrow(/Cannot serialize block "callout"/);

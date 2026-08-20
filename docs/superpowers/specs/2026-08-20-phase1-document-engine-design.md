@@ -140,10 +140,22 @@ Aligned to SPEC.md §7.2 `DocumentEngine` interface. The package exports both a
 functional surface and a `createDocumentEngine(registry?)` factory.
 
 ```ts
-interface ParseResult {
+type ParseResult = AcceptedParseResult | RejectedParseResult;
+
+interface AcceptedParseResult {
+  ok: true;
   document: NotebookDocument;
+  source: string;
   diagnostics: DocumentDiagnostic[];
-  specVersion: number | null;   // null = versionless legacy input
+  specVersion: number;
+}
+
+interface RejectedParseResult {
+  ok: false;
+  document: null;
+  source: string;
+  diagnostics: DocumentDiagnostic[];
+  specVersion: number | null;
 }
 
 interface ValidationResult {
@@ -173,9 +185,15 @@ function createDocumentEngine(registry?: BlockRegistry): DocumentEngine;
 function createRegistry(): BlockRegistry;   // default registry with all built-ins
 ```
 
-`parse` reads `glyphquire-spec` from canonical frontmatter. Only the explicitly
-named `importLegacy` accepts a caller-selected version, and its result preserves
-the original input. (SPEC.md §7.2, MARKDOWN_SPEC.md §47)
+`parse` reads `glyphquire-spec` from canonical frontmatter. Missing, malformed,
+non-positive, non-integer, and unsupported future markers are rejected with
+`ok: false`, `document: null`, and the exact original Markdown in `source`.
+Unsupported future versions and parser failures never get transformed into a
+v1 AST. Only the explicitly named `importLegacy` accepts a validated
+caller-selected version for versionless input; it preserves the exact source
+and removes only the expected `SPEC_VERSION_MISSING` warning. A bounded
+malformed top-level block-directive attribute opener is likewise rejected with
+`DIRECTIVE_SYNTAX_INVALID`. (SPEC.md §7.2, MARKDOWN_SPEC.md §47)
 
 ## 7. Semantic AST
 
@@ -240,7 +258,11 @@ omits unambiguous defaults (e.g. `open="false"`).
 Three degradation paths (§14, §15, §42):
 
 1. **Syntax-invalid** — directive parser cannot form a node: emit a syntax
-   diagnostic, preserve raw Markdown, do not crash.
+   diagnostic, preserve raw Markdown in a rejected parse result, and do not
+   crash. The bounded v0.1 classifier rejects only a top-level paragraph line
+   beginning (after at most three spaces) with `::name{` or `:::name{` whose
+   closing `}` is missing on that line; escaped openers, prose, nested nodes,
+   and code are accepted.
 2. **Unknown directive** — well-formed but name not in registry →
    `UnknownDirectiveNode` preserving `name`, `attributes`, `children`, and
    enough source for round-trip.
@@ -255,10 +277,10 @@ on arbitrary UTF-8 (property-tested).
 
 `DocumentDiagnostic` per §41 with `code`, `severity`, `message`, optional
 `range`, `block`, `attribute`. Diagnostic codes from §41: `DIRECTIVE_UNKNOWN`,
-`DIRECTIVE_INVALID_NAME`, `ATTRIBUTE_UNKNOWN`, `ATTRIBUTE_INVALID_VALUE`,
-`ATTRIBUTE_REQUIRED`, `INVALID_PARENT`, `INVALID_CHILD`,
-`UNSUPPORTED_SPEC_VERSION`. (`RUNTIME_NETWORK_DENIED`, `ASSET_NOT_FOUND` are
-declared for later phases.)
+`DIRECTIVE_INVALID_NAME`, `DIRECTIVE_SYNTAX_INVALID`, `ATTRIBUTE_UNKNOWN`,
+`ATTRIBUTE_INVALID_VALUE`, `ATTRIBUTE_REQUIRED`, `INVALID_PARENT`,
+`INVALID_CHILD`, `UNSUPPORTED_SPEC_VERSION`. (`RUNTIME_NETWORK_DENIED`,
+`ASSET_NOT_FOUND` are declared for later phases.)
 
 Semantic validation covers: parent/child rules (`tab` only under `tabs`,
 `column` only under `columns`, ≥1 tab), required attributes, enum membership,

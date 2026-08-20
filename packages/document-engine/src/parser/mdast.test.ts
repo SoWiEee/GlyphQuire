@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseToMdast } from "./mdast.js";
+import { parseMarkdown, parseToMdast } from "./mdast.js";
 
 describe("parseToMdast", () => {
   it("parses a container directive into a containerDirective node", () => {
@@ -17,5 +17,13 @@ describe("parseToMdast", () => {
 
   it("does not throw on arbitrary input", () => {
     expect(() => parseToMdast(" ￿:::{}}}not valid")).not.toThrow();
+  });
+
+  it("reports an injected parser failure explicitly", () => {
+    const result = parseMarkdown("source", () => {
+      throw new Error("parser exploded");
+    });
+
+    expect(result).toStrictEqual({ ok: false });
   });
 });

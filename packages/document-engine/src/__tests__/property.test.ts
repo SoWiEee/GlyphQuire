@@ -18,8 +18,14 @@ describe("properties (§60)", () => {
     fc.assert(
       fc.property(fc.lorem({ maxCount: 8 }), (body) => {
         const md = `---\nglyphquire-spec: 1\n---\n\n${body}\n`;
-        const ast1 = engine.parse(md).document;
-        const ast2 = engine.parse(engine.serialize(ast1)).document;
+        const parsed1 = engine.parse(md);
+        expect(parsed1.ok).toBe(true);
+        if (!parsed1.ok) throw new Error("expected a valid v1 document");
+        const ast1 = parsed1.document;
+        const parsed2 = engine.parse(engine.serialize(ast1));
+        expect(parsed2.ok).toBe(true);
+        if (!parsed2.ok) throw new Error("expected serialized v1 document");
+        const ast2 = parsed2.document;
         expect(semanticNormalize(ast2)).toEqual(semanticNormalize(ast1));
       }),
       { numRuns: 200 },
