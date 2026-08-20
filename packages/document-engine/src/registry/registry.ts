@@ -14,31 +14,49 @@ export const RESERVED_NAMES = [
 ] as const;
 
 const RESERVED = new Set<string>(RESERVED_NAMES);
-const BUILTIN_REGISTRATION_TOKEN = Symbol("builtin-registration");
-type BuiltinRegistrationToken = typeof BUILTIN_REGISTRATION_TOKEN;
+const DEFINITIONS = new WeakMap<BlockRegistry, Map<string, BlockDefinition>>();
+
+function definitionsFor(registry: BlockRegistry): Map<string, BlockDefinition> {
+  const definitions = DEFINITIONS.get(registry);
+  if (definitions === undefined) {
+    throw new Error("Block registry is not initialized.");
+  }
+  return definitions;
+}
+
+function insertDefinition(
+  definitions: Map<string, BlockDefinition>,
+  definition: BlockDefinition,
+  allowReserved: boolean,
+): void {
+  const name = definition.name;
+  if (!allowReserved && isReservedName(name)) {
+    throw new Error(`Block "${name}" is reserved for built-in definitions.`);
+  }
+  if (allowReserved && !isReservedName(name)) {
+    throw new Error(`Block "${name}" is not a reserved built-in definition.`);
+  }
+  if (definitions.has(name)) {
+    throw new Error(`Block "${name}" is already registered.`);
+  }
+  definitions.set(name, definition);
+}
 
 export class BlockRegistry {
-  private readonly definitions = new Map<string, BlockDefinition>();
+  constructor() {
+    DEFINITIONS.set(this, new Map());
+  }
 
-  register(
-    definition: BlockDefinition,
-    token?: BuiltinRegistrationToken,
-  ): void {
-    if (token !== BUILTIN_REGISTRATION_TOKEN && isReservedName(definition.name)) {
-      throw new Error(`Block "${definition.name}" is reserved for built-in definitions.`);
-    }
-    if (this.definitions.has(definition.name)) {
-      throw new Error(`Block "${definition.name}" is already registered.`);
-    }
-    this.definitions.set(definition.name, definition);
+  register(definition: BlockDefinition): void {
+    insertDefinition(definitionsFor(this), definition, false);
   }
 
   get(name: string): BlockDefinition | undefined {
-    return this.definitions.get(name);
+    return definitionsFor(this).get(name);
   }
 
   has(name: string): boolean {
-    return this.definitions.has(name);
+    return definitionsFor(this).has(name);
   }
 }
 
@@ -46,7 +64,7 @@ export function registerBuiltin(
   registry: BlockRegistry,
   definition: BlockDefinition,
 ): void {
-  registry.register(definition, BUILTIN_REGISTRATION_TOKEN);
+  insertDefinition(definitionsFor(registry), definition, true);
 }
 
 export function isReservedName(name: string): boolean {
