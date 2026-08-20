@@ -46,7 +46,10 @@ export const columnsBlock: BlockDefinition<ColumnsNode> = {
     const invalidChildren = transformed.filter(
       (child) => child.type !== "column" && !(child.type === "invalid-block" && child.originalType === "column"),
     );
-    if (invalidChildren.length > 0) {
+    const nominalInvalidChildren = transformed.filter(
+      (child) => child.type === "invalid-block" && child.originalType === "column",
+    );
+    if (invalidChildren.length > 0 || nominalInvalidChildren.length > 0) {
       throw new BlockValidationError(
         invalidChildren.map((child) => ({
           code: DIAGNOSTIC_CODES.INVALID_CHILD,

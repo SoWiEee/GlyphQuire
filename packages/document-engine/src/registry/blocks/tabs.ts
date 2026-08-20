@@ -40,7 +40,10 @@ export const tabsBlock: BlockDefinition<TabsNode> = {
     const invalidChildren = transformed.filter(
       (child) => child.type !== "tab" && !(child.type === "invalid-block" && child.originalType === "tab"),
     );
-    if (invalidChildren.length > 0) {
+    const nominalInvalidChildren = transformed.filter(
+      (child) => child.type === "invalid-block" && child.originalType === "tab",
+    );
+    if (invalidChildren.length > 0 || nominalInvalidChildren.length > 0) {
       throw new BlockValidationError(
         invalidChildren.map((child) => ({
           code: DIAGNOSTIC_CODES.INVALID_CHILD,

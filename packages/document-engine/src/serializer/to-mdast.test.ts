@@ -50,6 +50,18 @@ describe("serialize", () => {
     expect(out).toContain("Sentinel");
   });
 
+  it("serializes a schema-invalid nominal tab with its sentinel content", () => {
+    const out = roundTrip('---\nglyphquire-spec: 1\n---\n\n:::tabs\n:::tab\nSentinel tab content.\n:::\n:::\n');
+    expect(out).toContain("Sentinel tab content.");
+    expect(out).toContain(":::tab");
+  });
+
+  it("serializes a leaf-form nominal column with its original kind", () => {
+    const out = roundTrip('---\nglyphquire-spec: 1\n---\n\n::::columns{count="2"}\n::column\n::::\n');
+    expect(out).toMatch(/\n::column(?:\n|$)/);
+    expect(out).not.toMatch(/\n:::column(?:\{|\n|$)/);
+  });
+
   it("preserves asset:// image URIs", () => {
     const out = roundTrip("---\nglyphquire-spec: 1\n---\n\n![Arch](asset://01ABC)\n");
     expect(out).toContain("asset://01ABC");

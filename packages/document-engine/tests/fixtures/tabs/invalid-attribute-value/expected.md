@@ -6,4 +6,8 @@ glyphquire-spec: 1
 :::tab{title="Valid"}
 Content A.
 :::
+
+:::tab{title}
+Content B.
+:::
 ::::

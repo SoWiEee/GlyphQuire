@@ -3,8 +3,11 @@
   "specVersion": 1,
   "children": [
     {
-      "type": "tabs",
-      "version": 1,
+      "type": "invalid-block",
+      "originalType": "tabs",
+      "directiveType": "container",
+      "attributes": {},
+      "errors": [],
       "children": [
         {
           "type": "tab",
@@ -31,6 +34,32 @@
                       "offset": 70
                     }
                   }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "invalid-block",
+          "originalType": "tab",
+          "directiveType": "container",
+          "attributes": {
+            "title": ""
+          },
+          "errors": [
+            {
+              "code": "ATTRIBUTE_INVALID_VALUE",
+              "message": "String must contain at least 1 character(s)",
+              "attribute": "title"
+            }
+          ],
+          "children": [
+            {
+              "type": "paragraph",
+              "children": [
+                {
+                  "type": "text",
+                  "value": "Content B."
                 }
               ]
             }

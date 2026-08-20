@@ -80,6 +80,57 @@ describe("parse", () => {
     expect(columns.children[0]).toMatchObject({ type: "paragraph", children: [{ type: "text", value: "Stray paragraph." }] });
   });
 
+  it("retains a schema-invalid nominal tab and its content without a second structural diagnostic", () => {
+    const r = parse(
+      '---\nglyphquire-spec: 1\n---\n\n:::tabs\n:::tab\nSentinel tab content.\n:::\n:::\n',
+    );
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error("expected a recoverable v1 document");
+    expect(r.diagnostics).toContainEqual(expect.objectContaining({
+      code: "ATTRIBUTE_INVALID_VALUE",
+      attribute: "title",
+    }));
+    expect(r.diagnostics.filter((d) => d.code === "INVALID_CHILD")).toHaveLength(0);
+    expect(r.diagnostics.filter((d) => d.code === "INVALID_PARENT")).toHaveLength(0);
+    const tabs = r.document.children[0];
+    expect(tabs?.type).toBe("invalid-block");
+    if (tabs?.type !== "invalid-block") throw new Error("expected invalid tabs block");
+    expect(tabs.children).toHaveLength(1);
+    expect(tabs.children[0]).toMatchObject({
+      type: "invalid-block",
+      originalType: "tab",
+      directiveType: "container",
+      children: [{ type: "paragraph", children: [{ type: "text", value: "Sentinel tab content." }] }],
+    });
+  });
+
+  it("retains a leaf-form nominal column without adding structural diagnostics", () => {
+    const r = parse(
+      '---\nglyphquire-spec: 1\n---\n\n::::columns{count="2"}\n::column\n::::\n',
+    );
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error("expected a recoverable v1 document");
+    expect(r.diagnostics).toContainEqual(expect.objectContaining({
+      code: "DIRECTIVE_KIND_MISMATCH",
+      severity: "error",
+    }));
+    expect(r.diagnostics.filter((d) => d.code === "INVALID_CHILD")).toHaveLength(0);
+    expect(r.diagnostics.filter((d) => d.code === "INVALID_PARENT")).toHaveLength(0);
+    const columns = r.document.children[0];
+    expect(columns?.type).toBe("invalid-block");
+    if (columns?.type !== "invalid-block") throw new Error("expected invalid columns block");
+    expect(columns.children).toEqual([
+      expect.objectContaining({
+        type: "invalid-block",
+        originalType: "column",
+        directiveType: "leaf",
+        errors: [expect.objectContaining({ code: "DIRECTIVE_KIND_MISMATCH" })],
+      }),
+    ]);
+  });
+
   it("retains the original leaf kind when a known container directive is used as a leaf", () => {
     const r = parse('---\nglyphquire-spec: 1\n---\n\n::callout{type="warning"}\n');
 
