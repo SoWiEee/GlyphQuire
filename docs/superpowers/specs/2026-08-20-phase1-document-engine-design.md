@@ -253,7 +253,11 @@ blocks are a Phase 1 non-goal.
 
 Attribute handling (§11): string values coerced to schema type by the validator;
 serializer emits double-quoted values in schema-defined deterministic order;
-omits unambiguous defaults (e.g. `open="false"`).
+omits unambiguous defaults (e.g. `open="false"`). Built-in v0.1 schemas use an
+explicit strip policy for unknown attributes: they are omitted from the
+semantic AST and canonical output without a mandatory `ATTRIBUTE_UNKNOWN`
+diagnostic. Future schemas may opt into reporting; the engine does not add
+universal unknown-attribute detection.
 
 ## 9. Parser Behavior & Error Recovery
 
@@ -330,7 +334,11 @@ theme tokens, runtime source, opaque asset IDs.
   `invalid-child`; version handling adds `missing-version-marker`,
   `invalid-version-non-positive`, `invalid-version-non-integer`,
   `unsupported-future-version`, `metadata-version-mismatch`. Fixture shape:
-  `input.md`, `expected.ast.json`, `expected.md`.
+  `input.md`, `expected.ast.json`, `expected.md`; the optional
+  `expected.diagnostics.json` is an ordered list of diagnostic codes.
+  Rejected fixtures assert a null document, exact source retention, and no
+  canonical `expected.md`; accepted fixtures retain normalized AST and
+  canonical Markdown assertions.
 - **Round-trip** (§36): `semanticNormalize(parse(M)) ===
   semanticNormalize(parse(serialize(parse(M))))` across all fixtures.
 - **Property tests** (§60): parse never crashes on arbitrary UTF-8;

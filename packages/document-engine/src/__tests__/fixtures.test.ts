@@ -25,9 +25,15 @@ function fixtureCases(root: string): string[] {
 describe("golden fixtures", () => {
   for (const caseDir of fixtureCases(fixturesRoot)) {
     const label = caseDir.slice(fixturesRoot.length);
-    it(`matches expected AST and markdown: ${label}`, () => {
+    it(`matches expected AST, diagnostics, and markdown: ${label}`, () => {
       const input = readFileSync(join(caseDir, "input.md"), "utf8");
       const result = engine.parse(input);
+
+      const diagnosticsPath = join(caseDir, "expected.diagnostics.json");
+      if (existsSync(diagnosticsPath)) {
+        const expectedCodes = JSON.parse(readFileSync(diagnosticsPath, "utf8")) as string[];
+        expect(result.diagnostics.map((item) => item.code)).toEqual(expectedCodes);
+      }
 
       if (!result.ok) {
         expect(result.document).toBeNull();

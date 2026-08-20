@@ -347,6 +347,10 @@ Rules：
 
 5. Semantic validator 負責將 string attribute coercion 成 block schema type。
 6. Unknown attribute 的處理取決於 block schema。
+   v0.1 built-in schemas use an explicit strip policy: unknown attributes are
+   omitted from the semantic AST and canonical output, without a mandatory
+   `ATTRIBUTE_UNKNOWN` diagnostic. Future schemas may choose a reporting
+   policy; this does not require universal unknown-attribute detection。
 7. Attribute order 不具 semantic meaning。
 8. Serializer SHOULD 使用 schema-defined deterministic order。
 
@@ -1807,6 +1811,11 @@ unknown-attribute.md
 roundtrip.md
 migration-vN-vN+1.md
 ```
+
+The golden fixture harness MAY also read `expected.diagnostics.json`, an
+ordered list of diagnostic codes. Rejected fixtures MUST assert a null
+document, exact source retention, and no canonical `expected.md`; accepted
+fixtures continue to assert their normalized AST and canonical Markdown.
 
 Parent/child blocks additionally：
 
