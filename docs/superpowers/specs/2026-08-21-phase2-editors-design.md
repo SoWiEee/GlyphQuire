@@ -87,7 +87,14 @@ Markdown validator.
 ## Persistence Model
 
 `notes` stores `id`, `workspaceId`, `title`, `contentMarkdown`, `revision`,
-`contentHash`, `createdAt`, `updatedAt`, and nullable `deletedAt`.
+`contentHash`, `ownerId`, `schemaVersion`, `visibility`, `createdAt`, `updatedAt`,
+and nullable `deletedAt`. Phase 2 accepts only `visibility = private`.
+
+Registration creates one Personal Workspace and an `owner` membership in the
+same provisioning workflow. Existing users receive the same workspace through
+an idempotent first-use backfill. Phase 2 exposes no second-workspace,
+invitation, or role-management UI, but the membership schema supports
+`owner`, `editor`, and `viewer` for future phases.
 
 `note_versions` stores immutable snapshots with the note and workspace IDs,
 source revision, Markdown, content hash, creation reason, creator, and creation
@@ -101,6 +108,12 @@ payload hash so reuse of an operation ID with different content fails with
 Every resource belongs to exactly one workspace. Every query applies workspace
 membership in the database predicate. Cross-workspace and deleted-resource
 lookups return `404 NOTE_NOT_FOUND` without revealing existence.
+
+A single server-side authorization module owns the action matrix. `owner` and
+`editor` may read, edit, rename, soft-delete/restore, create checkpoints, view
+versions, and restore versions. `viewer` may list, read, and preview versions
+only and cannot enter a writable editor. The automatically provisioned
+Personal Workspace has one `owner` during Phase 2.
 
 ## First-Party API
 
@@ -121,8 +134,17 @@ POST   /notes/:noteId/versions/:versionId/restore
 ```
 
 List endpoints use cursor pagination and deterministic ordering. Every mutation
-requires an `operationId`. Content update and restore also require
-`baseRevision`.
+requires an `operationId`. Every mutation of an existing note, including
+rename, content update, soft delete, note restore, checkpoint, and version
+restore, also requires `baseRevision` and increments the monotonic revision on
+success.
+
+Create idempotency is scoped by actor, workspace, operation kind, and operation
+ID. Existing-note mutation idempotency additionally includes the note ID. The
+canonical request hash covers the operation kind, target IDs, base revision,
+and the complete validated payload. Same key and same hash replay the recorded
+result; same key and different hash return `OPERATION_REUSED`. Replay lookup
+precedes CAS so a retry remains replayable after later revisions.
 
 An autosave transaction performs authorization, request-size validation,
 Markdown validation, revision compare-and-swap, note update, monotonic revision
@@ -183,6 +205,9 @@ IndexedDB records are keyed by `userId + workspaceId + noteId` and store exact
 Markdown, base revision, edit time, pending operation ID, and conflict state.
 The client clears a draft only after the server acknowledges the expected new
 revision. Logout clears that user's drafts. IndexedDB stores no session secret.
+Recovered drafts remain untrusted and are exposed only after a live server
+session matches their user and workspace. Logout and account switching
+broadcast a local lock/clear event even if the network logout request fails.
 
 Web Locks provides one writer per note. A second browser tab is read-only and
 uses BroadcastChannel to show the active writer. Explicit takeover transfers
@@ -244,13 +269,37 @@ record applicable controls in the repository security compliance matrix:
 
 All requests and responses use shared schema validation. Session-cookie, CSRF,
 Origin, CSP, clickjacking, referrer, and MIME-sniffing controls follow the auth
-flow and the referenced baseline. Markdown size, title length, pagination, and
-mutation frequency have explicit server limits. Structured logs exclude full
-Markdown and include only identifiers, revision, byte size, content hash,
-correlation ID, and stable error code.
+flow and the referenced baseline. The application uses same-origin `/api` in
+production; development origins are exact allowlist entries, never wildcards.
+Unsafe `/api/v1` methods require an authenticated server session, JSON content,
+and CSRF/Origin validation. Structured logs exclude full Markdown and include
+only identifiers, revision, byte size, content hash, correlation ID, and stable
+error code.
+
+Phase 2 limits are normative:
+
+- Markdown is at most 2 MiB of UTF-8; JSON request bodies are limited to 2.25
+  MiB before parsing;
+- titles contain 1–200 Unicode characters;
+- operation IDs are UUIDs with a maximum textual length of 36 characters;
+- list endpoints default to 50 and allow at most 100 items; cursors are at most
+  512 bytes;
+- autosave mutations allow 60 requests per user per minute, 300 per workspace
+  per minute, and 600 per IP per minute;
+- other note mutations allow 30 requests per user per minute;
+- IndexedDB retains at most 50 drafts per user. Saved or explicitly discarded
+  drafts are deleted; unresolved drafts expire after 30 days.
+
+Oversized requests return `413 DOCUMENT_TOO_LARGE`. Rate limits return
+`429 RATE_LIMITED` with `Retry-After`. Rate-limit storage remains behind the
+port required by `docs/SPEC.md` section 31.
 
 `canvas` and `p5` code remains inert text. Phase 2 may not introduce `eval`,
 dynamic code import, executable iframe content, or a runtime message bridge.
+Renderers may not use `v-html`, `innerHTML`, or runtime template compilation for
+note content. Raw HTML and unknown blocks are escaped placeholders. One URL
+policy rejects `javascript:`, active `data:`, `file:`, and unintended `blob:`
+URLs and applies safe external-link target/relationship behavior.
 
 ## Verification and Acceptance
 
