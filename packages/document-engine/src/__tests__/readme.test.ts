@@ -14,4 +14,11 @@ describe("README directive examples", () => {
 
     expect(headings).toEqual(expect.arrayContaining(["特色", "Callout", "Interactive Runtime"]));
   });
+
+  it("closes nested runtime code fences before directive closers", async () => {
+    const readme = await readFile(new URL("../../../../README.md", import.meta.url), "utf8");
+    const canvasExample = readme.match(/:::canvas[\s\S]*?互動程式碼/iu)?.[0];
+
+    expect(canvasExample).toMatch(/```js[\s\S]*?```\s*:::/u);
+  });
 });
