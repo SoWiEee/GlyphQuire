@@ -85,6 +85,27 @@ async function phase2ArtifactState(databaseUrl: string) {
   }
 }
 
+async function legacyAccountRows(databaseUrl: string) {
+  const client = postgres(databaseUrl, { max: 1 });
+  try {
+    return await client<
+      {
+        id: string;
+        account_id: string;
+        provider_id: string;
+        user_id: string;
+        password: string | null;
+      }[]
+    >`
+      select id, account_id, provider_id, user_id, password
+      from account
+      order by id
+    `;
+  } finally {
+    await client.end();
+  }
+}
+
 async function authCatalog(databaseUrl: string) {
   const client = postgres(databaseUrl, { max: 1 });
   try {
@@ -264,9 +285,11 @@ describeWithPostgres("migration baseline issuer upgrade", () => {
       await client.end();
     }
 
+    const accountsBeforeMigration = await legacyAccountRows(databaseUrl);
     await expect(migrateDatabase(databaseUrl)).rejects.toThrow(
       "cannot infer issuer for legacy account rows",
     );
+    expect(await legacyAccountRows(databaseUrl)).toEqual(accountsBeforeMigration);
     expect(await journalRows(databaseUrl)).toHaveLength(1);
     expect(await phase2ArtifactState(databaseUrl)).toEqual({
       issuer_column: false,
@@ -280,7 +303,9 @@ describeWithPostgres("migration baseline issuer upgrade", () => {
     await applyPhase0(databaseUrl);
     await insertLegacyCredential(databaseUrl, { duplicate: true });
 
+    const accountsBeforeMigration = await legacyAccountRows(databaseUrl);
     await expect(migrateDatabase(databaseUrl)).rejects.toThrow("duplicate account identity");
+    expect(await legacyAccountRows(databaseUrl)).toEqual(accountsBeforeMigration);
     expect(await journalRows(databaseUrl)).toHaveLength(1);
     expect(await phase2ArtifactState(databaseUrl)).toEqual({
       issuer_column: false,

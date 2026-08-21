@@ -22,7 +22,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "pnpm --filter @glyphquire/database generate",
+    "db:verify-baseline": "pnpm --filter @glyphquire/database db:verify-baseline",
     "db:migrate": "pnpm --filter @glyphquire/database migrate",
+    "db:upgrade:phase0-compose": "docker compose --profile phase0-upgrade run --rm postgres-phase0-role-upgrade",
     "clean": "pnpm -r clean"
   },
   "devDependencies": {

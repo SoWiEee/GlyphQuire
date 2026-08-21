@@ -616,7 +616,8 @@ cp .env.example .env
 至少需要設定：
 
 ```env
-DATABASE_URL=postgresql://glyphquire:glyphquire@localhost:5432/glyphquire
+DATABASE_URL=postgresql://glyphquire_app:glyphquire_app_dev@localhost:5432/glyphquire_dev
+MIGRATION_DATABASE_URL=postgresql://glyphquire_migration:glyphquire_migration_dev@localhost:5432/glyphquire_dev
 
 BETTER_AUTH_SECRET=change-me
 
@@ -633,6 +634,10 @@ S3_BUCKET=glyphquire
 ```bash
 pnpm db:migrate
 ```
+
+既有 Phase 0 PostgreSQL volume 必須先依照
+[Phase 0 to Phase 2 maintenance upgrade](docs/deployment/phase2-maintenance-upgrade.md)
+停機、備份並建立分離的 migration/runtime roles；不可直接讓新舊 API 同時連線。
 
 ## 6. 啟動開發環境
 

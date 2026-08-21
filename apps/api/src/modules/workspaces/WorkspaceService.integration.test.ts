@@ -306,7 +306,7 @@ describeWithMigrationPostgres("Phase 0 credential upgrade", () => {
     await adminDb.$client.end();
   });
 
-  it("backfills a trusted credential issuer without breaking sign-in", async () => {
+  it("captures broken pre-0001 signup, then upgrades trusted credentials", async () => {
     const databaseName = `glyphquire_t2_api_${randomUUID().replaceAll("-", "")}`;
     expect(databaseName).toMatch(/^[a-z0-9_]+$/);
     await adminDb.$client.unsafe(`create database "${databaseName}"`);
@@ -316,39 +316,64 @@ describeWithMigrationPostgres("Phase 0 credential upgrade", () => {
     targetUrl.pathname = `/${databaseName}`;
     const targetDb = createDb(targetUrl.toString());
     const email = `phase0-${randomUUID()}@example.test`;
+    const incompatibleSignupEmail = `phase0-signup-${randomUUID()}@example.test`;
     const userId = `phase0-${randomUUID()}`;
 
     try {
-      for (const migrationUrl of [
+      const phase0Source = await readFile(
         new URL(
           "../../../../../packages/database/src/migrations/0000_phase0_auth.sql",
           import.meta.url,
         ),
+        "utf8",
+      );
+      for (const statement of phase0Source.split("--> statement-breakpoint")) {
+        if (statement.trim()) await targetDb.$client.unsafe(statement);
+      }
+
+      const phase0Auth = createAuth(targetDb, {
+        baseUrl,
+        secret: authSecret,
+        async onUserCreated() {},
+      });
+      const incompatibleSignup = await phase0Auth.handler(
+        registrationRequest(incompatibleSignupEmail),
+      );
+      const orphanedUser = await targetDb.query.user.findFirst({
+        where: (table, { eq }) => eq(table.email, incompatibleSignupEmail),
+      });
+      expect(incompatibleSignup.status).toBe(500);
+      expect(orphanedUser).toBeDefined();
+      const [orphanedAccountCount] = await targetDb.$client<{ count: number }[]>`
+        select count(*)::integer as count
+        from account
+        where user_id = ${orphanedUser!.id}
+      `;
+      expect(orphanedAccountCount?.count).toBe(0);
+
+      await targetDb.$client`
+        insert into "user" (id, name, email)
+        values (${userId}, 'Phase 0 User', ${email})
+      `;
+      await targetDb.$client`
+        insert into account (id, account_id, provider_id, user_id, password)
+        values (
+          ${`account-${randomUUID()}`},
+          ${userId},
+          'credential',
+          ${userId},
+          ${credentialPasswordHash}
+        )
+      `;
+      const phase2Source = await readFile(
         new URL(
           "../../../../../packages/database/src/migrations/0001_phase2_workspaces.sql",
           import.meta.url,
         ),
-      ]) {
-        const source = await readFile(migrationUrl, "utf8");
-        if (migrationUrl.pathname.endsWith("0001_phase2_workspaces.sql")) {
-          await targetDb.$client`
-            insert into "user" (id, name, email)
-            values (${userId}, 'Phase 0 User', ${email})
-          `;
-          await targetDb.$client`
-            insert into account (id, account_id, provider_id, user_id, password)
-            values (
-              ${`account-${randomUUID()}`},
-              ${userId},
-              'credential',
-              ${userId},
-              ${credentialPasswordHash}
-            )
-          `;
-        }
-        for (const statement of source.split("--> statement-breakpoint")) {
-          if (statement.trim()) await targetDb.$client.unsafe(statement);
-        }
+        "utf8",
+      );
+      for (const statement of phase2Source.split("--> statement-breakpoint")) {
+        if (statement.trim()) await targetDb.$client.unsafe(statement);
       }
 
       const auth = createAuth(targetDb, {
