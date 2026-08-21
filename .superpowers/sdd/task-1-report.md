@@ -36,3 +36,17 @@ Commit SHA: `fa01334`.
 ## Concerns
 
 - Local Chrome execution remains blocked by the container sandbox; CI should run the scaffold on GitHub Actions.
+
+## Review Fix
+
+Restored the README directive examples corrupted by Prettier, including the nested p5.js, Canvas, callout, toggle, and runtime examples. Nested examples now use longer outer fences where required, and targeted `prettier-ignore` comments preserve directive structure. Added `packages/document-engine/src/__tests__/readme.test.ts`, which parses README with remark and asserts that `特色`, `Callout`, and `Interactive Runtime` remain headings.
+
+Covering commands and results:
+
+- `pnpm exec prettier --check README.md` — PASS.
+- `pnpm format:check` — PASS (`All matched files use Prettier code style!`).
+- `pnpm --filter @glyphquire/document-engine test -- src/__tests__/readme.test.ts` — PASS (1 file, 1 test).
+- `git diff --check` — PASS.
+- Fixture Markdown audit — no `input.md` or `expected.md` changes.
+
+Review-fix commit: `ea71a90`.
