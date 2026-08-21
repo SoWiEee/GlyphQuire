@@ -182,7 +182,12 @@ git commit -m "test: establish phase2 quality gates"
 - Create: `packages/database/src/migrations/meta/0000_snapshot.json`
 - Create: `packages/database/src/migrations/meta/0001_snapshot.json`
 - Create: `packages/database/src/migrations/verify-baseline.ts`
+- Modify: `packages/database/src/migrate.ts`
 - Modify: `packages/database/package.json`
+- Modify: `packages/shared/src/env.ts`
+- Modify: `.env.example`
+- Modify: `docker-compose.yml`
+- Create: `infra/postgres/init/001_roles.sql`
 - Create: `apps/api/src/modules/workspaces/WorkspaceService.ts`
 - Create: `apps/api/src/modules/workspaces/WorkspaceService.integration.test.ts`
 - Modify: `apps/api/src/routes/auth.ts`
@@ -230,6 +235,13 @@ Add exact package commands:
 }
 ```
 
+`packages/database/src/migrate.ts` requires privileged
+`MIGRATION_DATABASE_URL`; runtime `createDb` continues to require the distinct
+least-privilege `DATABASE_URL`. Update shared env validation, `.env.example`,
+Docker Compose, and the PostgreSQL init script to create separate migration and
+application roles. The application role receives DML on application tables but
+cannot create, alter, or drop schema objects.
+
 - [ ] **Step 3: Implement workspace schema constraints and migration**
 
 Create `workspaces` and `workspace_members` with foreign keys to `user`, unique `(workspaceId, userId)`, a role check, and a unique personal-owner key that makes provisioning race-safe. Export tables and relations from `schema/index.ts` and re-export the tables plus inferred row types from `packages/database/src/index.ts` for backend persistence modules. Routes and frontend code may not import raw tables. Generate and review `0001_phase2_workspaces.sql`; assert the journal sequence is `0000`, `0001`.
@@ -259,19 +271,23 @@ request repairs provisioning before note routes run.
 Run against two disposable PostgreSQL databases:
 
 ```bash
-DATABASE_URL=postgres://.../glyphquire_fresh pnpm --filter @glyphquire/database db:migrate:test
-DATABASE_URL=postgres://.../glyphquire_phase0 pnpm --filter @glyphquire/database db:verify-baseline
-DATABASE_URL=postgres://.../glyphquire_phase0 pnpm --filter @glyphquire/database db:migrate:test
+MIGRATION_DATABASE_URL=postgres://migration:.../glyphquire_fresh pnpm --filter @glyphquire/database db:migrate:test
+MIGRATION_DATABASE_URL=postgres://migration:.../glyphquire_phase0 pnpm --filter @glyphquire/database db:verify-baseline
+MIGRATION_DATABASE_URL=postgres://migration:.../glyphquire_phase0 pnpm --filter @glyphquire/database db:migrate:test
 ```
 
 The fresh database creates auth plus workspaces; the exact Phase 0 database is
 baselined then upgraded; a malformed Phase 0 fingerprint is rejected. Assert
 the Drizzle journal version after every path.
 
+Connect with the runtime `DATABASE_URL` after migration and assert SELECT,
+INSERT, UPDATE, and DELETE on owned application rows work while CREATE TABLE,
+ALTER TABLE, DROP TABLE, and writes to the migration journal fail.
+
 - [ ] **Step 6: Commit**
 
 ```bash
-git add packages/database packages/auth apps/api/src/modules/workspaces apps/api/src/middleware/personal-workspace.ts apps/api/src/routes/auth.ts apps/api/src/app.ts
+git add packages/database packages/shared packages/auth apps/api/src/modules/workspaces apps/api/src/middleware/personal-workspace.ts apps/api/src/routes/auth.ts apps/api/src/app.ts .env.example docker-compose.yml infra/postgres/init/001_roles.sql
 git commit -m "feat: provision personal workspaces"
 ```
 
@@ -288,6 +304,7 @@ git commit -m "feat: provision personal workspaces"
 - Modify: `packages/database/src/index.ts`
 - Create: `packages/database/src/migrations/0002_phase2_notes.sql`
 - Create: `packages/database/src/migrations/meta/0002_snapshot.json`
+- Modify: `packages/database/src/migrations/meta/_journal.json`
 
 **Interfaces:**
 
@@ -308,10 +325,16 @@ Do not expose them through the API contract package.
 - [ ] **Step 3: Add reviewed SQL migration**
 
 Generate with `pnpm db:generate`, inspect the SQL, and keep the reviewed migration in version control. Application startup must not push schema.
+Confirm the generation diff is limited to owned schema, `0002` SQL/snapshot,
+and `_journal.json`, whose repository sequence is exactly `0000`, `0001`,
+`0002`.
 
 - [ ] **Step 4: Verify migrations and commit**
 
-Run database tests plus disposable fresh/upgrade migration checks.
+Run database tests plus disposable fresh and Phase 0 upgrade paths with
+`MIGRATION_DATABASE_URL`. Inspect `drizzle.__drizzle_migrations` for the exact
+ordered hashes/versions `0000`, `0001`, `0002`. Re-run runtime-role DML success
+and CREATE/ALTER/DROP/journal-write denial.
 
 ```bash
 git add packages/database
@@ -405,11 +428,21 @@ git commit -m "feat: define note API contracts"
 - Create: `apps/api/src/middleware/request-context.ts`
 - Create: `apps/api/src/middleware/security.ts`
 - Create: `apps/api/src/middleware/rate-limit.ts`
+- Create: `apps/api/src/middleware/PostgresRateLimitAdapter.ts`
 - Create: `apps/api/src/middleware/security.integration.test.ts`
 - Modify: `apps/api/src/middleware/cors.ts`
 - Modify: `apps/api/src/middleware/error-handler.ts`
+- Modify: `apps/api/src/env.ts`
 - Modify: `apps/api/src/app.ts`
 - Modify: `packages/auth/src/server.ts`
+- Modify: `packages/shared/src/env.ts`
+- Create: `packages/database/src/schema/rate-limit-buckets.ts`
+- Modify: `packages/database/src/schema/index.ts`
+- Modify: `packages/database/src/index.ts`
+- Create: `packages/database/src/migrations/0003_phase2_rate_limits.sql`
+- Create: `packages/database/src/migrations/meta/0003_snapshot.json`
+- Modify: `packages/database/src/migrations/meta/_journal.json`
+- Modify: `.env.example`
 - Create: `docs/security/phase2-compliance-matrix.md`
 
 **Interfaces:**
@@ -419,6 +452,16 @@ git commit -m "feat: define note API contracts"
 - [ ] **Step 1: Write failing security tests**
 
 Test missing/evil/null Origin, cross-site form content types, unauthenticated requests, forged user IDs, and state-changing GETs. Assert same-origin JSON succeeds. Inject sentinel Markdown, cookie, SQL, and stack strings and assert neither response nor captured structured log contains them.
+
+Use one validated `WEB_ORIGIN` value as the exact trusted-origin source for
+Better Auth and Hono. Production serves same-origin `/api` and emits no
+credentialed cross-origin CORS headers. Unsafe methods reject missing, `null`,
+malformed, and unlisted Origin and non-JSON content. Fetch Metadata may reject
+additional `cross-site` requests but cannot authorize a request lacking the
+exact Origin. Assert session issue and logout clearing use HttpOnly, host-only,
+Path `/`, SameSite `Lax`, and Secure under HTTPS across `/api/auth/*` and
+`/api/v1/*`; development Secure behavior follows the explicit HTTP test origin
+without weakening production assertions.
 
 Send Content-Length, chunked, and multibyte JSON bodies at exactly 2.25 MiB and
 2.25 MiB + 1 byte. Assert the latter is rejected before JSON parsing with
@@ -430,9 +473,20 @@ per user. Confirm the strictest exhausted scope wins, windows reset only after
 the injected clock advances, `429` includes `Retry-After`, and rejected requests
 perform no database write.
 
+Add auth-route boundary and concurrency cases: failed login 10/11 per
+account-and-IP in 15 minutes, all login attempts 30/31 per IP in 15 minutes,
+registration 5/6 per IP per hour, and password reset 5/6 per account-and-IP per
+hour. Test two API instances concurrently consume the same PostgreSQL bucket.
+Only direct peers matching configured `TRUSTED_PROXY_CIDRS` may supply the
+selected forwarded-IP header; untrusted peers cannot spoof it. Shared-limiter
+database failure makes protected production requests fail closed.
+
 - [ ] **Step 2: Implement request context and CSRF/origin policy**
 
-Use the server session only; never accept actor identity from the body. Production uses same-origin `/api`. Development uses exact trusted origins. Unsafe `/api/v1` methods require JSON plus Hono CSRF/Origin or equivalent Fetch-Metadata validation.
+Use the server session only; never accept actor identity from the body.
+`WEB_ORIGIN` is parsed once and injected into both Better Auth and Hono.
+Production uses same-origin `/api`; development permits exactly that configured
+origin. Unsafe `/api/v1` methods require JSON and the exact Origin policy above.
 
 - [ ] **Step 3: Implement response hardening and safe errors**
 
@@ -440,14 +494,31 @@ Add CSP, `frame-ancestors`/X-Frame-Options, `Referrer-Policy`, and `nosniff`. Ge
 
 - [ ] **Step 4: Implement rate-limit adapter and limits**
 
-Define `RateLimitPort.consume(key, limit, windowMs)` with in-memory test adapter and production-configured adapter seam. Apply the approved per-user/workspace/IP limits and emit `Retry-After`.
+Define `RateLimitPort.consume(key, limit, windowMs)` with an in-memory unit-test
+adapter and a PostgreSQL production adapter using atomic bucket upsert/update.
+Create the rate-limit schema and reviewed `0003` migration. Production startup
+requires this shared adapter and fails if it cannot initialize. Parse trusted
+proxy CIDRs at startup and derive client IP from direct peer unless that peer is
+trusted. Apply note and auth limits and emit `Retry-After`.
+
+Confirm migration generation changes only the owned rate-limit schema, `0003`
+SQL/snapshot, and `_journal.json`; the repository sequence is exactly `0000`,
+`0001`, `0002`, `0003`. Reproduce disposable fresh and Phase 0 upgrade paths
+with `MIGRATION_DATABASE_URL`, inspect the database migration table for those
+ordered hashes/versions, and re-run runtime-role DML success plus
+CREATE/ALTER/DROP/journal-write denial.
 
 - [ ] **Step 5: Record compliance evidence and commit**
 
-Map applicable OWASP ASVS/CSRF/XSS/session controls to tests and code paths without copying external catalogs.
+Inventory every fixed baseline and applicable section-32 control: OWASP ASVS,
+NIST SP 800-63B-4, SLSA 1.2 Build L1, Authentication, Session Management, CSRF,
+XSS, CSP/HTML, content, sandbox, and database controls. Each row records status
+(`applicable`, `implemented`, or `documented exception`), implementation
+evidence, automated/manual verification, and—when excepted—rationale, risk,
+compensating control, and approver. Do not copy external catalogs.
 
 ```bash
-git add apps/api packages/auth docs/security
+git add apps/api packages/auth packages/shared packages/database .env.example docs/security
 git commit -m "feat: secure authenticated note requests"
 ```
 
@@ -471,11 +542,12 @@ git commit -m "feat: secure authenticated note requests"
 Exercise every resource identifier as owner, editor, viewer, unrelated user, and deleted-note caller. Assert uniform 404s and no title/Markdown/editor leak. Assert viewers cannot mutate.
 
 For create, rename, soft delete, and note restore, inject failures immediately
-before and after the note change and operation-result insert. Assert each
-mutation is one transaction: neither the note change nor operation record can
-commit alone. Concurrent identical create requests using the
+before and after the note change, operation-result insert, and document-job
+insert. Assert each mutation is one transaction: the note change, operation
+record, and derived-state outbox row either all commit or all roll back.
+Concurrent identical create requests using the
 `(actorId, workspaceId, operationKind, operationId)` scope create one note and
-replay one recorded response. Existing-note operations use
+return equivalent recorded success responses to both callers. Existing-note operations use
 `(actorId, workspaceId, noteId, operationKind, operationId)`. Same key with a
 different canonical hash returns `OPERATION_REUSED`; losing CAS writes nothing.
 
@@ -496,7 +568,11 @@ interface NoteService {
 
 Every query joins or subqueries current membership. Each lifecycle mutation
 opens one database transaction, checks replay before CAS, conditionally changes
-the note, and records the exact response before commit. Conditional mutations
+the note, records the exact response, and inserts the uniquely identified
+derived-state document job before commit. If concurrent identical requests both
+miss the initial replay, the unique-operation/CAS loser performs an authorized
+operation re-read: same hash returns the exact recorded response; different
+hash returns `OPERATION_REUSED`. Conditional mutations
 include workspace, visibility/deletion state, and revision. Zero updated rows
 are resolved through another membership-scoped query in the same authorization
 scope.
@@ -557,7 +633,10 @@ authorized `409`. The conflict schema must contain current revision, exact
 server Markdown, updated time, and minimized editor identity only after tenant
 authorization; sentinel Markdown must not appear in logs. Identical concurrent
 requests increment once. Same key/different canonical payload returns
-`OPERATION_REUSED`. Losing CAS writes no version, operation, or job.
+`OPERATION_REUSED`. If concurrent identical requests both miss replay, the
+unique-operation/CAS loser re-reads the authorized operation record and both
+callers receive equivalent recorded success responses. Losing CAS writes no
+version, operation, or job.
 
 - [ ] **Step 3: Implement NoteWriter transaction**
 
@@ -863,6 +942,7 @@ git commit -m "feat: add note history and conflict recovery"
 - Create: `tests/load/autosave-conflict.ts`
 - Create: `docs/evidence/phase2/README.md`
 - Modify: `.github/workflows/ci.yml`
+- Create: `.github/workflows/provenance.yml`
 
 **Interfaces:**
 
@@ -910,6 +990,13 @@ must not be reported as satisfying P0-08.
 
 - [ ] **Step 5: Run the complete gate and commit**
 
+Build immutable Phase 2 artifacts in GitHub Actions and generate SLSA 1.2 Build
+Level 1 provenance using GitHub artifact attestation. Record the workflow run,
+subject digest, source commit, builder identity, and verification command in the
+evidence directory. The compliance matrix links this evidence; if the hosting
+environment cannot produce it, execution stops for an explicitly approved
+exception rather than silently claiming SLSA compliance.
+
 ```bash
 pnpm typecheck
 pnpm lint
@@ -928,7 +1015,7 @@ directory explicitly records that Phase 2 does not claim P0-08's complete
 30-minute workload or P0-14's cross-browser matrix.
 
 ```bash
-git add playwright.config.ts tests docs/evidence .github/workflows/ci.yml
+git add playwright.config.ts tests docs/evidence .github/workflows/ci.yml .github/workflows/provenance.yml
 git commit -m "test: verify phase2 editor workflows"
 ```
 

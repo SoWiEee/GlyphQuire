@@ -144,7 +144,10 @@ ID. Existing-note mutation idempotency additionally includes the note ID. The
 canonical request hash covers the operation kind, target IDs, base revision,
 and the complete validated payload. Same key and same hash replay the recorded
 result; same key and different hash return `OPERATION_REUSED`. Replay lookup
-precedes CAS so a retry remains replayable after later revisions.
+precedes CAS so a retry remains replayable after later revisions. If two
+identical requests race and both initially miss replay, the CAS or unique-index
+loser performs an authorized operation re-read: the same hash returns the exact
+recorded success response, while a different hash returns `OPERATION_REUSED`.
 
 An autosave transaction performs authorization, request-size validation,
 Markdown validation, revision compare-and-swap, note update, monotonic revision
@@ -152,6 +155,9 @@ increment, optional snapshot creation, operation-result recording, and durable
 search-job enqueue. All effects commit or roll back together. A retried
 operation returns its recorded result and does not increment the revision
 again.
+
+Create, rename, soft delete, and note restore also insert their derived-state
+document job in the same transaction as the note mutation and operation result.
 
 Revision mismatch returns `409 REVISION_CONFLICT` with the current server
 revision, Markdown, update time, and editor identity. It does not modify the
@@ -270,9 +276,15 @@ record applicable controls in the repository security compliance matrix:
 All requests and responses use shared schema validation. Session-cookie, CSRF,
 Origin, CSP, clickjacking, referrer, and MIME-sniffing controls follow the auth
 flow and the referenced baseline. The application uses same-origin `/api` in
-production; development origins are exact allowlist entries, never wildcards.
-Unsafe `/api/v1` methods require an authenticated server session, JSON content,
-and CSRF/Origin validation. Structured logs exclude full Markdown and include
+production and does not enable credentialed cross-origin CORS there. One exact
+trusted-origin configuration feeds both Better Auth and Hono in development;
+wildcards are forbidden. Unsafe `/api/v1` methods require an authenticated
+server session, JSON content, and an exact, non-null allowed `Origin`.
+Missing, `null`, malformed, and unlisted origins are rejected. Fetch Metadata
+may reject additional cross-site requests but never substitutes for Origin
+checking. Production cookies are HttpOnly, host-only, Path `/`, SameSite `Lax`,
+and Secure under HTTPS; issue and clear behavior applies consistently to
+`/api/auth/*` and `/api/v1/*`. Structured logs exclude full Markdown and include
 only identifiers, revision, byte size, content hash, correlation ID, and stable
 error code.
 
@@ -287,12 +299,23 @@ Phase 2 limits are normative:
 - autosave mutations allow 60 requests per user per minute, 300 per workspace
   per minute, and 600 per IP per minute;
 - other note mutations allow 30 requests per user per minute;
+- failed login allows 10 attempts per account-and-IP per 15 minutes, while all
+  login attempts allow 30 per IP per 15 minutes;
+- registration allows five attempts per IP per hour;
+- password reset allows five attempts per account-and-IP per hour;
 - IndexedDB retains at most 50 drafts per user. Saved or explicitly discarded
   drafts are deleted; unresolved drafts expire after 30 days.
 
 Oversized requests return `413 DOCUMENT_TOO_LARGE`. Rate limits return
 `429 RATE_LIMITED` with `Retry-After`. Rate-limit storage remains behind the
 port required by `docs/SPEC.md` section 31.
+The production adapter uses atomic PostgreSQL buckets and fails closed when the
+shared limiter is unavailable. A forwarded client IP is accepted only from a
+configured trusted-proxy CIDR; otherwise the direct peer defines client IP.
+
+Schema migration uses a privileged `MIGRATION_DATABASE_URL`. The application
+uses a separate least-privilege `DATABASE_URL` role that cannot create, alter,
+or drop schema objects.
 
 `canvas` and `p5` code remains inert text. Phase 2 may not introduce `eval`,
 dynamic code import, executable iframe content, or a runtime message bridge.
