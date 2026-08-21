@@ -4,8 +4,7 @@ import { mdastToMarkdown } from "./to-markdown.js";
 
 describe("mdastToMarkdown", () => {
   it("round-trips a nested container directive with sufficient fence length", () => {
-    const input =
-      '::::columns{count="2"}\n\n:::callout{type="info"}\nLeft\n:::\n\n::::\n';
+    const input = '::::columns{count="2"}\n\n:::callout{type="info"}\nLeft\n:::\n\n::::\n';
     const out = mdastToMarkdown(parseToMdast(input));
     expect(out).toContain("::::columns");
     expect(out).toContain(":::callout");

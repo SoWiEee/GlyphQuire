@@ -8,9 +8,7 @@ import type { PhrasingContent, Root } from "mdast";
 
 export type MdastParser = (markdown: string) => Root;
 
-export type MdastParseResult =
-  | { ok: true; tree: Root }
-  | { ok: false };
+export type MdastParseResult = { ok: true; tree: Root } | { ok: false };
 
 /**
  * A unified processor configured for both parse (markdown -> MDAST) and
@@ -29,13 +27,7 @@ export function createProcessor(): Processor<Root, undefined, undefined, Root, s
     })
     .use(remarkGfm)
     .use(remarkFrontmatter, ["yaml"])
-    .use(remarkDirective) as unknown as Processor<
-    Root,
-    undefined,
-    undefined,
-    Root,
-    string
-  >;
+    .use(remarkDirective) as unknown as Processor<Root, undefined, undefined, Root, string>;
 }
 
 function parseWithProcessor(markdown: string): Root {
@@ -68,10 +60,7 @@ interface SourceRange {
   to: number;
 }
 
-function collectInlineCodeRanges(
-  children: PhrasingContent[],
-  ranges: SourceRange[],
-): void {
+function collectInlineCodeRanges(children: PhrasingContent[], ranges: SourceRange[]): void {
   for (const child of children) {
     if (child.type === "inlineCode") {
       const from = child.position?.start.offset;
@@ -92,7 +81,11 @@ function collectInlineCodeRanges(
  */
 export function hasMalformedBlockDirective(tree: Root, markdown: string): boolean {
   for (const node of tree.children) {
-    if (node.type !== "paragraph" || node.position?.start.offset === undefined || node.position.end.offset === undefined) {
+    if (
+      node.type !== "paragraph" ||
+      node.position?.start.offset === undefined ||
+      node.position.end.offset === undefined
+    ) {
       continue;
     }
 

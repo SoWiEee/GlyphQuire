@@ -44,7 +44,9 @@ export const columnsBlock: BlockDefinition<ColumnsNode> = {
     const container = node as ContainerDirective;
     const transformed: BlockNode[] = context.transformChildren(container.children);
     const invalidChildren = transformed.filter(
-      (child) => child.type !== "column" && !(child.type === "invalid-block" && child.originalType === "column"),
+      (child) =>
+        child.type !== "column" &&
+        !(child.type === "invalid-block" && child.originalType === "column"),
     );
     const nominalInvalidChildren = transformed.filter(
       (child) => child.type === "invalid-block" && child.originalType === "column",

@@ -85,6 +85,7 @@ packages/document-engine/
 ### Task 1: Package scaffold
 
 **Files:**
+
 - Create: `packages/document-engine/package.json`
 - Create: `packages/document-engine/tsconfig.json`
 - Create: `packages/document-engine/tsconfig.build.json`
@@ -95,6 +96,7 @@ packages/document-engine/
 - Modify: `.github/workflows/ci.yml` (add test step)
 
 **Interfaces:**
+
 - Produces: the `@glyphquire/document-engine` workspace package with `typecheck`, `build`, `test`, `clean` scripts. Later tasks add source under `src/`.
 
 - [ ] **Step 1: Write `package.json`**
@@ -205,8 +207,8 @@ In the root `package.json` `scripts` object, add: `"test": "pnpm -r test"`.
 In `.github/workflows/ci.yml`, after the `build` step (or after `lint`), add a step:
 
 ```yaml
-      - name: Test
-        run: pnpm -r test
+- name: Test
+  run: pnpm -r test
 ```
 
 - [ ] **Step 9: Install and verify**
@@ -228,12 +230,14 @@ git commit -m "feat: scaffold document-engine package"
 ### Task 2: Semantic AST types + normalize
 
 **Files:**
+
 - Create: `packages/document-engine/src/ast/nodes.ts`
 - Create: `packages/document-engine/src/ast/normalize.ts`
 - Create: `packages/document-engine/src/ast/index.ts`
 - Create: `packages/document-engine/src/ast/normalize.test.ts`
 
 **Interfaces:**
+
 - Consumes: `@types/mdast` `PhrasingContent`, `AlignType`.
 - Produces: `NotebookDocument`, `BlockNode` union and every node interface below; `InlineContent` (alias for mdast `PhrasingContent`); `semanticNormalize(document: NotebookDocument): NotebookDocument`.
 
@@ -316,7 +320,7 @@ export interface CodeNode {
 
 export interface TableNode {
   type: "table";
-  align: (AlignType)[];
+  align: AlignType[];
   children: TableRowNode[];
 }
 
@@ -557,12 +561,14 @@ git commit -m "feat: document-engine semantic AST types and normalize"
 ### Task 3: Registry contract + diagnostics
 
 **Files:**
+
 - Create: `packages/document-engine/src/registry/types.ts`
 - Create: `packages/document-engine/src/validation/diagnostics.ts`
 - Create: `packages/document-engine/src/validation/index.ts`
 - Create: `packages/document-engine/src/validation/diagnostics.test.ts`
 
 **Interfaces:**
+
 - Consumes: AST nodes (Task 2), `mdast-util-directive` directive node types, `zod`.
 - Produces: `BlockCapability`, `DirectiveMdastNode`, `TransformContext`, `SerializeContext`, `BlockDefinition`; `DocumentDiagnostic`, `DiagnosticSeverity`, `DIAGNOSTIC_CODES`, and factory `diagnostic(code, severity, message, extra?)`.
 
@@ -570,25 +576,14 @@ git commit -m "feat: document-engine semantic AST types and normalize"
 
 ```ts
 import type { ZodType } from "zod";
-import type {
-  ContainerDirective,
-  LeafDirective,
-  TextDirective,
-} from "mdast-util-directive";
+import type { ContainerDirective, LeafDirective, TextDirective } from "mdast-util-directive";
 import type { RootContent } from "mdast";
 import type { BlockNode } from "../ast/nodes.js";
 import type { DocumentDiagnostic } from "../validation/diagnostics.js";
 
-export type BlockCapability =
-  | "static"
-  | "interactive-ui"
-  | "sandbox-runtime"
-  | "network-request";
+export type BlockCapability = "static" | "interactive-ui" | "sandbox-runtime" | "network-request";
 
-export type DirectiveMdastNode =
-  | ContainerDirective
-  | LeafDirective
-  | TextDirective;
+export type DirectiveMdastNode = ContainerDirective | LeafDirective | TextDirective;
 
 export interface TransformContext {
   /** Transform a list of MDAST block children into semantic block nodes. */
@@ -671,8 +666,7 @@ export const DIAGNOSTIC_CODES = {
   RAW_HTML_DISABLED: "RAW_HTML_DISABLED",
 } as const;
 
-export type DiagnosticCode =
-  (typeof DIAGNOSTIC_CODES)[keyof typeof DIAGNOSTIC_CODES];
+export type DiagnosticCode = (typeof DIAGNOSTIC_CODES)[keyof typeof DIAGNOSTIC_CODES];
 
 export function diagnostic(
   code: string,
@@ -712,12 +706,14 @@ git commit -m "feat: document-engine registry contract and diagnostics"
 ### Task 4: Parser — MDAST pipeline + frontmatter (W2, parallel)
 
 **Files:**
+
 - Create: `packages/document-engine/src/parser/mdast.ts`
 - Create: `packages/document-engine/src/parser/frontmatter.ts`
 - Create: `packages/document-engine/src/parser/mdast.test.ts`
 - Create: `packages/document-engine/src/parser/frontmatter.test.ts`
 
 **Interfaces:**
+
 - Consumes: `unified`, `remark-parse`, `remark-gfm`, `remark-directive`, `remark-frontmatter`, `remark-stringify`, `yaml`; diagnostics (Task 3).
 - Produces:
   - `createProcessor(): Processor` — a frozen-safe unified processor configured for parse and stringify.
@@ -745,7 +741,7 @@ describe("parseToMdast", () => {
   });
 
   it("does not throw on arbitrary input", () => {
-    expect(() => parseToMdast(" ￿:::{}}}not valid")).not.toThrow();
+    expect(() => parseToMdast("�￿:::{}}}not valid")).not.toThrow();
   });
 });
 ```
@@ -783,13 +779,7 @@ export function createProcessor(): Processor<Root, undefined, undefined, Root, s
     })
     .use(remarkGfm)
     .use(remarkFrontmatter, ["yaml"])
-    .use(remarkDirective) as unknown as Processor<
-    Root,
-    undefined,
-    undefined,
-    Root,
-    string
-  >;
+    .use(remarkDirective) as unknown as Processor<Root, undefined, undefined, Root, string>;
 }
 
 /** Parse markdown into MDAST. Never throws on arbitrary UTF-8. */
@@ -894,9 +884,7 @@ export function extractSpecVersion(tree: Root): {
   }
 
   const raw =
-    data && typeof data === "object"
-      ? (data as Record<string, unknown>)[SPEC_FIELD]
-      : undefined;
+    data && typeof data === "object" ? (data as Record<string, unknown>)[SPEC_FIELD] : undefined;
 
   if (raw === undefined) {
     return {
@@ -946,10 +934,12 @@ git commit -m "feat: document-engine MDAST pipeline and spec-version extraction"
 ### Task 5: Serializer — MDAST → Markdown (W2, parallel)
 
 **Files:**
+
 - Create: `packages/document-engine/src/serializer/to-markdown.ts`
 - Create: `packages/document-engine/src/serializer/to-markdown.test.ts`
 
 **Interfaces:**
+
 - Consumes: `createProcessor` (Task 4, `../parser/mdast.js`).
 - Produces: `mdastToMarkdown(tree: Root): string` — deterministic canonical formatting (LF, ATX headings, backtick fences, trailing newline, correct nested directive fence length via the directive serializer).
 
@@ -964,8 +954,7 @@ import { mdastToMarkdown } from "./to-markdown.js";
 
 describe("mdastToMarkdown", () => {
   it("round-trips a nested container directive with sufficient fence length", () => {
-    const input =
-      '::::columns{count="2"}\n\n:::callout{type="info"}\nLeft\n:::\n\n::::\n';
+    const input = '::::columns{count="2"}\n\n:::callout{type="info"}\nLeft\n:::\n\n::::\n';
     const out = mdastToMarkdown(parseToMdast(input));
     expect(out).toContain("::::columns");
     expect(out).toContain(":::callout");
@@ -1023,6 +1012,7 @@ git commit -m "feat: document-engine MDAST-to-markdown serializer"
 ### Task 6: Registry + built-in block definitions (W2, parallel)
 
 **Files:**
+
 - Create: `packages/document-engine/src/registry/registry.ts`
 - Create: `packages/document-engine/src/registry/blocks/callout.ts`
 - Create: `packages/document-engine/src/registry/blocks/sticky.ts`
@@ -1036,6 +1026,7 @@ git commit -m "feat: document-engine MDAST-to-markdown serializer"
 - Create: `packages/document-engine/src/registry/blocks/blocks.test.ts`
 
 **Interfaces:**
+
 - Consumes: AST nodes (Task 2), registry types + diagnostics (Task 3), `zod`, `mdast-util-directive` node types.
 - Produces:
   - `BlockRegistry` class: `register(def)`, `get(name): BlockDefinition | undefined`, `has(name)`, `RESERVED_NAMES`.
@@ -1091,9 +1082,7 @@ export function isReservedName(name: string): boolean {
 }
 
 /** Coerce a directive node's attributes to a plain string record. */
-export function readAttributes(
-  node: DirectiveMdastNode,
-): Record<string, string> {
+export function readAttributes(node: DirectiveMdastNode): Record<string, string> {
   const result: Record<string, string> = {};
   const attrs = node.attributes ?? {};
   for (const [key, value] of Object.entries(attrs)) {
@@ -1102,9 +1091,7 @@ export function readAttributes(
   return result;
 }
 
-export function directiveTypeOf(
-  node: DirectiveMdastNode,
-): "container" | "leaf" | "text" {
+export function directiveTypeOf(node: DirectiveMdastNode): "container" | "leaf" | "text" {
   if (node.type === "containerDirective") return "container";
   if (node.type === "leafDirective") return "leaf";
   return "text";
@@ -1117,14 +1104,17 @@ export function directiveTypeOf(
 import { z } from "zod";
 import type { ContainerDirective } from "mdast-util-directive";
 import type { Paragraph } from "mdast";
-import type { BlockDefinition, TransformContext, SerializeContext, DirectiveMdastNode } from "../types.js";
+import type {
+  BlockDefinition,
+  TransformContext,
+  SerializeContext,
+  DirectiveMdastNode,
+} from "../types.js";
 import type { CalloutNode } from "../../ast/nodes.js";
 import { readAttributes } from "../registry.js";
 
 const calloutSchema = z.object({
-  type: z
-    .enum(["info", "note", "tip", "warning", "danger", "success"])
-    .default("info"),
+  type: z.enum(["info", "note", "tip", "warning", "danger", "success"]).default("info"),
   title: z.string().optional(),
   icon: z.string().optional(),
 });
@@ -1166,7 +1156,12 @@ export const calloutBlock: BlockDefinition<CalloutNode> = {
 ```ts
 import { z } from "zod";
 import type { ContainerDirective } from "mdast-util-directive";
-import type { BlockDefinition, TransformContext, SerializeContext, DirectiveMdastNode } from "../types.js";
+import type {
+  BlockDefinition,
+  TransformContext,
+  SerializeContext,
+  DirectiveMdastNode,
+} from "../types.js";
 import type { StickyNode } from "../../ast/nodes.js";
 import { readAttributes } from "../registry.js";
 
@@ -1184,7 +1179,12 @@ export const stickyBlock: BlockDefinition<StickyNode> = {
   fromDirective(node, context): StickyNode {
     const props = stickySchema.parse(readAttributes(node));
     const container = node as ContainerDirective;
-    return { type: "sticky", version: 1, props, children: context.transformChildren(container.children) };
+    return {
+      type: "sticky",
+      version: 1,
+      props,
+      children: context.transformChildren(container.children),
+    };
   },
   toDirective(node, context): DirectiveMdastNode {
     const attributes: Record<string, string> = { tone: node.props.tone };
@@ -1206,7 +1206,12 @@ export const stickyBlock: BlockDefinition<StickyNode> = {
 ```ts
 import { z } from "zod";
 import type { ContainerDirective } from "mdast-util-directive";
-import type { BlockDefinition, TransformContext, SerializeContext, DirectiveMdastNode } from "../types.js";
+import type {
+  BlockDefinition,
+  TransformContext,
+  SerializeContext,
+  DirectiveMdastNode,
+} from "../types.js";
 import type { ToggleNode } from "../../ast/nodes.js";
 import { readAttributes } from "../registry.js";
 
@@ -1227,7 +1232,12 @@ export const toggleBlock: BlockDefinition<ToggleNode> = {
   fromDirective(node, context): ToggleNode {
     const props = toggleSchema.parse(readAttributes(node));
     const container = node as ContainerDirective;
-    return { type: "toggle", version: 1, props, children: context.transformChildren(container.children) };
+    return {
+      type: "toggle",
+      version: 1,
+      props,
+      children: context.transformChildren(container.children),
+    };
   },
   toDirective(node, context): DirectiveMdastNode {
     const attributes: Record<string, string> = { title: node.props.title };
@@ -1249,7 +1259,12 @@ Both defs are exported. `tab.fromDirective` builds a `TabNode`; `tabs.fromDirect
 ```ts
 import { z } from "zod";
 import type { ContainerDirective } from "mdast-util-directive";
-import type { BlockDefinition, TransformContext, SerializeContext, DirectiveMdastNode } from "../types.js";
+import type {
+  BlockDefinition,
+  TransformContext,
+  SerializeContext,
+  DirectiveMdastNode,
+} from "../types.js";
 import type { TabsNode, TabNode, BlockNode } from "../../ast/nodes.js";
 import { readAttributes } from "../registry.js";
 
@@ -1264,7 +1279,12 @@ export const tabBlock: BlockDefinition<TabNode> = {
   fromDirective(node, context): TabNode {
     const props = tabSchema.parse(readAttributes(node));
     const container = node as ContainerDirective;
-    return { type: "tab", version: 1, props, children: context.transformChildren(container.children) };
+    return {
+      type: "tab",
+      version: 1,
+      props,
+      children: context.transformChildren(container.children),
+    };
   },
   toDirective(node, context): DirectiveMdastNode {
     return {
@@ -1306,7 +1326,12 @@ export const tabsBlock: BlockDefinition<TabsNode> = {
 ```ts
 import { z } from "zod";
 import type { ContainerDirective } from "mdast-util-directive";
-import type { BlockDefinition, TransformContext, SerializeContext, DirectiveMdastNode } from "../types.js";
+import type {
+  BlockDefinition,
+  TransformContext,
+  SerializeContext,
+  DirectiveMdastNode,
+} from "../types.js";
 import type { ColumnsNode, ColumnNode, BlockNode } from "../../ast/nodes.js";
 import { readAttributes } from "../registry.js";
 
@@ -1469,7 +1494,13 @@ export function createRegistry(): BlockRegistry {
 
 ```ts
 export * from "./types.js";
-export { BlockRegistry, RESERVED_NAMES, isReservedName, readAttributes, directiveTypeOf } from "./registry.js";
+export {
+  BlockRegistry,
+  RESERVED_NAMES,
+  isReservedName,
+  readAttributes,
+  directiveTypeOf,
+} from "./registry.js";
 export { createRegistry } from "./builtins.js";
 ```
 
@@ -1512,8 +1543,17 @@ import type { TransformContext, SerializeContext } from "../types.js";
 const tx: TransformContext = { transformChildren: () => [], addDiagnostic: () => {} };
 const sx: SerializeContext = { serializeChildren: (): RootContent[] => [] };
 
-function container(name: string, attributes: Record<string, string>, children: RootContent[] = []): ContainerDirective {
-  return { type: "containerDirective", name, attributes, children: children as ContainerDirective["children"] };
+function container(
+  name: string,
+  attributes: Record<string, string>,
+  children: RootContent[] = [],
+): ContainerDirective {
+  return {
+    type: "containerDirective",
+    name,
+    attributes,
+    children: children as ContainerDirective["children"],
+  };
 }
 
 describe("callout block", () => {
@@ -1522,7 +1562,9 @@ describe("callout block", () => {
     expect(node.props.type).toBe("info");
   });
   it("throws (schema-invalid) on bad enum", () => {
-    expect(() => calloutBlock.fromDirective(container("callout", { type: "rainbow" }), tx)).toThrow();
+    expect(() =>
+      calloutBlock.fromDirective(container("callout", { type: "rainbow" }), tx),
+    ).toThrow();
   });
   it("serializes type attribute", () => {
     const dir = calloutBlock.toDirective(
@@ -1574,12 +1616,14 @@ git commit -m "feat: document-engine block registry and built-in definitions"
 ### Task 7: Migration framework (W2, parallel)
 
 **Files:**
+
 - Create: `packages/document-engine/src/migration/types.ts`
 - Create: `packages/document-engine/src/migration/migrate.ts`
 - Create: `packages/document-engine/src/migration/index.ts`
 - Create: `packages/document-engine/src/migration/migrate.test.ts`
 
 **Interfaces:**
+
 - Consumes: diagnostics (Task 3).
 - Produces: `CURRENT_SPEC_VERSION = 1`; `MigrationResult`; `migrateDocument(markdown, from, to): MigrationResult`; `Migration` interface + empty registry for future steps.
 
@@ -1640,7 +1684,11 @@ export interface MigrationResult {
 export interface Migration {
   from: number;
   to: number;
-  apply(markdown: string): { markdown: string; diagnostics: DocumentDiagnostic[]; destructive: boolean };
+  apply(markdown: string): {
+    markdown: string;
+    diagnostics: DocumentDiagnostic[];
+    destructive: boolean;
+  };
 }
 ```
 
@@ -1659,11 +1707,7 @@ function isPositiveInteger(n: number): boolean {
   return Number.isInteger(n) && n > 0;
 }
 
-export function migrateDocument(
-  markdown: string,
-  from: number,
-  to: number,
-): MigrationResult {
+export function migrateDocument(markdown: string, from: number, to: number): MigrationResult {
   const base: Omit<MigrationResult, "ok" | "diagnostics"> = {
     markdown,
     fromVersion: from,
@@ -1758,11 +1802,13 @@ git commit -m "feat: document-engine migration framework with v1 identity"
 ### Task 8: Text extraction (W2, parallel)
 
 **Files:**
+
 - Create: `packages/document-engine/src/text/extract.ts`
 - Create: `packages/document-engine/src/text/index.ts`
 - Create: `packages/document-engine/src/text/extract.test.ts`
 
 **Interfaces:**
+
 - Consumes: AST nodes (Task 2), `mdast-util-to-string`.
 - Produces: `extractText(document: NotebookDocument): string` — searchable text per §43 (heading/paragraph/quote/list/callout/sticky/toggle/tab/image-alt titles+content), excluding directive names, runtime source, asset IDs.
 
@@ -1786,7 +1832,13 @@ describe("extractText", () => {
           props: { type: "warning", title: "Limit" },
           children: [{ type: "paragraph", children: [{ type: "text", value: "shared memory" }] }],
         },
-        { type: "runtime", version: 1, runtime: "p5", props: { height: 400, network: [], autoplay: false }, source: "circle(1,2,3)" },
+        {
+          type: "runtime",
+          version: 1,
+          runtime: "p5",
+          props: { height: 400, network: [], autoplay: false },
+          source: "circle(1,2,3)",
+        },
       ],
     };
     const text = extractText(doc);
@@ -1807,11 +1859,7 @@ Expected: FAIL.
 
 ```ts
 import { toString as mdastToString } from "mdast-util-to-string";
-import type {
-  NotebookDocument,
-  BlockNode,
-  InlineContent,
-} from "../ast/nodes.js";
+import type { NotebookDocument, BlockNode, InlineContent } from "../ast/nodes.js";
 
 /** Collect searchable text from a document (MARKDOWN_SPEC.md §43). */
 export function extractText(document: NotebookDocument): string {
@@ -1906,6 +1954,7 @@ git commit -m "feat: document-engine search-text extraction"
 ### Task 9: MDAST → Semantic AST transform + validation + parse (W3)
 
 **Files:**
+
 - Create: `packages/document-engine/src/parser/transform.ts`
 - Create: `packages/document-engine/src/validation/validate.ts`
 - Create: `packages/document-engine/src/parser/index.ts`
@@ -1914,6 +1963,7 @@ git commit -m "feat: document-engine search-text extraction"
 - Modify: `packages/document-engine/src/validation/index.ts` (export `validateDocument`)
 
 **Interfaces:**
+
 - Consumes: `parseToMdast`, `extractSpecVersion` (Task 4); `BlockRegistry`, `createRegistry`, `readAttributes`, `directiveTypeOf` (Task 6); AST nodes (Task 2); diagnostics (Task 3); `mdast-util-directive` node types; migration `CURRENT_SPEC_VERSION` (Task 7).
 - Produces:
   - `transformRoot(tree, registry, addDiagnostic): BlockNode[]`
@@ -1921,6 +1971,7 @@ git commit -m "feat: document-engine search-text extraction"
   - `parse(markdown, registry?): ParseResult` and `importLegacy(markdown, assumedVersion, registry?): ParseResult`, where `ParseResult = { document, diagnostics, specVersion }`.
 
 Transform rules (MARKDOWN_SPEC.md §14/§15/§17/§27/§42):
+
 - `paragraph` → ParagraphNode; **exception**: a paragraph whose only child is an `image` → ImageNode (§27, §54).
 - `heading`→HeadingNode; `blockquote`→QuoteNode; `list`/`listItem`→ListNode/ListItemNode; `code`→CodeNode; `table`→TableNode (map rows/cells); `thematicBreak`→ThematicBreakNode; `footnoteDefinition`→FootnoteDefinitionNode; `definition`→DefinitionNode.
 - `html` (raw block HTML, disabled in v0.1 §6) → `InvalidBlockNode` with `code RAW_HTML_DISABLED`, `source` = html value, no children; adds a diagnostic. Never discarded.
@@ -1935,7 +1986,9 @@ import { parse } from "./index.js";
 
 describe("parse", () => {
   it("transforms a callout directive to a semantic callout node", () => {
-    const r = parse('---\nglyphquire-spec: 1\n---\n\n:::callout{type="warning" title="T"}\nHi\n:::\n');
+    const r = parse(
+      '---\nglyphquire-spec: 1\n---\n\n:::callout{type="warning" title="T"}\nHi\n:::\n',
+    );
     const callout = r.document.children.find((c) => c.type === "callout");
     expect(callout).toBeDefined();
     // @ts-expect-error test narrowing
@@ -1963,7 +2016,7 @@ describe("parse", () => {
   });
 
   it("never throws on arbitrary input", () => {
-    expect(() => parse("  not ::: valid {{{")).not.toThrow();
+    expect(() => parse("� not ::: valid {{{")).not.toThrow();
   });
 });
 ```
@@ -1994,11 +2047,7 @@ import type {
   Html,
   PhrasingContent,
 } from "mdast";
-import type {
-  ContainerDirective,
-  LeafDirective,
-  TextDirective,
-} from "mdast-util-directive";
+import type { ContainerDirective, LeafDirective, TextDirective } from "mdast-util-directive";
 import { ZodError } from "zod";
 import type { BlockRegistry, TransformContext, DirectiveMdastNode } from "../registry/types.js";
 import { readAttributes, directiveTypeOf } from "../registry/registry.js";
@@ -2037,11 +2086,10 @@ function transformNodes(
   addDiagnostic: (d: DocumentDiagnostic) => void,
   sharedContext?: TransformContext,
 ): BlockNode[] {
-  const context: TransformContext =
-    sharedContext ?? {
-      transformChildren: (children) => transformNodes(children, registry, addDiagnostic),
-      addDiagnostic,
-    };
+  const context: TransformContext = sharedContext ?? {
+    transformChildren: (children) => transformNodes(children, registry, addDiagnostic),
+    addDiagnostic,
+  };
   const result: BlockNode[] = [];
   for (const node of nodes) {
     const mapped = transformNode(node, registry, context, addDiagnostic);
@@ -2062,7 +2110,11 @@ function transformNode(
     case "paragraph":
       return transformParagraph(node);
     case "heading":
-      return { type: "heading", depth: (node as Heading).depth, children: node.children as PhrasingContent[] };
+      return {
+        type: "heading",
+        depth: (node as Heading).depth,
+        children: node.children as PhrasingContent[],
+      };
     case "blockquote":
       return { type: "quote", children: context.transformChildren((node as Blockquote).children) };
     case "list":
@@ -2080,7 +2132,11 @@ function transformNode(
       return { type: "thematicBreak" };
     case "footnoteDefinition": {
       const fn = node as FootnoteDefinition;
-      const out = { type: "footnoteDefinition", identifier: fn.identifier, children: context.transformChildren(fn.children) } as BlockNode;
+      const out = {
+        type: "footnoteDefinition",
+        identifier: fn.identifier,
+        children: context.transformChildren(fn.children),
+      } as BlockNode;
       if (fn.label) (out as { label?: string }).label = fn.label;
       return out;
     }
@@ -2126,8 +2182,14 @@ function transformList(node: List, context: TransformContext): BlockNode {
     }
     return li;
   });
-  const out = { type: "list" as const, ordered: node.ordered ?? false, spread: node.spread ?? false, children };
-  if (node.start !== null && node.start !== undefined) (out as { start?: number }).start = node.start;
+  const out = {
+    type: "list" as const,
+    ordered: node.ordered ?? false,
+    spread: node.spread ?? false,
+    children,
+  };
+  if (node.start !== null && node.start !== undefined)
+    (out as { start?: number }).start = node.start;
   return out;
 }
 
@@ -2143,11 +2205,21 @@ function transformTable(node: Table): TableNode {
   return { type: "table", align, children: rows };
 }
 
-function transformHtml(node: Html, addDiagnostic: (d: DocumentDiagnostic) => void): InvalidBlockNode {
+function transformHtml(
+  node: Html,
+  addDiagnostic: (d: DocumentDiagnostic) => void,
+): InvalidBlockNode {
   addDiagnostic(
     diagnostic(DIAGNOSTIC_CODES.RAW_HTML_DISABLED, "warning", "Raw HTML is disabled in v0.1."),
   );
-  return { type: "invalid-block", originalType: "html", attributes: {}, errors: [{ code: DIAGNOSTIC_CODES.RAW_HTML_DISABLED, message: "Raw HTML is disabled." }], source: node.value, children: [] };
+  return {
+    type: "invalid-block",
+    originalType: "html",
+    attributes: {},
+    errors: [{ code: DIAGNOSTIC_CODES.RAW_HTML_DISABLED, message: "Raw HTML is disabled." }],
+    source: node.value,
+    children: [],
+  };
 }
 
 function transformDirective(
@@ -2169,26 +2241,62 @@ function transformDirective(
       : [];
 
   if (!DIRECTIVE_NAME_RE.test(name)) {
-    addDiagnostic(diagnostic(DIAGNOSTIC_CODES.DIRECTIVE_INVALID_NAME, "error", `Invalid directive name "${name}".`, { block: name }));
-    return { type: "unknown-directive", directiveType: kind, name, attributes, children: fallbackChildren() } satisfies UnknownDirectiveNode;
+    addDiagnostic(
+      diagnostic(
+        DIAGNOSTIC_CODES.DIRECTIVE_INVALID_NAME,
+        "error",
+        `Invalid directive name "${name}".`,
+        { block: name },
+      ),
+    );
+    return {
+      type: "unknown-directive",
+      directiveType: kind,
+      name,
+      attributes,
+      children: fallbackChildren(),
+    } satisfies UnknownDirectiveNode;
   }
 
   const def = registry.get(name);
   if (!def) {
-    addDiagnostic(diagnostic(DIAGNOSTIC_CODES.DIRECTIVE_UNKNOWN, "warning", `Unknown directive "${name}".`, { block: name }));
-    return { type: "unknown-directive", directiveType: kind, name, attributes, children: fallbackChildren() } satisfies UnknownDirectiveNode;
+    addDiagnostic(
+      diagnostic(DIAGNOSTIC_CODES.DIRECTIVE_UNKNOWN, "warning", `Unknown directive "${name}".`, {
+        block: name,
+      }),
+    );
+    return {
+      type: "unknown-directive",
+      directiveType: kind,
+      name,
+      attributes,
+      children: fallbackChildren(),
+    } satisfies UnknownDirectiveNode;
   }
 
   try {
     return def.fromDirective(node, context);
   } catch (error) {
-    const issues = error instanceof ZodError
-      ? error.issues.map((i) => ({ code: DIAGNOSTIC_CODES.ATTRIBUTE_INVALID_VALUE, message: i.message, attribute: i.path.join(".") || undefined }))
-      : [{ code: DIAGNOSTIC_CODES.ATTRIBUTE_INVALID_VALUE, message: String(error) }];
+    const issues =
+      error instanceof ZodError
+        ? error.issues.map((i) => ({
+            code: DIAGNOSTIC_CODES.ATTRIBUTE_INVALID_VALUE,
+            message: i.message,
+            attribute: i.path.join(".") || undefined,
+          }))
+        : [{ code: DIAGNOSTIC_CODES.ATTRIBUTE_INVALID_VALUE, message: String(error) }];
     for (const issue of issues) {
-      addDiagnostic(diagnostic(issue.code, "error", issue.message, { block: name, attribute: issue.attribute }));
+      addDiagnostic(
+        diagnostic(issue.code, "error", issue.message, { block: name, attribute: issue.attribute }),
+      );
     }
-    const invalid: InvalidBlockNode = { type: "invalid-block", originalType: name, attributes, errors: issues, children: fallbackChildren() };
+    const invalid: InvalidBlockNode = {
+      type: "invalid-block",
+      originalType: name,
+      attributes,
+      errors: issues,
+      children: fallbackChildren(),
+    };
     return invalid;
   }
 }
@@ -2218,7 +2326,14 @@ function walk(nodes: BlockNode[], diagnostics: DocumentDiagnostic[]): void {
     switch (node.type) {
       case "tabs":
         if (node.children.length === 0) {
-          diagnostics.push(diagnostic(DIAGNOSTIC_CODES.INVALID_CHILD, "error", "tabs must contain at least one tab.", { block: "tabs" }));
+          diagnostics.push(
+            diagnostic(
+              DIAGNOSTIC_CODES.INVALID_CHILD,
+              "error",
+              "tabs must contain at least one tab.",
+              { block: "tabs" },
+            ),
+          );
         }
         for (const child of node.children) walk(child.children, diagnostics);
         break;
@@ -2226,11 +2341,25 @@ function walk(nodes: BlockNode[], diagnostics: DocumentDiagnostic[]): void {
         for (const child of node.children) walk(child.children, diagnostics);
         break;
       case "tab":
-        diagnostics.push(diagnostic(DIAGNOSTIC_CODES.INVALID_PARENT, "error", "tab must be a direct child of tabs.", { block: "tab" }));
+        diagnostics.push(
+          diagnostic(
+            DIAGNOSTIC_CODES.INVALID_PARENT,
+            "error",
+            "tab must be a direct child of tabs.",
+            { block: "tab" },
+          ),
+        );
         walk(node.children, diagnostics);
         break;
       case "column":
-        diagnostics.push(diagnostic(DIAGNOSTIC_CODES.INVALID_PARENT, "error", "column must be a direct child of columns.", { block: "column" }));
+        diagnostics.push(
+          diagnostic(
+            DIAGNOSTIC_CODES.INVALID_PARENT,
+            "error",
+            "column must be a direct child of columns.",
+            { block: "column" },
+          ),
+        );
         walk(node.children, diagnostics);
         break;
       case "callout":
@@ -2265,7 +2394,11 @@ import { extractSpecVersion } from "./frontmatter.js";
 import { transformRoot } from "./transform.js";
 import { validateDocument } from "../validation/validate.js";
 import { CURRENT_SPEC_VERSION } from "../migration/migrate.js";
-import { diagnostic, DIAGNOSTIC_CODES, type DocumentDiagnostic } from "../validation/diagnostics.js";
+import {
+  diagnostic,
+  DIAGNOSTIC_CODES,
+  type DocumentDiagnostic,
+} from "../validation/diagnostics.js";
 
 export interface ParseResult {
   document: NotebookDocument;
@@ -2282,7 +2415,13 @@ export function parse(markdown: string, registry: BlockRegistry = createRegistry
   diagnostics.push(...versionInfo.diagnostics);
 
   if (versionInfo.version !== null && versionInfo.version > CURRENT_SPEC_VERSION) {
-    add(diagnostic(DIAGNOSTIC_CODES.UNSUPPORTED_SPEC_VERSION, "error", `Spec version ${versionInfo.version} is newer than supported (${CURRENT_SPEC_VERSION}).`));
+    add(
+      diagnostic(
+        DIAGNOSTIC_CODES.UNSUPPORTED_SPEC_VERSION,
+        "error",
+        `Spec version ${versionInfo.version} is newer than supported (${CURRENT_SPEC_VERSION}).`,
+      ),
+    );
   }
 
   const children = transformRoot(tree, registry, add);
@@ -2293,7 +2432,11 @@ export function parse(markdown: string, registry: BlockRegistry = createRegistry
 }
 
 /** Legacy import: caller asserts a version; the original input is preserved in diagnostics context. */
-export function importLegacy(markdown: string, assumedVersion: number, registry: BlockRegistry = createRegistry()): ParseResult {
+export function importLegacy(
+  markdown: string,
+  assumedVersion: number,
+  registry: BlockRegistry = createRegistry(),
+): ParseResult {
   const result = parse(markdown, registry);
   return { ...result, specVersion: result.specVersion ?? assumedVersion };
 }
@@ -2308,14 +2451,28 @@ import type { NotebookDocument } from "../ast/nodes.js";
 
 describe("validateDocument", () => {
   it("flags a tab outside tabs as invalid parent", () => {
-    const doc: NotebookDocument = { type: "document", specVersion: 1, children: [{ type: "tab", version: 1, props: { title: "X" }, children: [] }] };
+    const doc: NotebookDocument = {
+      type: "document",
+      specVersion: 1,
+      children: [{ type: "tab", version: 1, props: { title: "X" }, children: [] }],
+    };
     const r = validateDocument(doc);
     expect(r.valid).toBe(false);
     expect(r.diagnostics[0]?.code).toBe("INVALID_PARENT");
   });
 
   it("accepts a well-formed tabs block", () => {
-    const doc: NotebookDocument = { type: "document", specVersion: 1, children: [{ type: "tabs", version: 1, children: [{ type: "tab", version: 1, props: { title: "A" }, children: [] }] }] };
+    const doc: NotebookDocument = {
+      type: "document",
+      specVersion: 1,
+      children: [
+        {
+          type: "tabs",
+          version: 1,
+          children: [{ type: "tab", version: 1, props: { title: "A" }, children: [] }],
+        },
+      ],
+    };
     expect(validateDocument(doc).valid).toBe(true);
   });
 });
@@ -2346,11 +2503,13 @@ git commit -m "feat: document-engine MDAST transform, validation, and parse API"
 ### Task 10: Semantic AST → MDAST + serialize (W3)
 
 **Files:**
+
 - Create: `packages/document-engine/src/serializer/to-mdast.ts`
 - Create: `packages/document-engine/src/serializer/index.ts`
 - Create: `packages/document-engine/src/serializer/to-mdast.test.ts`
 
 **Interfaces:**
+
 - Consumes: AST nodes (Task 2); `BlockRegistry`/`createRegistry` (Task 6); `mdastToMarkdown` (Task 5); `mdast-util-directive` types.
 - Produces: `documentToMdast(document, registry): Root`; `serialize(document, registry?): string`. Emits `glyphquire-spec` frontmatter, preserves unknown/invalid directives and `asset://` URIs.
 
@@ -2408,26 +2567,44 @@ import type { BlockRegistry, SerializeContext } from "../registry/types.js";
 import type { BlockNode, NotebookDocument } from "../ast/nodes.js";
 
 export function documentToMdast(document: NotebookDocument, registry: BlockRegistry): Root {
-  const context: SerializeContext = { serializeChildren: (children) => serializeBlocks(children, registry) };
+  const context: SerializeContext = {
+    serializeChildren: (children) => serializeBlocks(children, registry),
+  };
   const frontmatter: Yaml = { type: "yaml", value: `glyphquire-spec: ${document.specVersion}` };
-  return { type: "root", children: [frontmatter, ...serializeBlocks(document.children, registry, context)] };
+  return {
+    type: "root",
+    children: [frontmatter, ...serializeBlocks(document.children, registry, context)],
+  };
 }
 
-function serializeBlocks(nodes: BlockNode[], registry: BlockRegistry, shared?: SerializeContext): RootContent[] {
-  const context: SerializeContext = shared ?? { serializeChildren: (children) => serializeBlocks(children, registry) };
+function serializeBlocks(
+  nodes: BlockNode[],
+  registry: BlockRegistry,
+  shared?: SerializeContext,
+): RootContent[] {
+  const context: SerializeContext = shared ?? {
+    serializeChildren: (children) => serializeBlocks(children, registry),
+  };
   const out: RootContent[] = [];
   for (const node of nodes) out.push(serializeBlock(node, registry, context));
   return out;
 }
 
-function serializeBlock(node: BlockNode, registry: BlockRegistry, context: SerializeContext): RootContent {
+function serializeBlock(
+  node: BlockNode,
+  registry: BlockRegistry,
+  context: SerializeContext,
+): RootContent {
   switch (node.type) {
     case "paragraph":
       return { type: "paragraph", children: node.children };
     case "heading":
       return { type: "heading", depth: node.depth, children: node.children };
     case "quote":
-      return { type: "blockquote", children: serializeBlocks(node.children, registry, context) as never };
+      return {
+        type: "blockquote",
+        children: serializeBlocks(node.children, registry, context) as never,
+      };
     case "list":
       return {
         type: "list",
@@ -2442,14 +2619,22 @@ function serializeBlock(node: BlockNode, registry: BlockRegistry, context: Seria
         })),
       };
     case "code":
-      return { type: "code", ...(node.lang ? { lang: node.lang } : {}), ...(node.meta ? { meta: node.meta } : {}), value: node.value };
+      return {
+        type: "code",
+        ...(node.lang ? { lang: node.lang } : {}),
+        ...(node.meta ? { meta: node.meta } : {}),
+        value: node.value,
+      };
     case "table":
       return {
         type: "table",
         align: node.align,
         children: node.children.map((row) => ({
           type: "tableRow" as const,
-          children: row.children.map((cell) => ({ type: "tableCell" as const, children: cell.children })),
+          children: row.children.map((cell) => ({
+            type: "tableCell" as const,
+            children: cell.children,
+          })),
         })),
       };
     case "image": {
@@ -2461,11 +2646,31 @@ function serializeBlock(node: BlockNode, registry: BlockRegistry, context: Seria
     case "thematicBreak":
       return { type: "thematicBreak" };
     case "footnoteDefinition":
-      return { type: "footnoteDefinition", identifier: node.identifier, ...(node.label ? { label: node.label } : {}), children: serializeBlocks(node.children, registry, context) as never };
+      return {
+        type: "footnoteDefinition",
+        identifier: node.identifier,
+        ...(node.label ? { label: node.label } : {}),
+        children: serializeBlocks(node.children, registry, context) as never,
+      };
     case "definition":
-      return { type: "definition", identifier: node.identifier, ...(node.label ? { label: node.label } : {}), url: node.url, ...(node.title ? { title: node.title } : {}) };
+      return {
+        type: "definition",
+        identifier: node.identifier,
+        ...(node.label ? { label: node.label } : {}),
+        url: node.url,
+        ...(node.title ? { title: node.title } : {}),
+      };
     case "unknown-directive":
-      return { type: "containerDirective", name: node.name, attributes: node.attributes, children: serializeBlocks(node.children, registry, context) as ContainerDirective["children"] };
+      return {
+        type: "containerDirective",
+        name: node.name,
+        attributes: node.attributes,
+        children: serializeBlocks(
+          node.children,
+          registry,
+          context,
+        ) as ContainerDirective["children"],
+      };
     case "invalid-block":
       return serializeInvalid(node, registry, context);
     default:
@@ -2473,15 +2678,28 @@ function serializeBlock(node: BlockNode, registry: BlockRegistry, context: Seria
   }
 }
 
-function serializeInvalid(node: Extract<BlockNode, { type: "invalid-block" }>, registry: BlockRegistry, context: SerializeContext): RootContent {
+function serializeInvalid(
+  node: Extract<BlockNode, { type: "invalid-block" }>,
+  registry: BlockRegistry,
+  context: SerializeContext,
+): RootContent {
   if (node.originalType === "html" && node.source !== undefined) {
     return { type: "html", value: node.source };
   }
   // Re-emit as its original directive with preserved attributes (§15.2).
-  return { type: "containerDirective", name: node.originalType, attributes: node.attributes, children: serializeBlocks(node.children, registry, context) as ContainerDirective["children"] };
+  return {
+    type: "containerDirective",
+    name: node.originalType,
+    attributes: node.attributes,
+    children: serializeBlocks(node.children, registry, context) as ContainerDirective["children"],
+  };
 }
 
-function serializeDirectiveBlock(node: BlockNode, registry: BlockRegistry, context: SerializeContext): RootContent {
+function serializeDirectiveBlock(
+  node: BlockNode,
+  registry: BlockRegistry,
+  context: SerializeContext,
+): RootContent {
   const name = node.type === "runtime" ? node.runtime : node.type;
   const def = registry.get(name);
   if (!def) {
@@ -2504,7 +2722,10 @@ import { mdastToMarkdown } from "./to-markdown.js";
 export { documentToMdast } from "./to-mdast.js";
 export { mdastToMarkdown } from "./to-markdown.js";
 
-export function serialize(document: NotebookDocument, registry: BlockRegistry = createRegistry()): string {
+export function serialize(
+  document: NotebookDocument,
+  registry: BlockRegistry = createRegistry(),
+): string {
   return mdastToMarkdown(documentToMdast(document, registry));
 }
 ```
@@ -2527,11 +2748,13 @@ git commit -m "feat: document-engine semantic-AST-to-markdown serializer"
 ### Task 11: Public API assembly (W3)
 
 **Files:**
+
 - Modify: `packages/document-engine/src/index.ts`
 - Create: `packages/document-engine/src/engine.ts`
 - Create: `packages/document-engine/src/engine.test.ts`
 
 **Interfaces:**
+
 - Consumes: parse/importLegacy (Task 9), serialize (Task 10), validateDocument (Task 9), extractText (Task 8), migrateDocument (Task 7), createRegistry (Task 6).
 - Produces: `createDocumentEngine(registry?): DocumentEngine`; re-exports of all public types and functions per the design spec §6.
 
@@ -2544,7 +2767,8 @@ import { createDocumentEngine } from "./engine.js";
 describe("DocumentEngine", () => {
   it("parses, validates, serializes, and extracts text", () => {
     const engine = createDocumentEngine();
-    const md = '---\nglyphquire-spec: 1\n---\n\n# GPU\n\n:::callout{type="warning" title="Limit"}\nshared memory\n:::\n';
+    const md =
+      '---\nglyphquire-spec: 1\n---\n\n# GPU\n\n:::callout{type="warning" title="Limit"}\nshared memory\n:::\n';
     const parsed = engine.parse(md);
     expect(parsed.specVersion).toBe(1);
     expect(engine.validate(parsed.document).valid).toBe(true);
@@ -2609,7 +2833,11 @@ export * from "./registry/index.js";
 export { parse, importLegacy, type ParseResult } from "./parser/index.js";
 export { serialize, documentToMdast, mdastToMarkdown } from "./serializer/index.js";
 export { extractText } from "./text/extract.js";
-export { migrateDocument, CURRENT_SPEC_VERSION, type MigrationResult } from "./migration/migrate.js";
+export {
+  migrateDocument,
+  CURRENT_SPEC_VERSION,
+  type MigrationResult,
+} from "./migration/migrate.js";
 export { createDocumentEngine, type DocumentEngine } from "./engine.js";
 ```
 
@@ -2631,10 +2859,12 @@ git commit -m "feat: document-engine public API and DocumentEngine factory"
 ### Task 12: Golden fixtures + fixture-driven tests (W4)
 
 **Files:**
+
 - Create: `packages/document-engine/tests/fixtures/**` (data)
 - Create: `packages/document-engine/src/__tests__/fixtures.test.ts`
 
 **Interfaces:**
+
 - Consumes: `createDocumentEngine`, `semanticNormalize`.
 - Produces: golden fixtures per MARKDOWN_SPEC.md §59 and a harness that, for each fixture directory, asserts `parse(input.md)` matches `expected.ast.json` (normalized) and `serialize(parse(input.md).document)` matches `expected.md`.
 
@@ -2643,6 +2873,7 @@ Fixture directory shape: `tests/fixtures/<group>/<case>/{input.md, expected.ast.
 - [ ] **Step 1: Create version-handling fixtures**
 
 Create these directories with `input.md` files (and `expected.ast.json`/`expected.md` generated in Step 4):
+
 - `tests/fixtures/version/missing-version-marker/input.md` → `# Hi\n`
 - `tests/fixtures/version/invalid-version-non-positive/input.md` → `---\nglyphquire-spec: 0\n---\n`
 - `tests/fixtures/version/invalid-version-non-integer/input.md` → `---\nglyphquire-spec: 1.5\n---\n`
@@ -2742,7 +2973,10 @@ import { readFileSync, writeFileSync } from "node:fs";
 const engine = createDocumentEngine();
 const input = readFileSync("tests/fixtures/callout/valid-full/input.md", "utf8");
 const { document } = engine.parse(input);
-writeFileSync("tests/fixtures/callout/valid-full/expected.ast.json", JSON.stringify(document, null, 2) + "\n");
+writeFileSync(
+  "tests/fixtures/callout/valid-full/expected.ast.json",
+  JSON.stringify(document, null, 2) + "\n",
+);
 writeFileSync("tests/fixtures/callout/valid-full/expected.md", engine.serialize(document));
 ```
 
@@ -2763,10 +2997,12 @@ git commit -m "test: document-engine golden fixtures and harness"
 ### Task 13: Round-trip invariant + property tests (W4)
 
 **Files:**
+
 - Create: `packages/document-engine/src/__tests__/round-trip.test.ts`
 - Create: `packages/document-engine/src/__tests__/property.test.ts`
 
 **Interfaces:**
+
 - Consumes: `createDocumentEngine`, `semanticNormalize`, `migrateDocument`; `fast-check`.
 - Produces: the §36 round-trip invariant suite over representative documents and the §60 property suite.
 
@@ -2779,7 +3015,7 @@ import { createDocumentEngine, semanticNormalize } from "../index.js";
 const engine = createDocumentEngine();
 
 const DOCS: string[] = [
-  '---\nglyphquire-spec: 1\n---\n\n# Title\n\nParagraph with **bold** and `code`.\n',
+  "---\nglyphquire-spec: 1\n---\n\n# Title\n\nParagraph with **bold** and `code`.\n",
   '---\nglyphquire-spec: 1\n---\n\n:::callout{type="danger" title="Sec"}\nNever run this.\n:::\n',
   '---\nglyphquire-spec: 1\n---\n\n::::columns{count="2"}\n\n:::column\nLeft\n:::\n\n:::column\nRight\n:::\n\n::::\n',
   '---\nglyphquire-spec: 1\n---\n\n::::tabs\n\n:::tab{title="A"}\nAlpha\n:::\n\n::::\n',

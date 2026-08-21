@@ -1,23 +1,12 @@
 import type { ZodType } from "zod";
-import type {
-  ContainerDirective,
-  LeafDirective,
-  TextDirective,
-} from "mdast-util-directive";
+import type { ContainerDirective, LeafDirective, TextDirective } from "mdast-util-directive";
 import type { RootContent } from "mdast";
 import type { BlockNode, ValidationIssue } from "../ast/nodes.js";
 import type { DocumentDiagnostic } from "../validation/diagnostics.js";
 
-export type BlockCapability =
-  | "static"
-  | "interactive-ui"
-  | "sandbox-runtime"
-  | "network-request";
+export type BlockCapability = "static" | "interactive-ui" | "sandbox-runtime" | "network-request";
 
-export type DirectiveMdastNode =
-  | ContainerDirective
-  | LeafDirective
-  | TextDirective;
+export type DirectiveMdastNode = ContainerDirective | LeafDirective | TextDirective;
 
 export interface TransformContext {
   /** Transform a list of MDAST block children into semantic block nodes. */

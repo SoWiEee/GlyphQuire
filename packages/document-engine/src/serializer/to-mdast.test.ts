@@ -38,26 +38,36 @@ describe("serialize", () => {
   });
 
   it("round-trips an unknown inline text directive inside its paragraph", () => {
-    const out = roundTrip('---\nglyphquire-spec: 1\n---\n\nBefore :future[inline] after.\n');
+    const out = roundTrip("---\nglyphquire-spec: 1\n---\n\nBefore :future[inline] after.\n");
     expect(out).toContain(":future[inline]");
   });
 
   it.each([
-    ["tabs", '::::tabs\n\n:::tab{title="A"}\nValid tab.\n:::\n\nSentinel tabs paragraph.\n\n::::\n'],
-    ["columns", '::::columns{count="2"}\n\n:::column\nValid column.\n:::\n\nSentinel columns paragraph.\n\n::::\n'],
+    [
+      "tabs",
+      '::::tabs\n\n:::tab{title="A"}\nValid tab.\n:::\n\nSentinel tabs paragraph.\n\n::::\n',
+    ],
+    [
+      "columns",
+      '::::columns{count="2"}\n\n:::column\nValid column.\n:::\n\nSentinel columns paragraph.\n\n::::\n',
+    ],
   ])("serializes the retained foreign child of %s", (_name, body) => {
     const out = roundTrip(`---\nglyphquire-spec: 1\n---\n\n${body}`);
     expect(out).toContain("Sentinel");
   });
 
   it("serializes a schema-invalid nominal tab with its sentinel content", () => {
-    const out = roundTrip('---\nglyphquire-spec: 1\n---\n\n:::tabs\n:::tab\nSentinel tab content.\n:::\n:::\n');
+    const out = roundTrip(
+      "---\nglyphquire-spec: 1\n---\n\n:::tabs\n:::tab\nSentinel tab content.\n:::\n:::\n",
+    );
     expect(out).toContain("Sentinel tab content.");
     expect(out).toContain(":::tab");
   });
 
   it("serializes a leaf-form nominal column with its original kind", () => {
-    const out = roundTrip('---\nglyphquire-spec: 1\n---\n\n::::columns{count="2"}\n::column\n::::\n');
+    const out = roundTrip(
+      '---\nglyphquire-spec: 1\n---\n\n::::columns{count="2"}\n::column\n::::\n',
+    );
     expect(out).toMatch(/\n::column(?:\n|$)/);
     expect(out).not.toMatch(/\n:::column(?:\{|\n|$)/);
   });
@@ -77,7 +87,9 @@ describe("serialize", () => {
     if (!result.ok) throw new Error("expected a valid v1 document");
     const { document } = result;
     const emptyRegistry = new BlockRegistry();
-    expect(() => documentToMdast(document, emptyRegistry)).toThrow(/Cannot serialize block "callout"/);
+    expect(() => documentToMdast(document, emptyRegistry)).toThrow(
+      /Cannot serialize block "callout"/,
+    );
     expect(() => serialize(document, emptyRegistry)).toThrow(/Cannot serialize block "callout"/);
   });
 });

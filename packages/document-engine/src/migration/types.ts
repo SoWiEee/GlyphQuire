@@ -12,5 +12,9 @@ export interface MigrationResult {
 export interface Migration {
   from: number;
   to: number;
-  apply(markdown: string): { markdown: string; diagnostics: DocumentDiagnostic[]; destructive: boolean };
+  apply(markdown: string): {
+    markdown: string;
+    diagnostics: DocumentDiagnostic[];
+    destructive: boolean;
+  };
 }

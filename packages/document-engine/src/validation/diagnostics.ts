@@ -26,8 +26,7 @@ export const DIAGNOSTIC_CODES = {
   RAW_HTML_DISABLED: "RAW_HTML_DISABLED",
 } as const;
 
-export type DiagnosticCode =
-  (typeof DIAGNOSTIC_CODES)[keyof typeof DIAGNOSTIC_CODES];
+export type DiagnosticCode = (typeof DIAGNOSTIC_CODES)[keyof typeof DIAGNOSTIC_CODES];
 
 export function diagnostic(
   code: string,

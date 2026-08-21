@@ -21,7 +21,12 @@ export const toggleBlock: BlockDefinition<ToggleNode> = {
   fromDirective(node, context): ToggleNode {
     const props = toggleSchema.parse(readAttributes(node));
     const container = node as ContainerDirective;
-    return { type: "toggle", version: 1, props, children: context.transformChildren(container.children) };
+    return {
+      type: "toggle",
+      version: 1,
+      props,
+      children: context.transformChildren(container.children),
+    };
   },
   toDirective(node, context): DirectiveMdastNode {
     const attributes: Record<string, string> = { title: node.props.title };

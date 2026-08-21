@@ -5,9 +5,7 @@ export const errorHandler: ErrorHandler = (err, c) => {
   console.error(`[API Error]`, err);
 
   const status: ContentfulStatusCode =
-    "status" in err && typeof err.status === "number"
-      ? (err.status as ContentfulStatusCode)
-      : 500;
+    "status" in err && typeof err.status === "number" ? (err.status as ContentfulStatusCode) : 500;
 
   return c.json(
     {

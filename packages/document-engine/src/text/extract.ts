@@ -1,9 +1,5 @@
 import { toString as mdastToString } from "mdast-util-to-string";
-import type {
-  NotebookDocument,
-  BlockNode,
-  InlineContent,
-} from "../ast/nodes.js";
+import type { NotebookDocument, BlockNode, InlineContent } from "../ast/nodes.js";
 
 /** Collect searchable text from a document (MARKDOWN_SPEC.md §43). */
 export function extractText(document: NotebookDocument): string {

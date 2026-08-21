@@ -1,9 +1,5 @@
 export interface QueuePort {
-  enqueue<T>(
-    taskName: string,
-    payload: T,
-    options?: EnqueueOptions,
-  ): Promise<string>;
+  enqueue<T>(taskName: string, payload: T, options?: EnqueueOptions): Promise<string>;
 }
 
 export interface EnqueueOptions {

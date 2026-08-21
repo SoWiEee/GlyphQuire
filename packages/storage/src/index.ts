@@ -1,9 +1,5 @@
 export interface StoragePort {
-  upload(
-    key: string,
-    data: Buffer | ReadableStream,
-    contentType: string,
-  ): Promise<StorageResult>;
+  upload(key: string, data: Buffer | ReadableStream, contentType: string): Promise<StorageResult>;
   download(key: string): Promise<StorageObject>;
   delete(key: string): Promise<void>;
   getSignedUrl(key: string, expiresIn: number): Promise<string>;

@@ -1,13 +1,16 @@
 import { z } from "zod";
 import type { ContainerDirective } from "mdast-util-directive";
-import type { BlockDefinition, TransformContext, SerializeContext, DirectiveMdastNode } from "../types.js";
+import type {
+  BlockDefinition,
+  TransformContext,
+  SerializeContext,
+  DirectiveMdastNode,
+} from "../types.js";
 import type { CalloutNode } from "../../ast/nodes.js";
 import { readAttributes } from "../registry.js";
 
 const calloutSchema = z.object({
-  type: z
-    .enum(["info", "note", "tip", "warning", "danger", "success"])
-    .default("info"),
+  type: z.enum(["info", "note", "tip", "warning", "danger", "success"]).default("info"),
   title: z.string().optional(),
   icon: z.string().optional(),
 });

@@ -120,23 +120,23 @@ Port interfaces for storage and queue are included to bridge Phase 1.
 
 ## 3. Technology Choices
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Runtime | Node.js | 22+ |
-| Package manager | pnpm | 9+ |
-| Language | TypeScript | 5.x, strict |
-| Frontend | Vue 3 + Vite | latest |
-| Router | Vue Router | 4 |
-| State | Pinia | latest |
-| CSS | Tailwind CSS | 4 |
-| Editor framework | Milkdown, CodeMirror 6 | Phase 2 |
-| API | Hono | latest |
-| ORM | Drizzle | latest |
-| Auth | Better Auth | latest |
-| Database | PostgreSQL | 16+ |
-| Object storage | MinIO (dev) | latest |
-| Lint | ESLint (flat config) | 9+ |
-| Format | Prettier | latest |
+| Layer            | Technology             | Version     |
+| ---------------- | ---------------------- | ----------- |
+| Runtime          | Node.js                | 22+         |
+| Package manager  | pnpm                   | 9+          |
+| Language         | TypeScript             | 5.x, strict |
+| Frontend         | Vue 3 + Vite           | latest      |
+| Router           | Vue Router             | 4           |
+| State            | Pinia                  | latest      |
+| CSS              | Tailwind CSS           | 4           |
+| Editor framework | Milkdown, CodeMirror 6 | Phase 2     |
+| API              | Hono                   | latest      |
+| ORM              | Drizzle                | latest      |
+| Auth             | Better Auth            | latest      |
+| Database         | PostgreSQL             | 16+         |
+| Object storage   | MinIO (dev)            | latest      |
+| Lint             | ESLint (flat config)   | 9+          |
+| Format           | Prettier               | latest      |
 
 ---
 
@@ -272,6 +272,7 @@ volumes:
 Workflow triggers: push to `main`, pull requests.
 
 Steps:
+
 1. Checkout
 2. Setup Node.js 22 + pnpm
 3. `pnpm install --frozen-lockfile`
@@ -310,15 +311,15 @@ CORS_ORIGIN=http://localhost:5173
 
 ### Work Units
 
-| Unit | Content | Dependencies | Agent |
-|------|---------|-------------|-------|
-| W1 | Root monorepo config | none | main session |
-| W2 | packages/shared, api-contract, storage, queue | W1 | executor (worktree) |
-| W3 | packages/database | W1, W2 | executor (worktree) |
-| W4 | packages/auth | W1, W3 | executor (worktree) |
-| W5 | apps/api | W1, W3, W4 | executor (worktree) |
-| W6 | apps/web | W1 | executor (worktree) |
-| W7 | Docker Compose + CI + .env.example | W1 | executor (worktree) |
+| Unit | Content                                       | Dependencies | Agent               |
+| ---- | --------------------------------------------- | ------------ | ------------------- |
+| W1   | Root monorepo config                          | none         | main session        |
+| W2   | packages/shared, api-contract, storage, queue | W1           | executor (worktree) |
+| W3   | packages/database                             | W1, W2       | executor (worktree) |
+| W4   | packages/auth                                 | W1, W3       | executor (worktree) |
+| W5   | apps/api                                      | W1, W3, W4   | executor (worktree) |
+| W6   | apps/web                                      | W1           | executor (worktree) |
+| W7   | Docker Compose + CI + .env.example            | W1           | executor (worktree) |
 
 ### Execution Waves
 

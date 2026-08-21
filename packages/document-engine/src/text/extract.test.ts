@@ -15,7 +15,13 @@ describe("extractText", () => {
           props: { type: "warning", title: "Limit" },
           children: [{ type: "paragraph", children: [{ type: "text", value: "shared memory" }] }],
         },
-        { type: "runtime", version: 1, runtime: "p5", props: { height: 400, network: [], autoplay: false }, source: "circle(1,2,3)" },
+        {
+          type: "runtime",
+          version: 1,
+          runtime: "p5",
+          props: { height: 400, network: [], autoplay: false },
+          source: "circle(1,2,3)",
+        },
       ],
     };
     const text = extractText(doc);
@@ -32,7 +38,9 @@ describe("extractText", () => {
       children: [
         {
           type: "quote",
-          children: [{ type: "paragraph", children: [{ type: "text", value: "attributed wisdom" }] }],
+          children: [
+            { type: "paragraph", children: [{ type: "text", value: "attributed wisdom" }] },
+          ],
         },
         {
           type: "list",
@@ -102,7 +110,12 @@ describe("extractText", () => {
       specVersion: 1,
       children: [
         { type: "thematicBreak" },
-        { type: "definition", identifier: "ref1", url: "https://example.com", title: "Example Title Text" },
+        {
+          type: "definition",
+          identifier: "ref1",
+          url: "https://example.com",
+          title: "Example Title Text",
+        },
         { type: "code", lang: "js", value: "const secretCode = 42;" },
       ],
     };

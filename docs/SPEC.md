@@ -92,6 +92,7 @@ v1 不包含以下項目：
 type: warning
 title: 注意
 ---
+
 GPU memory is shared.
 :::
 ```
@@ -341,9 +342,7 @@ markdown
 測試要求：
 
 ```ts
-normalize(parse(serialize(parse(markdown))))
-===
-normalize(parse(markdown))
+normalize(parse(serialize(parse(markdown)))) === normalize(parse(markdown));
 ```
 
 格式化造成的 whitespace 差異可接受，但不得遺失 semantic data。
@@ -361,7 +360,7 @@ Notebook Markdown Spec v0.1
 每份 note 儲存：
 
 ```ts
-schemaVersion: number
+schemaVersion: number;
 ```
 
 ### 8.1 Base syntax
@@ -419,13 +418,15 @@ Right
 
 ### 8.3 Executable code blocks
 
-```md
+````md
 ```p5
 function setup() {
   createCanvas(600, 400)
 }
 ```
-```
+````
+
+````
 
 metadata 必須由 parser 轉換成受控 schema，不允許任意 HTML attributes 注入。
 
@@ -454,7 +455,7 @@ interface DocumentNode extends BaseNode {
   version: number;
   children: BlockNode[];
 }
-```
+````
 
 ### 9.2 Custom node
 
@@ -748,7 +749,7 @@ Sandbox 不得取得：
 原則上：
 
 ```html
-<iframe sandbox="allow-scripts">
+<iframe sandbox="allow-scripts"></iframe>
 ```
 
 不預設加入 `allow-same-origin`。
@@ -796,11 +797,13 @@ Sandbox network 預設拒絕。
 
 v1 protocol 預留 explicit allowlist capability：
 
-```md
+````md
 ```p5 {network=["https://api.example.com"]}
 ...
 ```
-```
+````
+
+````
 
 實際執行前由 Runtime Manager 驗證 allowlist。MVP 可先實作完全禁網，再啟用 allowlist；不得提供 unrestricted Internet access。
 
@@ -852,7 +855,7 @@ Workspace：
 owner
 editor
 viewer
-```
+````
 
 ### 16.2 Note visibility
 
@@ -872,7 +875,7 @@ Authorization is deny-by-default。所有 read、list、search、mutation、rest
 API service 使用：
 
 ```ts
-authorize(actor, action, resource)
+authorize(actor, action, resource);
 ```
 
 作為統一 policy entry point。
@@ -1341,7 +1344,7 @@ packages/theme-sdk
 不得：
 
 ```ts
-const body = await c.req.json() as SomeType;
+const body = (await c.req.json()) as SomeType;
 ```
 
 直接信任 client type assertion。
@@ -1509,15 +1512,15 @@ v1 至少：
 
 ### Health、readiness and alert routing
 
-| ID | Condition | Threshold | Required action |
-|---|---|---|---|
-| OPS-PROBE-01 | cadence | every 30 seconds | timeout 5 seconds |
-| OPS-ALERT-01 | consecutive failure | 3 consecutive failures | alert |
-| OPS-ALERT-02 | rolling failure | 50% failures within 5 minutes | alert |
-| OPS-RECOVERY-01 | recovery | 3 consecutive successes | recovery notification |
-| OPS-ROUTING-01 | readiness failure | stop new traffic | stop new traffic |
-| OPS-ROUTING-02 | health failure | invoke restart policy | invoke restart policy |
-| OPS-DELIVERY-01 | notification delivery | configured operator channel within 5 minutes after condition is met | deliver notification |
+| ID              | Condition             | Threshold                                                           | Required action       |
+| --------------- | --------------------- | ------------------------------------------------------------------- | --------------------- |
+| OPS-PROBE-01    | cadence               | every 30 seconds                                                    | timeout 5 seconds     |
+| OPS-ALERT-01    | consecutive failure   | 3 consecutive failures                                              | alert                 |
+| OPS-ALERT-02    | rolling failure       | 50% failures within 5 minutes                                       | alert                 |
+| OPS-RECOVERY-01 | recovery              | 3 consecutive successes                                             | recovery notification |
+| OPS-ROUTING-01  | readiness failure     | stop new traffic                                                    | stop new traffic      |
+| OPS-ROUTING-02  | health failure        | invoke restart policy                                               | invoke restart policy |
+| OPS-DELIVERY-01 | notification delivery | configured operator channel within 5 minutes after condition is met | deliver notification  |
 
 Backup failure、dead-letter job 或 oldest queue job above five minutes MUST alert immediately。Database/disk usage MUST warn at 80% and alert critical at 90%。
 
@@ -1557,16 +1560,16 @@ Security Requirements is the sole authority for the security implementation base
 
 Living implementation references：
 
-| Reference | Direct URL | Reviewed | Upstream commit |
-|---|---|---|---|
-| Authentication | https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
-| Session Management | https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
-| CSRF | https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
-| XSS Prevention | https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
-| SSRF Prevention | https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
-| File Upload | https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
-| WHATWG HTML | https://html.spec.whatwg.org/ | 2026-08-19 | 40814ebfef1506a621a4af1ebd7e80c048cc396e |
-| W3C CSP Level 3 | https://www.w3.org/TR/CSP3/ | 2026-08-19 | e81d712e979255b8291579854e168f0021b5b0da |
+| Reference          | Direct URL                                                                                             | Reviewed   | Upstream commit                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------ | ---------- | ---------------------------------------- |
+| Authentication     | https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html                         | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| Session Management | https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html                     | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| CSRF               | https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html  | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| XSS Prevention     | https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html        | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| SSRF Prevention    | https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| File Upload        | https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html                            | 2026-08-19 | 6b8819da79e0537d072e04296ffa3adfc94ba881 |
+| WHATWG HTML        | https://html.spec.whatwg.org/                                                                          | 2026-08-19 | 40814ebfef1506a621a4af1ebd7e80c048cc396e |
+| W3C CSP Level 3    | https://www.w3.org/TR/CSP3/                                                                            | 2026-08-19 | e81d712e979255b8291579854e168f0021b5b0da |
 
 Pinned review records：
 
@@ -1949,7 +1952,7 @@ Markdown Spec v2
 migration：
 
 ```ts
-migrateDocument(markdown, 1, 2)
+migrateDocument(markdown, 1, 2);
 ```
 
 需求：
@@ -1982,13 +1985,13 @@ Typical case is one active personal-notebook user；burst ceiling is five concur
 
 Playwright performance marks MUST implement these exact boundaries：
 
-| ID | Operation | Warm-up | Samples | Measurement boundary | Gate |
-|---|---|---|---|---|---|
-| PERF-UI-01 | 100 KB input | 100 warm-ups | 1,000 samples | InputEvent dispatch -> next animation frame containing rendered change | p95 < 100 ms |
-| PERF-UI-02 | Visual/Source switch | 10 warm-ups | 100 samples | triggering action -> target editor accepts input | p95 < 1 second |
-| PERF-UI-03 | 1 MB open | 5 warm-ups | 100 samples | request dispatch -> editor accepts input | p95 < 5 seconds |
-| PERF-UI-04 | 1 MB save | 5 warm-ups | 100 samples | request dispatch -> server acknowledgment and saved UI state | p95 < 5 seconds |
-| PERF-UI-05 | 1 MB export | 5 warm-ups | 100 samples | action -> downloadable blob ready | p95 < 5 seconds |
+| ID         | Operation            | Warm-up      | Samples       | Measurement boundary                                                   | Gate            |
+| ---------- | -------------------- | ------------ | ------------- | ---------------------------------------------------------------------- | --------------- |
+| PERF-UI-01 | 100 KB input         | 100 warm-ups | 1,000 samples | InputEvent dispatch -> next animation frame containing rendered change | p95 < 100 ms    |
+| PERF-UI-02 | Visual/Source switch | 10 warm-ups  | 100 samples   | triggering action -> target editor accepts input                       | p95 < 1 second  |
+| PERF-UI-03 | 1 MB open            | 5 warm-ups   | 100 samples   | request dispatch -> editor accepts input                               | p95 < 5 seconds |
+| PERF-UI-04 | 1 MB save            | 5 warm-ups   | 100 samples   | request dispatch -> server acknowledgment and saved UI state           | p95 < 5 seconds |
+| PERF-UI-05 | 1 MB export          | 5 warm-ups   | 100 samples   | action -> downloadable blob ready                                      | p95 < 5 seconds |
 
 Continuous typing MUST produce no main-thread task above 200 ms。Full parse/validation above 100 KB MUST run in a Web Worker or use interruptible processing。
 
@@ -2038,7 +2041,7 @@ Built-in UI MUST meet WCAG 2.2 AA。Release evidence MUST include：
 動畫 theme 必須尊重：
 
 ```css
-@media (prefers-reduced-motion: reduce)
+@media (prefers-reduced-motion: reduce);
 ```
 
 Production release priority and evidence: see §49 Production Readiness Contract。
@@ -2377,21 +2380,21 @@ P0 explicitly does NOT promise：
 
 ### 49.3 P0 Evidence Table
 
-| P0-01 | Deployment scope | Officially hosted multi-tenant SaaS with five-user burst ceiling | §1 Purpose | CI + Docker Compose integration test |
-|---|---|---|---|---|
-| P0-02 | Transactional persistence | Autosave: authorization, revision CAS, note update, snapshot, durable enqueue in one PostgreSQL transaction | §18 Autosave | Integration test with concurrent revision |
-| P0-03 | Tenant isolation | Every resource belongs to exactly one workspace; every operation applies workspace scope server-side | §16 Authorization | Integration test exercising cross-workspace rejection |
-| P0-04 | Markdown/version history | Self-describing `glyphquire-spec` marker; import/restore/migration require `baseRevision`; monotonic revisions; failure preserves source | §19 Version History; `MARKDOWN_SPEC.md` §47 | Golden tests + integration test for conflict/restore |
-| P0-05 | Security baseline | OWASP ASVS 5.0.0 L2, NIST 800-63B-4, SLSA 1.2 Build L1; living reference pins; compliance matrix | §32 Security Requirements | Compliance matrix + automated scans + manual verification report |
-| P0-06 | Backup/data lifecycle | Encrypted daily backups; 30-day retention; monthly restore drill; 24-hour RPO; deletion lifecycle | §33 Backups and Data Lifecycle | Restore drill report with content-hash verification |
-| P0-07 | CI/release/migration | GitHub Actions gates; Git tag + image digest + migration versions; manual approval; expand/contract compatibility | §37 Release and Migration Contract | CI run + deployment log + rollback test |
-| P0-08 | Small-workload performance | Reproducible benchmark: 4 vCPU/8 GB; UI p95 gates; 30-min burst with five users; API p95 gates | §40 Performance Targets | Load report with environment/digest/data-volume record |
-| P0-09 | Observability/runbooks | Structured logs; health/readiness probes; alert rules; notification delivery within 5 min | §30 Operational Monitoring | Runbooks (deploy, rollback, restore, queue-recovery) + alert test |
-| P0-10 | Search consistency | 60-second freshness under P0 workload; query-time authorization; dead-letter handling; operator rebuild | §20 Full-text Search | Integration test + dead-letter scenario + rebuild test |
-| P0-11 | First-party API | `/api/v1` shared schemas; cursor pagination; idempotency keys; conditional mutations; backward-compatible errors | §24 API Design | Contract test suite |
-| P0-12 | Custom Blocks | Workspace-scoped; immutable published versions; unsupported placeholder; round-trip preservation | §11.3 Custom Block API; `MARKDOWN_SPEC.md` §29 | Golden tests + integration test |
-| P0-13 | Conflict recovery | `409` never overwrites; client retains draft across reload/crash; UI supports comparison/merge | §10.3 Dirty State | E2E test with simulated conflict + reload |
-| P0-14 | Browser/accessibility | Latest 2 stable Chrome/Firefox/Safari/Edge; WCAG 2.2 AA; axe CI; keyboard flows; screen-reader smoke | §41 Accessibility and Browser Support | axe report + keyboard-only E2E + VoiceOver or NVDA smoke test |
+| P0-01 | Deployment scope           | Officially hosted multi-tenant SaaS with five-user burst ceiling                                                                         | §1 Purpose                                     | CI + Docker Compose integration test                              |
+| ----- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------- |
+| P0-02 | Transactional persistence  | Autosave: authorization, revision CAS, note update, snapshot, durable enqueue in one PostgreSQL transaction                              | §18 Autosave                                   | Integration test with concurrent revision                         |
+| P0-03 | Tenant isolation           | Every resource belongs to exactly one workspace; every operation applies workspace scope server-side                                     | §16 Authorization                              | Integration test exercising cross-workspace rejection             |
+| P0-04 | Markdown/version history   | Self-describing `glyphquire-spec` marker; import/restore/migration require `baseRevision`; monotonic revisions; failure preserves source | §19 Version History; `MARKDOWN_SPEC.md` §47    | Golden tests + integration test for conflict/restore              |
+| P0-05 | Security baseline          | OWASP ASVS 5.0.0 L2, NIST 800-63B-4, SLSA 1.2 Build L1; living reference pins; compliance matrix                                         | §32 Security Requirements                      | Compliance matrix + automated scans + manual verification report  |
+| P0-06 | Backup/data lifecycle      | Encrypted daily backups; 30-day retention; monthly restore drill; 24-hour RPO; deletion lifecycle                                        | §33 Backups and Data Lifecycle                 | Restore drill report with content-hash verification               |
+| P0-07 | CI/release/migration       | GitHub Actions gates; Git tag + image digest + migration versions; manual approval; expand/contract compatibility                        | §37 Release and Migration Contract             | CI run + deployment log + rollback test                           |
+| P0-08 | Small-workload performance | Reproducible benchmark: 4 vCPU/8 GB; UI p95 gates; 30-min burst with five users; API p95 gates                                           | §40 Performance Targets                        | Load report with environment/digest/data-volume record            |
+| P0-09 | Observability/runbooks     | Structured logs; health/readiness probes; alert rules; notification delivery within 5 min                                                | §30 Operational Monitoring                     | Runbooks (deploy, rollback, restore, queue-recovery) + alert test |
+| P0-10 | Search consistency         | 60-second freshness under P0 workload; query-time authorization; dead-letter handling; operator rebuild                                  | §20 Full-text Search                           | Integration test + dead-letter scenario + rebuild test            |
+| P0-11 | First-party API            | `/api/v1` shared schemas; cursor pagination; idempotency keys; conditional mutations; backward-compatible errors                         | §24 API Design                                 | Contract test suite                                               |
+| P0-12 | Custom Blocks              | Workspace-scoped; immutable published versions; unsupported placeholder; round-trip preservation                                         | §11.3 Custom Block API; `MARKDOWN_SPEC.md` §29 | Golden tests + integration test                                   |
+| P0-13 | Conflict recovery          | `409` never overwrites; client retains draft across reload/crash; UI supports comparison/merge                                           | §10.3 Dirty State                              | E2E test with simulated conflict + reload                         |
+| P0-14 | Browser/accessibility      | Latest 2 stable Chrome/Firefox/Safari/Edge; WCAG 2.2 AA; axe CI; keyboard flows; screen-reader smoke                                     | §41 Accessibility and Browser Support          | axe report + keyboard-only E2E + VoiceOver or NVDA smoke test     |
 
 ### 49.4 P1 Items
 
