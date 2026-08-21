@@ -10,7 +10,12 @@ describe("README directive examples", () => {
     const tree = unified().use(remarkParse).use(remarkDirective).parse(readme);
     const headings = tree.children
       .filter((node) => node.type === "heading")
-      .map((node) => node.children?.map((child) => child.value).join(""));
+      .map((node) =>
+        node.children
+          ?.filter((child) => child.type === "text")
+          .map((child) => child.value)
+          .join(""),
+      );
 
     expect(headings).toEqual(expect.arrayContaining(["特色", "Callout", "Interactive Runtime"]));
   });
