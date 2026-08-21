@@ -42,9 +42,12 @@ must never be reused in production.
 
    ```bash
    pnpm db:upgrade:phase0-compose
+   pnpm db:preflight:roles-compose
    ```
 
-   This command is versioned, transactional, and idempotent. It does not rely
+   These commands are versioned and idempotent. The bootstrap is transactional
+   and removes stale role memberships; the preflight fails if either application
+   login has elevated attributes or can assume any other role. They do not rely
    on `/docker-entrypoint-initdb.d`, which PostgreSQL skips for an existing
    volume. It transfers the database, `public` schema, tables, and sequences to
    `glyphquire_migration`, then grants `glyphquire_app` only connection, schema
@@ -62,6 +65,7 @@ must never be reused in production.
 
    ```bash
    pnpm db:verify-baseline
+   pnpm db:preflight:roles-compose
    pnpm db:migrate
    ```
 
@@ -122,6 +126,8 @@ arguments, CI output, or logs:
   `NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`,
   owns no objects, cannot create in the database or schema, and receives only
   table `SELECT`, `INSERT`, `UPDATE`, `DELETE` plus sequence `USAGE`;
+- neither login is a member of another role; production preflight must reject
+  every direct membership because `NOINHERIT` alone still permits `SET ROLE`;
 - the runtime login receives no access to the `drizzle` schema or migration
   journal and no sequence `UPDATE`, so it cannot run `setval`;
 - production role bootstrap and ownership transfer run inside a maintenance

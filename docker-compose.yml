@@ -40,6 +40,26 @@ services:
       - --file=/upgrade/001_phase0_roles.sql
     restart: "no"
 
+  postgres-role-preflight:
+    image: postgres:16-alpine
+    profiles: ["phase0-upgrade"]
+    environment:
+      PGPASSWORD: glyphquire_migration_dev
+    volumes:
+      - ./infra/postgres/upgrade:/upgrade:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - psql
+      - --host=postgres
+      - --username=glyphquire_migration
+      - --dbname=glyphquire_dev
+      - --no-password
+      - --set=ON_ERROR_STOP=1
+      - --file=/upgrade/002_role_preflight.sql
+    restart: "no"
+
   minio:
     image: minio/minio
     command: server /data --console-address ":9001"

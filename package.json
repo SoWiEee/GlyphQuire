@@ -25,6 +25,7 @@
     "db:verify-baseline": "pnpm --filter @glyphquire/database db:verify-baseline",
     "db:migrate": "pnpm --filter @glyphquire/database migrate",
     "db:upgrade:phase0-compose": "docker compose --profile phase0-upgrade run --rm postgres-phase0-role-upgrade",
+    "db:preflight:roles-compose": "docker compose --profile phase0-upgrade run --rm postgres-role-preflight",
     "clean": "pnpm -r clean"
   },
   "devDependencies": {

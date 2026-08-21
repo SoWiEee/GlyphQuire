@@ -39,6 +39,44 @@ ALTER ROLE glyphquire_app
   NOBYPASSRLS
   PASSWORD 'glyphquire_app_dev';
 
+-- NOINHERIT does not disable SET ROLE. Remove every stale membership edge so
+-- neither application-owned login can assume another role, directly or through
+-- a membership chain.
+DO $memberships$
+DECLARE
+  membership record;
+BEGIN
+  FOR membership IN
+    SELECT
+      granted.rolname AS granted_role,
+      member.rolname AS member_role,
+      grantor.rolname AS grantor_role
+    FROM pg_catalog.pg_auth_members auth_members
+    JOIN pg_catalog.pg_roles granted ON granted.oid = auth_members.roleid
+    JOIN pg_catalog.pg_roles member ON member.oid = auth_members.member
+    JOIN pg_catalog.pg_roles grantor ON grantor.oid = auth_members.grantor
+    WHERE member.rolname IN ('glyphquire_app', 'glyphquire_migration')
+  LOOP
+    EXECUTE format(
+      'REVOKE %I FROM %I GRANTED BY %I',
+      membership.granted_role,
+      membership.member_role,
+      membership.grantor_role
+    );
+  END LOOP;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_auth_members auth_members
+    JOIN pg_catalog.pg_roles member ON member.oid = auth_members.member
+    WHERE member.rolname IN ('glyphquire_app', 'glyphquire_migration')
+  ) THEN
+    RAISE EXCEPTION
+      'Phase 0 role upgrade refused: application login retains a role membership';
+  END IF;
+END
+$memberships$;
+
 ALTER DATABASE glyphquire_dev OWNER TO glyphquire_migration;
 ALTER SCHEMA public OWNER TO glyphquire_migration;
 

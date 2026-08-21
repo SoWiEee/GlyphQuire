@@ -17,6 +17,10 @@ const roleUpgradeSqlUrl = new URL(
   "../../../../infra/postgres/upgrade/001_phase0_roles.sql",
   import.meta.url,
 );
+const rolePreflightSqlUrl = new URL(
+  "../../../../infra/postgres/upgrade/002_role_preflight.sql",
+  import.meta.url,
+);
 
 async function applySql(sql: Sql, source: string) {
   for (const statement of source.split("--> statement-breakpoint")) {
@@ -77,7 +81,44 @@ describeWithLegacyPostgres("Phase 0 local Compose role upgrade", () => {
     expect(await canConnect(migrationDatabaseUrl!)).toBe(false);
     expect(await canConnect(runtimeDatabaseUrl!)).toBe(false);
 
+    await legacy.unsafe(`
+      create role glyphquire_migration
+        login createdb createrole inherit replication bypassrls
+        password 'glyphquire_migration_dev';
+      create role glyphquire_app
+        login createdb createrole inherit replication bypassrls
+        password 'glyphquire_app_dev';
+      create role glyphquire_malicious_grantor nologin;
+      create role glyphquire_privileged_bridge nologin;
+      create role glyphquire_migration_bridge nologin;
+
+      grant glyphquire to glyphquire_malicious_grantor with admin true, set false;
+      grant glyphquire to glyphquire_app with admin true, set true;
+      grant glyphquire to glyphquire_app
+        with inherit true, set false
+        granted by glyphquire_malicious_grantor;
+      grant glyphquire to glyphquire_privileged_bridge with set true;
+      grant glyphquire_privileged_bridge to glyphquire_app with set true;
+      grant glyphquire to glyphquire_migration_bridge with set true;
+      grant glyphquire_migration_bridge to glyphquire_migration with set true;
+    `);
+
+    const compromisedRuntime = postgres(runtimeDatabaseUrl!, { max: 1, onnotice() {} });
+    try {
+      await compromisedRuntime.unsafe("set role glyphquire");
+      expect(
+        await compromisedRuntime<{ current_role: string; is_superuser: boolean }[]>`
+          select current_user as current_role, rolsuper as is_superuser
+          from pg_catalog.pg_roles
+          where rolname = current_user
+        `,
+      ).toEqual([{ current_role: "glyphquire", is_superuser: true }]);
+    } finally {
+      await compromisedRuntime.end();
+    }
+
     const upgradeSql = await readFile(roleUpgradeSqlUrl, "utf8");
+    const preflightSql = await readFile(rolePreflightSqlUrl, "utf8");
     await legacy.unsafe(upgradeSql);
     await legacy.unsafe(upgradeSql);
 
@@ -86,6 +127,38 @@ describeWithLegacyPostgres("Phase 0 local Compose role upgrade", () => {
 
     const migration = postgres(migrationDatabaseUrl!, { max: 1, onnotice() {} });
     try {
+      await migration.unsafe(preflightSql);
+      expect(
+        await migration<
+          {
+            granted_role: string;
+            member_role: string;
+            grantor_role: string;
+            admin_option: boolean;
+            inherit_option: boolean;
+            set_option: boolean;
+          }[]
+        >`
+          select
+            granted.rolname as granted_role,
+            member.rolname as member_role,
+            grantor.rolname as grantor_role,
+            membership.admin_option,
+            membership.inherit_option,
+            membership.set_option
+          from pg_catalog.pg_auth_members membership
+          join pg_catalog.pg_roles granted on granted.oid = membership.roleid
+          join pg_catalog.pg_roles member on member.oid = membership.member
+          join pg_catalog.pg_roles grantor on grantor.oid = membership.grantor
+          where member.rolname in ('glyphquire_app', 'glyphquire_migration')
+          order by member.rolname, granted.rolname, grantor.rolname
+        `,
+      ).toEqual([]);
+
+      await expect(migration.unsafe("set role glyphquire")).rejects.toMatchObject({
+        code: "42501",
+      });
+
       const [roles] = await migration<
         {
           migration_super: boolean;
@@ -159,6 +232,13 @@ describeWithLegacyPostgres("Phase 0 local Compose role upgrade", () => {
         schema_owner: "glyphquire_migration",
         relation_owners: ["glyphquire_migration"],
       });
+
+      await legacy.unsafe("grant glyphquire to glyphquire_app");
+      await expect(migration.unsafe(preflightSql)).rejects.toThrow(
+        /application login can assume another role/,
+      );
+      await legacy.unsafe(upgradeSql);
+      await migration.unsafe(preflightSql);
     } finally {
       await migration.end();
     }
@@ -188,6 +268,9 @@ describeWithLegacyPostgres("Phase 0 local Compose role upgrade", () => {
     const runtime = postgres(runtimeDatabaseUrl!, { max: 1 });
     const actorId = `phase0-upgrade-${randomUUID()}`;
     try {
+      await expect(runtime.unsafe("set role glyphquire")).rejects.toMatchObject({
+        code: "42501",
+      });
       await runtime`
         insert into "user" (id, name, email)
         values (${actorId}, 'Upgrade Check', ${`${actorId}@example.test`})
