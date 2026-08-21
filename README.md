@@ -28,6 +28,7 @@ GlyphQuire 是一套以 **Markdown 作為唯一文件來源格式（canonical fo
 
 例如：
 
+<!-- prettier-ignore -->
 ```md
 # GPU Scheduling
 
@@ -36,11 +37,10 @@ MPS 不應被視為完整的 GPU memory isolation 機制。
 :::
 
 :::toggle{title="查看實驗設定"}
-
 - RTX 4070
 - RTX 3080
 - NVIDIA MPS
-  :::
+:::
 ```
 
 同一份 Markdown 可以由不同 Theme 呈現成完全不同的視覺風格，而文件內容本身不需要跟著修改。
@@ -115,18 +115,15 @@ Milkdown、CodeMirror、HTML Preview、搜尋索引以及其他格式都只是 M
 
 需要圖像或互動時才使用：
 
+<!-- prettier-ignore -->
 ````md
 :::p5{height="400"}
-
 ```js
 function setup() {
-  createCanvas(600, 400);
+  createCanvas(600, 400)
 }
 ```
-````
-
 :::
-
 ````
 
 不需要為了漂亮的筆記直接接觸 Vue、DOM 或底層應用程式程式碼。
@@ -178,7 +175,7 @@ GlyphQuire 以 GitHub Flavored Markdown 為基礎，並使用 Generic Directive 
 :::callout{type="warning" title="注意"}
 這是一個警告區塊。
 :::
-````
+```
 
 可用類型：
 
@@ -201,6 +198,7 @@ success
 
 ### Toggle
 
+<!-- prettier-ignore -->
 ```md
 :::toggle{title="查看更多"}
 這裡可以包含完整的 Markdown。
@@ -208,7 +206,7 @@ success
 - List
 - **Bold**
 - `code`
-  :::
+:::
 ```
 
 ### Tabs
@@ -382,37 +380,32 @@ Custom Block 可以定義：
 
 ## p5.js
 
+<!-- prettier-ignore -->
 ````md
 :::p5{height="400"}
-
 ```js
 function setup() {
-  createCanvas(600, 400);
+  createCanvas(600, 400)
 }
 
 function draw() {
-  background(245);
-  circle(mouseX, mouseY, 30);
+  background(245)
+  circle(mouseX, mouseY, 30)
 }
 ```
-````
-
 :::
-
 ````
 
 ## Canvas
 
-```md
+<!-- prettier-ignore -->
+````md
 :::canvas{height="320"}
 ```js
 const ctx = canvas.getContext("2d");
 
 ctx.fillRect(10, 10, 100, 100);
-````
-
 :::
-
 ````
 
 互動程式碼會在不同 origin 的 sandboxed iframe 執行：
@@ -427,7 +420,7 @@ Sandbox Runtime
      ├── p5.js
      ├── Canvas
      └── Web Worker
-````
+```
 
 Sandbox 預設無法存取：
 
