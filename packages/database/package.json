@@ -16,6 +16,8 @@
     "clean": "rm -rf dist",
     "generate": "drizzle-kit generate",
     "migrate": "tsx src/migrate.ts",
+    "db:verify-baseline": "tsx src/migrations/verify-baseline.ts",
+    "db:migrate:test": "tsx src/migrate.ts",
     "studio": "drizzle-kit studio"
   },
   "dependencies": {

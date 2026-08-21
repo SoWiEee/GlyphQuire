@@ -1,15 +1,22 @@
 import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { fileURLToPath } from "node:url";
+import { migrationEnvSchema } from "@glyphquire/shared";
 import { createDb } from "./client.js";
+import { verifyMigrationBaseline } from "./migrations/verify-baseline.js";
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  console.error("DATABASE_URL environment variable is required");
-  process.exit(1);
+const parsed = migrationEnvSchema.safeParse(process.env);
+if (!parsed.success) {
+  throw new Error("MIGRATION_DATABASE_URL environment variable is required");
 }
 
-const db = createDb(databaseUrl);
+const migrationsFolder = fileURLToPath(new URL("./migrations", import.meta.url));
+await verifyMigrationBaseline(parsed.data.MIGRATION_DATABASE_URL, migrationsFolder);
 
-await migrate(db, { migrationsFolder: "./src/migrations" });
+const db = createDb(parsed.data.MIGRATION_DATABASE_URL);
+try {
+  await migrate(db, { migrationsFolder });
+} finally {
+  await db.$client.end();
+}
 
 console.log("Migrations complete");
-process.exit(0);

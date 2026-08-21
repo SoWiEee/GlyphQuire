@@ -4,6 +4,10 @@ export const databaseEnvSchema = z.object({
   DATABASE_URL: z.string().url(),
 });
 
+export const migrationEnvSchema = z.object({
+  MIGRATION_DATABASE_URL: z.string().url(),
+});
+
 export const s3EnvSchema = z.object({
   S3_ENDPOINT: z.string().url(),
   S3_ACCESS_KEY: z.string().min(1),

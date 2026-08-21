@@ -7,3 +7,10 @@ export {
   sessionRelations,
   accountRelations,
 } from "./auth.js";
+export {
+  workspaceMembers,
+  workspaces,
+  workspaceMembersRelations,
+  workspacesRelations,
+  type WorkspaceRole,
+} from "./workspaces.js";
