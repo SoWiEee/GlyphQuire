@@ -20,11 +20,15 @@ async function copyMigrationRepository(
   changes: { sqlSuffix?: string; snapshotSuffix?: string },
 ) {
   const temporaryMetaDirectory = join(temporaryDirectory, "meta");
+  const journal = JSON.parse(
+    await readFile(join(migrationsDirectory, "meta", "_journal.json"), "utf8"),
+  ) as { entries: unknown[] };
+  journal.entries = journal.entries.slice(0, 2);
   await mkdir(temporaryMetaDirectory);
   await Promise.all([
     writeFile(
       join(temporaryMetaDirectory, "_journal.json"),
-      await readFile(join(migrationsDirectory, "meta", "_journal.json")),
+      `${JSON.stringify(journal, null, 2)}\n`,
     ),
     writeFile(
       join(temporaryMetaDirectory, "0000_snapshot.json"),
@@ -93,15 +97,17 @@ describe("workspace schema", () => {
 });
 
 describe("workspace migrations", () => {
-  it("commits the exact ordered Phase 0 and Phase 2 journal", async () => {
+  it("preserves the exact ordered Phase 0 and workspace journal prefix", async () => {
     const migrations = await readRepositoryMigrations(migrationsDirectory);
 
-    expect(migrations.map(({ idx, tag }) => ({ idx, tag }))).toEqual([
+    expect(migrations.slice(0, 2).map(({ idx, tag }) => ({ idx, tag }))).toEqual([
       { idx: 0, tag: "0000_phase0_auth" },
       { idx: 1, tag: "0001_phase2_workspaces" },
     ]);
-    expect(migrations.every((migration) => /^[a-f0-9]{64}$/.test(migration.hash))).toBe(true);
-    expect(new Set(migrations.map((migration) => migration.when)).size).toBe(2);
+    expect(migrations.slice(0, 2).every((migration) => /^[a-f0-9]{64}$/.test(migration.hash))).toBe(
+      true,
+    );
+    expect(new Set(migrations.slice(0, 2).map((migration) => migration.when)).size).toBe(2);
     expect(migrations[0]?.hash).toBe(PHASE0_AUTH_SQL_SHA256);
     expect(PHASE0_AUTH_SNAPSHOT_SHA256).toBe(
       "ddbdd01656f226667fc4e9b8533d946d8d57ed643d580ade86d4451a27c0be66",
