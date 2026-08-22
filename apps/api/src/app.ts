@@ -25,12 +25,14 @@ import {
   createTrustedProxyPolicy,
   type SecurityVariables,
 } from "./middleware/security.js";
+import { NoteServiceImpl, type NoteService } from "./modules/notes/NoteService.js";
 import {
   WorkspaceService,
   type PersonalWorkspaceProvisioner,
 } from "./modules/workspaces/WorkspaceService.js";
 import { createAuthRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
+import { createNoteRoutes } from "./routes/v1/notes.js";
 
 type AuthErrorLogger = NonNullable<AuthOptions["errorLogger"]>;
 type AuthErrorLogEntry = Parameters<AuthErrorLogger["error"]>[0];
@@ -48,6 +50,7 @@ const defaultAppLogger: AppSecurityLogger = {
 export interface AppDependencies {
   db?: Database;
   workspaceService?: PersonalWorkspaceProvisioner;
+  noteService?: NoteService;
   rateLimit?: RateLimitPort;
   clock?: Clock;
   logger?: AppSecurityLogger;
@@ -77,6 +80,7 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
   const ownsDb = dependencies.db === undefined;
   const db = dependencies.db ?? createDb(env.DATABASE_URL);
   const workspaceService = dependencies.workspaceService ?? new WorkspaceService(db);
+  const noteService = dependencies.noteService ?? new NoteServiceImpl(db);
   const logger = dependencies.logger ?? defaultAppLogger;
   const rateLimit =
     dependencies.rateLimit ??
@@ -152,7 +156,8 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
     .use("/api/v1/*", ensurePersonalWorkspace)
     .onError(createErrorHandler(logger as SecurityLogger))
     .route("/api", healthRoutes)
-    .route("/api", authRoutes);
+    .route("/api", authRoutes)
+    .route("/api/v1", createNoteRoutes(noteService));
 
   return {
     app,
