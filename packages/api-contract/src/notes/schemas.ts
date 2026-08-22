@@ -3,6 +3,9 @@ import { z } from "zod";
 export const MAX_MARKDOWN_BYTES = 2 * 1024 * 1024;
 export const MAX_CURSOR_BYTES = 512;
 export const MAX_TITLE_CODE_POINTS = 200;
+export const MAX_REQUEST_ID_BYTES = 128;
+export const MAX_PUBLIC_ERROR_MESSAGE_CODE_POINTS = 1024;
+export const MAX_DISPLAY_NAME_CODE_POINTS = 200;
 export const DEFAULT_PAGE_SIZE = 50;
 export const MAX_PAGE_SIZE = 100;
 
@@ -10,6 +13,9 @@ const utf8ByteLength = (value: string) => new TextEncoder().encode(value).byteLe
 const unicodeCodePointLength = (value: string) => [...value].length;
 const CANONICAL_UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const CANONICAL_PAGE_SIZE_PATTERN = /^(?:[1-9]|[1-9]\d|100)$/;
+const STRICT_RFC_3339_TIMESTAMP_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:(?:0\d|1[0-3]):[0-5]\d|14:00))$/;
 
 export const canonicalUuidSchema = z
   .string()
@@ -28,11 +34,11 @@ export const cursorSchema = z
     }
   });
 
-export const pageSizeSchema = z.coerce
-  .number()
-  .int()
-  .min(1)
-  .max(MAX_PAGE_SIZE)
+export const pageSizeSchema = z
+  .union([
+    z.number().int().min(1).max(MAX_PAGE_SIZE),
+    z.string().regex(CANONICAL_PAGE_SIZE_PATTERN).transform(Number),
+  ])
   .default(DEFAULT_PAGE_SIZE);
 
 export const cursorPaginationQuerySchema = z
@@ -60,6 +66,38 @@ export const noteTitleSchema = z.string().superRefine((value, context) => {
     });
   }
 });
+
+export const requestIdSchema = z
+  .string()
+  .min(1)
+  .superRefine((value, context) => {
+    if (utf8ByteLength(value) > MAX_REQUEST_ID_BYTES) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Request ID must be at most ${MAX_REQUEST_ID_BYTES} UTF-8 bytes`,
+      });
+    }
+  });
+
+const boundedCodePointStringSchema = (label: string, maximum: number) =>
+  z.string().superRefine((value, context) => {
+    const codePoints = unicodeCodePointLength(value);
+    if (codePoints < 1 || codePoints > maximum) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${label} must contain between 1 and ${maximum} Unicode code points`,
+      });
+    }
+  });
+
+export const publicErrorMessageSchema = boundedCodePointStringSchema(
+  "Public error message",
+  MAX_PUBLIC_ERROR_MESSAGE_CODE_POINTS,
+);
+export const displayNameSchema = boundedCodePointStringSchema(
+  "Display name",
+  MAX_DISPLAY_NAME_CODE_POINTS,
+);
 
 export const revisionSchema = z.number().int().positive();
 export const noteVisibilitySchema = z.literal("private");
@@ -93,7 +131,10 @@ export const restoreNoteInputSchema = noteMutationSchema;
 export const checkpointNoteInputSchema = noteMutationSchema;
 export const restoreNoteVersionInputSchema = noteMutationSchema;
 
-export const timestampSchema = z.string().datetime({ offset: true });
+export const timestampSchema = z
+  .string()
+  .regex(STRICT_RFC_3339_TIMESTAMP_PATTERN, "Expected a strict RFC 3339 timestamp")
+  .datetime({ offset: true });
 
 export const noteSummarySchema = z
   .object({
@@ -121,7 +162,7 @@ export const snapshotReasonSchema = z.enum([
   "import",
 ]);
 
-const displayNameIdentitySchema = z.object({ displayName: z.string().min(1) }).strict();
+export const displayNameIdentitySchema = z.object({ displayName: displayNameSchema }).strict();
 
 export const noteVersionSummarySchema = z
   .object({
@@ -142,7 +183,7 @@ export const noteVersionResultSchema = noteVersionSummarySchema.extend({
 export const cursorEnvelopeSchema = <TItem extends z.ZodTypeAny>(itemSchema: TItem) =>
   z
     .object({
-      items: z.array(itemSchema),
+      items: z.array(itemSchema).max(MAX_PAGE_SIZE),
       nextCursor: cursorSchema.nullable(),
     })
     .strict();

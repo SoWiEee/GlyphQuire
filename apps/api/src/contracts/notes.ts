@@ -5,6 +5,5 @@ import {
 
 export type { SaveNoteInput } from "@glyphquire/api-contract";
 
-export const API_BASE_URL = "/api";
 export const noteApiContract = sharedNoteApiContract;
 export const saveNoteInputSchema = sharedSaveNoteInputSchema;

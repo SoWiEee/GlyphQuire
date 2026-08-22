@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { canonicalUuidSchema, markdownSchema, revisionSchema } from "./schemas.js";
+import {
+  canonicalUuidSchema,
+  displayNameIdentitySchema,
+  markdownSchema,
+  publicErrorMessageSchema,
+  requestIdSchema,
+  revisionSchema,
+  timestampSchema,
+} from "./schemas.js";
 
 export const API_ERROR_CODES = [
   "NOTE_NOT_FOUND",
@@ -13,14 +21,12 @@ export const API_ERROR_CODES = [
 
 export const apiErrorCodeSchema = z.enum(API_ERROR_CODES);
 
-const requestIdSchema = z.string().min(1);
-
 export const apiErrorEnvelopeSchema = z
   .object({
     error: z
       .object({
         code: apiErrorCodeSchema,
-        message: z.string(),
+        message: publicErrorMessageSchema,
         requestId: requestIdSchema,
       })
       .strict(),
@@ -33,13 +39,8 @@ export const noteConflictSchema = z
     noteId: canonicalUuidSchema,
     serverRevision: revisionSchema,
     serverMarkdown: markdownSchema,
-    serverUpdatedAt: z.string().datetime({ offset: true }),
-    lastEditedBy: z
-      .object({
-        displayName: z.string().min(1),
-      })
-      .strict()
-      .nullable(),
+    serverUpdatedAt: timestampSchema,
+    lastEditedBy: displayNameIdentitySchema.nullable(),
     requestId: requestIdSchema,
   })
   .strict();

@@ -21,9 +21,14 @@ import {
   deleteNoteInputSchema,
   DEFAULT_PAGE_SIZE,
   MAX_CURSOR_BYTES,
+  MAX_DISPLAY_NAME_CODE_POINTS,
   MAX_MARKDOWN_BYTES,
   MAX_PAGE_SIZE,
+  MAX_PUBLIC_ERROR_MESSAGE_CODE_POINTS,
+  MAX_REQUEST_ID_BYTES,
   MAX_TITLE_CODE_POINTS,
+  displayNameIdentitySchema,
+  displayNameSchema,
   markdownSchema,
   noteApiContract,
   checkpointNoteResultSchema,
@@ -32,10 +37,14 @@ import {
   noteTitleSchema,
   noteVersionPageSchema,
   noteVersionResultSchema,
+  pageSizeSchema,
+  publicErrorMessageSchema,
   renameNoteInputSchema,
+  requestIdSchema,
   restoreNoteInputSchema,
   restoreNoteVersionInputSchema,
   saveNoteInputSchema,
+  timestampSchema,
 } from "./schemas.js";
 
 const canonicalUuid = "123e4567-e89b-42d3-a456-426614174000";
@@ -87,16 +96,203 @@ describe("note API schemas", () => {
     expect(cursorSchema.safeParse(oneByteOverLimit).success).toBe(false);
   });
 
-  it("defaults omitted page size and enforces the inclusive 1 through 100 boundary", () => {
+  it("accepts only real RFC 3339 timestamps with bounded UTC offsets", () => {
+    const validTimestamps = [
+      "2026-08-22T02:00:00Z",
+      "2026-08-22T02:00:00.123456789Z",
+      "2024-02-29T23:59:59+08:00",
+      "2026-08-22T02:00:00+14:00",
+      "2026-08-22T02:00:00-14:00",
+    ];
+    const invalidTimestamps = [
+      "2026-08-22T02:00:00+99:99",
+      "2026-08-22T02:00:00+14:01",
+      "2026-08-22T02:00:00-14:01",
+      "2026-08-22T02:00:00+08:60",
+      "2026-08-22T02:00:00+0800",
+      "2026-02-29T02:00:00Z",
+      "2024-02-30T02:00:00Z",
+      "2026-08-22T24:00:00Z",
+      "2026-08-22T23:60:00Z",
+      "2026-08-22T23:59:60Z",
+    ];
+
+    for (const timestamp of validTimestamps) {
+      expect(timestampSchema.safeParse(timestamp).success, timestamp).toBe(true);
+    }
+    for (const timestamp of invalidTimestamps) {
+      expect(timestampSchema.safeParse(timestamp).success, timestamp).toBe(false);
+    }
+
+    expect(noteResultSchema.shape.createdAt).toBe(timestampSchema);
+    expect(noteVersionResultSchema.shape.createdAt).toBe(timestampSchema);
+    expect(noteConflictSchema.shape.serverUpdatedAt).toBe(timestampSchema);
+  });
+
+  it("parses only integer numbers or canonical decimal page-size query strings", () => {
     expect(cursorPaginationQuerySchema.parse({})).toEqual({ pageSize: DEFAULT_PAGE_SIZE });
-    expect(cursorPaginationQuerySchema.parse({ pageSize: 1 }).pageSize).toBe(1);
-    expect(cursorPaginationQuerySchema.parse({ pageSize: String(MAX_PAGE_SIZE) }).pageSize).toBe(
-      100,
-    );
-    expect(cursorPaginationQuerySchema.safeParse({ pageSize: 0 }).success).toBe(false);
-    expect(cursorPaginationQuerySchema.safeParse({ pageSize: MAX_PAGE_SIZE + 1 }).success).toBe(
+    expect(pageSizeSchema.parse(undefined)).toBe(DEFAULT_PAGE_SIZE);
+
+    for (const pageSize of [1, 42, MAX_PAGE_SIZE, "1", "42", String(MAX_PAGE_SIZE)]) {
+      expect(pageSizeSchema.parse(pageSize), String(pageSize)).toBe(Number(pageSize));
+    }
+
+    const rejectedPageSizes: unknown[] = [
+      0,
+      MAX_PAGE_SIZE + 1,
+      1.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      true,
       false,
-    );
+      [],
+      ["1"],
+      {},
+      null,
+      "",
+      "0",
+      "101",
+      "01",
+      "+1",
+      "-1",
+      " 1",
+      "1 ",
+      "0x10",
+      "1e2",
+      "1.0",
+    ];
+
+    for (const pageSize of rejectedPageSizes) {
+      expect(pageSizeSchema.safeParse(pageSize).success, JSON.stringify(pageSize)).toBe(false);
+    }
+  });
+
+  it("bounds note and version cursor envelopes to the maximum page size", () => {
+    const noteSummary = {
+      id: canonicalUuid,
+      workspaceId: canonicalUuid,
+      title: "Bounded note",
+      revision: 1,
+      visibility: "private",
+      createdAt: "2026-08-22T01:00:00Z",
+      updatedAt: "2026-08-22T01:00:00Z",
+      deletedAt: null,
+    };
+    const versionSummary = {
+      id: canonicalUuid,
+      noteId: canonicalUuid,
+      revision: 1,
+      reason: "checkpoint",
+      createdBy: { displayName: "Editor" },
+      createdAt: "2026-08-22T01:00:00Z",
+    };
+
+    for (const { schema, item } of [
+      { schema: notePageSchema, item: noteSummary },
+      { schema: noteVersionPageSchema, item: versionSummary },
+    ]) {
+      expect(
+        schema.safeParse({
+          items: Array.from({ length: MAX_PAGE_SIZE }, () => item),
+          nextCursor: null,
+        }).success,
+      ).toBe(true);
+      expect(
+        schema.safeParse({
+          items: Array.from({ length: MAX_PAGE_SIZE + 1 }, () => item),
+          nextCursor: null,
+        }).success,
+      ).toBe(false);
+    }
+  });
+
+  it("bounds public request IDs by bytes and messages and display names by code points", () => {
+    const requestIdAtLimit = `${"界".repeat(42)}ab`;
+    const requestIdOverLimit = `${requestIdAtLimit}c`;
+    const messageAtLimit = "😀".repeat(MAX_PUBLIC_ERROR_MESSAGE_CODE_POINTS);
+    const messageOverLimit = `${messageAtLimit}😀`;
+    const displayNameAtLimit = "😀".repeat(MAX_DISPLAY_NAME_CODE_POINTS);
+    const displayNameOverLimit = `${displayNameAtLimit}😀`;
+
+    expect(new TextEncoder().encode(requestIdAtLimit)).toHaveLength(MAX_REQUEST_ID_BYTES);
+    expect(new TextEncoder().encode(requestIdOverLimit)).toHaveLength(MAX_REQUEST_ID_BYTES + 1);
+    expect(requestIdSchema.safeParse(requestIdAtLimit).success).toBe(true);
+    expect(requestIdSchema.safeParse(requestIdOverLimit).success).toBe(false);
+
+    expect([...messageAtLimit]).toHaveLength(MAX_PUBLIC_ERROR_MESSAGE_CODE_POINTS);
+    expect([...messageOverLimit]).toHaveLength(MAX_PUBLIC_ERROR_MESSAGE_CODE_POINTS + 1);
+    expect(publicErrorMessageSchema.safeParse(messageAtLimit).success).toBe(true);
+    expect(publicErrorMessageSchema.safeParse(messageOverLimit).success).toBe(false);
+
+    expect([...displayNameAtLimit]).toHaveLength(MAX_DISPLAY_NAME_CODE_POINTS);
+    expect([...displayNameOverLimit]).toHaveLength(MAX_DISPLAY_NAME_CODE_POINTS + 1);
+    expect(displayNameSchema.safeParse(displayNameAtLimit).success).toBe(true);
+    expect(displayNameSchema.safeParse(displayNameOverLimit).success).toBe(false);
+
+    expect(apiErrorEnvelopeSchema.shape.error.shape.message).toBe(publicErrorMessageSchema);
+    expect(apiErrorEnvelopeSchema.shape.error.shape.requestId).toBe(requestIdSchema);
+    expect(noteConflictSchema.shape.requestId).toBe(requestIdSchema);
+    expect(noteConflictSchema.shape.serverMarkdown).toBe(markdownSchema);
+    expect(noteConflictSchema.shape.lastEditedBy.unwrap()).toBe(displayNameIdentitySchema);
+    expect(noteVersionResultSchema.shape.createdBy).toBe(displayNameIdentitySchema);
+    expect(displayNameIdentitySchema.shape.displayName).toBe(displayNameSchema);
+
+    const errorAtLimit = {
+      error: {
+        code: "SERVICE_UNAVAILABLE",
+        message: messageAtLimit,
+        requestId: requestIdAtLimit,
+      },
+    };
+    expect(apiErrorEnvelopeSchema.safeParse(errorAtLimit).success).toBe(true);
+    expect(
+      apiErrorEnvelopeSchema.safeParse({
+        error: { ...errorAtLimit.error, message: messageOverLimit },
+      }).success,
+    ).toBe(false);
+    expect(
+      apiErrorEnvelopeSchema.safeParse({
+        error: { ...errorAtLimit.error, requestId: requestIdOverLimit },
+      }).success,
+    ).toBe(false);
+
+    const conflictAtLimit = {
+      code: "REVISION_CONFLICT",
+      noteId: canonicalUuid,
+      serverRevision: 1,
+      serverMarkdown: "# Server",
+      serverUpdatedAt: "2026-08-22T01:00:00Z",
+      lastEditedBy: { displayName: displayNameAtLimit },
+      requestId: requestIdAtLimit,
+    };
+    expect(noteConflictSchema.safeParse(conflictAtLimit).success).toBe(true);
+    expect(
+      noteConflictSchema.safeParse({
+        ...conflictAtLimit,
+        lastEditedBy: { displayName: displayNameOverLimit },
+      }).success,
+    ).toBe(false);
+    expect(
+      noteConflictSchema.safeParse({ ...conflictAtLimit, requestId: requestIdOverLimit }).success,
+    ).toBe(false);
+
+    const versionAtLimit = {
+      id: canonicalUuid,
+      noteId: canonicalUuid,
+      revision: 1,
+      reason: "checkpoint",
+      createdBy: { displayName: displayNameAtLimit },
+      createdAt: "2026-08-22T01:00:00Z",
+      contentMarkdown: "# Version",
+      schemaVersion: 1,
+    };
+    expect(noteVersionResultSchema.safeParse(versionAtLimit).success).toBe(true);
+    expect(
+      noteVersionResultSchema.safeParse({
+        ...versionAtLimit,
+        createdBy: { displayName: displayNameOverLimit },
+      }).success,
+    ).toBe(false);
   });
 
   it("requires a positive baseRevision on every existing-note mutation", () => {
