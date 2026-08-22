@@ -132,6 +132,11 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $function$
 BEGIN
+	IF TG_OP = 'DELETE' THEN
+		RAISE EXCEPTION 'document jobs cannot be deleted'
+			USING ERRCODE = '55000';
+	END IF;
+
 	IF OLD."status" IN ('completed', 'dead_letter') THEN
 		RAISE EXCEPTION 'terminal document jobs are immutable'
 			USING ERRCODE = '55000';
@@ -169,7 +174,7 @@ BEGIN
 END
 $function$;--> statement-breakpoint
 CREATE TRIGGER "document_jobs_update_guard"
-BEFORE UPDATE ON "document_jobs"
+BEFORE UPDATE OR DELETE ON "document_jobs"
 FOR EACH ROW
 EXECUTE FUNCTION "guard_document_job_update"();--> statement-breakpoint
 CREATE FUNCTION "guard_note_revision_update"()

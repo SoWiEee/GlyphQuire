@@ -398,7 +398,11 @@ describe("note persistence migration", () => {
     expect(migrationSql).toMatch(
       /CREATE TRIGGER "note_operations_immutable"[\s\S]+BEFORE UPDATE OR DELETE/,
     );
-    expect(migrationSql).toMatch(/CREATE TRIGGER "document_jobs_update_guard"[\s\S]+BEFORE UPDATE/);
+    expect(migrationSql).toMatch(
+      /CREATE TRIGGER "document_jobs_update_guard"[\s\S]+BEFORE UPDATE OR DELETE/,
+    );
+    expect(migrationSql).toContain(`IF TG_OP = 'DELETE' THEN`);
+    expect(migrationSql).toContain(`RAISE EXCEPTION 'document jobs cannot be deleted'`);
     for (const identityColumn of [
       "id",
       "workspace_id",
@@ -1023,11 +1027,17 @@ describeWithPostgres("note persistence database constraints", () => {
     const sql = postgres(runtimeTestDatabaseUrl!, { max: 1, onnotice() {} });
     try {
       const [privileges] = await sql<
-        { role_name: string; can_update: boolean; owns_table: boolean }[]
+        {
+          role_name: string;
+          can_update: boolean;
+          can_delete: boolean;
+          owns_table: boolean;
+        }[]
       >`
         select
           current_user as role_name,
           has_table_privilege(current_user, 'public.document_jobs', 'UPDATE') as can_update,
+          has_table_privilege(current_user, 'public.document_jobs', 'DELETE') as can_delete,
           pg_catalog.pg_get_userbyid(table_class.relowner) = current_user as owns_table
         from pg_catalog.pg_class table_class
         where table_class.oid = 'public.document_jobs'::regclass
@@ -1035,6 +1045,7 @@ describeWithPostgres("note persistence database constraints", () => {
       expect(privileges).toEqual({
         role_name: runtimeRole,
         can_update: true,
+        can_delete: true,
         owns_table: false,
       });
 
@@ -1061,4 +1072,138 @@ describeWithPostgres("note persistence database constraints", () => {
       await sql.end();
     }
   });
+
+  itWithRuntimePostgres(
+    "rejects completed-job deletion before its unique identity can be reused",
+    async () => {
+      const sql = postgres(runtimeTestDatabaseUrl!, { max: 1, onnotice() {} });
+      try {
+        const fixture = await insertDocumentJobFixture(sql);
+        await claimDocumentJob(sql, fixture);
+        await sql`
+          update document_jobs
+          set
+            status = 'completed',
+            locked_at = null,
+            locked_by = null,
+            completed_at = now(),
+            updated_at = now()
+          where id = ${fixture.jobId}
+        `;
+
+        await expect(
+          sql`
+            with deleted_job as (
+              delete from document_jobs
+              where id = ${fixture.jobId}
+              returning workspace_id, note_id, note_operation_id, operation_id, revision, kind
+            )
+            insert into document_jobs (
+              workspace_id, note_id, note_operation_id, operation_id, revision, kind
+            )
+            select workspace_id, note_id, note_operation_id, operation_id, revision, kind
+            from deleted_job
+          `,
+        ).rejects.toMatchObject({
+          code: "55000",
+          message: "document jobs cannot be deleted",
+        });
+
+        const [storedJob] = await sql<{ id: string; status: string }[]>`
+          select id, status
+          from document_jobs
+          where note_id = ${fixture.noteId}
+            and revision = 1
+            and operation_id = ${fixture.operationId}
+        `;
+        expect(storedJob).toEqual({ id: fixture.jobId, status: "completed" });
+        await expect(
+          sql`
+            insert into document_jobs (
+              workspace_id, note_id, note_operation_id, operation_id, revision, kind
+            )
+            values (
+              ${fixture.workspaceId}, ${fixture.noteId}, ${fixture.noteOperationId},
+              ${fixture.operationId}, 1, 'upsert'
+            )
+          `,
+        ).rejects.toMatchObject({
+          code: "23505",
+          constraint_name: "document_jobs_identity_unique",
+        });
+      } finally {
+        await sql.end();
+      }
+    },
+  );
+
+  itWithRuntimePostgres(
+    "rejects runtime deletion of pending, processing, and dead-letter jobs",
+    async () => {
+      const sql = postgres(runtimeTestDatabaseUrl!, { max: 1, onnotice() {} });
+      try {
+        const pendingFixture = await insertDocumentJobFixture(sql);
+        const processingFixture = await insertDocumentJobFixture(sql);
+        await claimDocumentJob(sql, processingFixture);
+        const deadLetterFixture = await insertDocumentJobFixture(sql);
+        await claimDocumentJob(sql, deadLetterFixture);
+        await sql`
+          update document_jobs
+          set
+            status = 'dead_letter',
+            locked_at = null,
+            locked_by = null,
+            dead_lettered_at = now(),
+            last_error = 'terminal failure',
+            updated_at = now()
+          where id = ${deadLetterFixture.jobId}
+        `;
+
+        const targets = [
+          { state: "pending", fixture: pendingFixture },
+          { state: "processing", fixture: processingFixture },
+          { state: "dead_letter", fixture: deadLetterFixture },
+        ];
+        const outcomes: { state: string; code: string; message: string }[] = [];
+        for (const target of targets) {
+          try {
+            await sql`delete from document_jobs where id = ${target.fixture.jobId}`;
+            outcomes.push({ state: target.state, code: "resolved", message: "" });
+          } catch (error) {
+            const databaseError = error as Error & { code?: string };
+            outcomes.push({
+              state: target.state,
+              code: databaseError.code ?? "unknown",
+              message: databaseError.message,
+            });
+          }
+        }
+
+        expect(outcomes).toEqual(
+          targets.map(({ state }) => ({
+            state,
+            code: "55000",
+            message: "document jobs cannot be deleted",
+          })),
+        );
+        const storedJobs = await sql<{ id: string; status: string }[]>`
+          select id, status
+          from document_jobs
+          where id in (
+            ${pendingFixture.jobId}, ${processingFixture.jobId}, ${deadLetterFixture.jobId}
+          )
+          order by status
+        `;
+        expect(storedJobs).toEqual(
+          [
+            { id: pendingFixture.jobId, status: "pending" },
+            { id: processingFixture.jobId, status: "processing" },
+            { id: deadLetterFixture.jobId, status: "dead_letter" },
+          ].sort((left, right) => left.status.localeCompare(right.status)),
+        );
+      } finally {
+        await sql.end();
+      }
+    },
+  );
 });
