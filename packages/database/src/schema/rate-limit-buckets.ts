@@ -15,6 +15,6 @@ export const rateLimitBuckets = pgTable(
       "rate_limit_buckets_key_size_check",
       sql`octet_length(${table.bucketKey}) between 1 and 255`,
     ),
-    check("rate_limit_buckets_request_count_positive_check", sql`${table.requestCount} > 0`),
+    check("rate_limit_buckets_request_count_nonnegative_check", sql`${table.requestCount} >= 0`),
   ],
 );

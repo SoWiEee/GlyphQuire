@@ -26,6 +26,7 @@ import {
   createAuthRateLimitMiddleware,
   enforceNoteRateLimits,
   type Clock,
+  type RateLimitPort,
 } from "./rate-limit.js";
 import { PostgresRateLimitAdapter } from "./PostgresRateLimitAdapter.js";
 import {
@@ -134,6 +135,9 @@ function createProtectedFixture(
     });
   });
   app.post("/api/v1/error", () => {
+    throw new Error("MARKDOWN_SENTINEL cookie=session-secret SELECT * FROM users STACK_SENTINEL");
+  });
+  app.post("/api/v1/error/*", () => {
     throw new Error("MARKDOWN_SENTINEL cookie=session-secret SELECT * FROM users STACK_SENTINEL");
   });
   return { app, writes: () => writes };
@@ -367,7 +371,7 @@ describe("safe responses, logs, and hardening headers", () => {
     );
   });
 
-  it("never returns or logs raw exception, Markdown, cookie, SQL, or stack strings", async () => {
+  it("logs only a fixed route class and never attacker-controlled request data", async () => {
     const entries: SecurityLogEntry[] = [];
     const logger: SecurityLogger = {
       error(entry) {
@@ -375,11 +379,12 @@ describe("safe responses, logs, and hardening headers", () => {
       },
     };
     const { app } = createProtectedFixture({ logger });
-    const request = jsonRequest("/api/v1/error", {
+    const request = jsonRequest("/api/v1/error/PATH_SENTINEL?QUERY_SENTINEL=do-not-log", {
       method: "POST",
       body: JSON.stringify({ content: "MARKDOWN_SENTINEL" }),
     });
     request.headers.set("cookie", "session=COOKIE_SENTINEL");
+    request.headers.set("x-untrusted-value", "HEADER_SENTINEL");
 
     const response = await app.request(request);
     const combined = `${await response.text()} ${JSON.stringify(entries)}`;
@@ -390,13 +395,16 @@ describe("safe responses, logs, and hardening headers", () => {
     expect(combined).not.toContain("COOKIE_SENTINEL");
     expect(combined).not.toContain("SELECT * FROM users");
     expect(combined).not.toContain("STACK_SENTINEL");
+    expect(combined).not.toContain("PATH_SENTINEL");
+    expect(combined).not.toContain("QUERY_SENTINEL");
+    expect(combined).not.toContain("HEADER_SENTINEL");
     expect(entries).toEqual([
       expect.objectContaining({
         event: "api_request_failed",
         code: "SERVICE_UNAVAILABLE",
         requestId: expect.any(String),
         method: "POST",
-        path: "/api/v1/error",
+        routeClass: "api_v1",
         status: 503,
       }),
     ]);
@@ -489,6 +497,26 @@ describe("trusted proxy client IP", () => {
     const policy = createTrustedProxyPolicy("10.0.0.0/8, 2001:db8:ffff::/48", "x-forwarded-for");
     const headers = new Headers({
       "x-forwarded-for": "198.51.100.8, 10.20.30.40",
+    });
+
+    expect(deriveClientIp("10.1.2.3", headers, policy)).toBe("198.51.100.8");
+  });
+
+  it.each([
+    ["an empty element", "198.51.100.8, , 10.20.30.40"],
+    ["an invalid IP", "198.51.100.8, definitely-not-an-ip"],
+    ["too many hops", Array.from({ length: 17 }, () => "10.20.30.40").join(", ")],
+  ])("falls back to the direct peer for a forwarded chain with %s", (_label, forwarded) => {
+    const policy = createTrustedProxyPolicy("10.0.0.0/8", "x-forwarded-for");
+    const headers = new Headers({ "x-forwarded-for": forwarded });
+
+    expect(deriveClientIp("10.1.2.3", headers, policy)).toBe("10.1.2.3");
+  });
+
+  it("stops at the first untrusted hop and ignores attacker-supplied elements to its left", () => {
+    const policy = createTrustedProxyPolicy("10.0.0.0/8", "x-forwarded-for");
+    const headers = new Headers({
+      "x-forwarded-for": "192.0.2.200, 198.51.100.8, 10.20.30.40",
     });
 
     expect(deriveClientIp("10.1.2.3", headers, policy)).toBe("198.51.100.8");
@@ -656,12 +684,15 @@ describe("note rate limits", () => {
 
 function createAuthLimitFixture(
   options: {
-    responseStatus?: 200 | 401;
+    responseStatus?: 200 | 302 | 401;
+    responseStatuses?: readonly (200 | 302 | 401)[];
+    throwHandler?: boolean;
     clock?: Clock;
     directPeer?: string;
+    rateLimit?: RateLimitPort;
   } = {},
 ) {
-  const adapter = new InMemoryRateLimitAdapter({ clock: options.clock });
+  const adapter = options.rateLimit ?? new InMemoryRateLimitAdapter({ clock: options.clock });
   const policy = createTrustedProxyPolicy("10.0.0.0/8", "x-forwarded-for");
   let handlerCalls = 0;
   const app = new Hono<{ Variables: SecurityVariables }>();
@@ -677,17 +708,19 @@ function createAuthLimitFixture(
       keySecret: "auth-rate-limit-secret",
     }),
   );
-  app.onError(createErrorHandler());
+  app.onError(createErrorHandler({ error() {} }));
   app.post("/api/auth/*", (context) => {
     handlerCalls += 1;
-    return context.json({ handled: true }, options.responseStatus ?? 200);
+    if (options.throwHandler) throw new Error("credential handler failed");
+    const status = options.responseStatuses?.[handlerCalls - 1] ?? options.responseStatus ?? 200;
+    return context.json({ handled: true }, status);
   });
   return { app, handlerCalls: () => handlerCalls };
 }
 
 describe("authentication route limits", () => {
   it("allows 10 failed account-and-IP logins and rate-limits the 11th", async () => {
-    const { app } = createAuthLimitFixture({ responseStatus: 401 });
+    const { app, handlerCalls } = createAuthLimitFixture({ responseStatus: 401 });
     for (let index = 1; index <= 11; index += 1) {
       const response = await app.request(
         jsonRequest("/api/auth/sign-in/email", {
@@ -701,6 +734,98 @@ describe("authentication route limits", () => {
         expect(response.headers.get("cache-control")).toBe("no-store");
       }
     }
+    expect(handlerCalls()).toBe(10);
+  });
+
+  it("reserves failed-login capacity before concurrent credential verification", async () => {
+    const { app, handlerCalls } = createAuthLimitFixture({ responseStatus: 401 });
+    const responses = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        app.request(
+          jsonRequest("/api/auth/sign-in/email", {
+            method: "POST",
+            body: JSON.stringify({ email: "concurrent@example.test", password: "wrong" }),
+          }),
+        ),
+      ),
+    );
+
+    expect(responses.filter(({ status }) => status === 401)).toHaveLength(10);
+    expect(responses.filter(({ status }) => status === 429)).toHaveLength(10);
+    expect(handlerCalls()).toBe(10);
+  });
+
+  it("refunds a successful credential verification before exhaustion", async () => {
+    const { app, handlerCalls } = createAuthLimitFixture({
+      responseStatus: 401,
+      responseStatuses: [...Array<401>(9).fill(401), 200],
+    });
+    const request = () =>
+      jsonRequest("/api/auth/sign-in/email", {
+        method: "POST",
+        body: JSON.stringify({ email: "refund@example.test", password: "candidate" }),
+      });
+
+    for (let index = 0; index < 9; index += 1) {
+      expect((await app.request(request())).status).toBe(401);
+    }
+    expect((await app.request(request())).status).toBe(200);
+    expect((await app.request(request())).status).toBe(401);
+    expect((await app.request(request())).status).toBe(429);
+    expect(handlerCalls()).toBe(11);
+  });
+
+  it("retains the reservation when the credential handler throws", async () => {
+    const { app, handlerCalls } = createAuthLimitFixture({ throwHandler: true });
+    const request = () =>
+      jsonRequest("/api/auth/sign-in/email", {
+        method: "POST",
+        body: JSON.stringify({ email: "throw@example.test", password: "candidate" }),
+      });
+
+    for (let index = 0; index < 10; index += 1) {
+      expect((await app.request(request())).status).toBe(503);
+    }
+    expect((await app.request(request())).status).toBe(429);
+    expect(handlerCalls()).toBe(10);
+  });
+
+  it("does not refund a non-2xx credential-handler redirect", async () => {
+    const { app, handlerCalls } = createAuthLimitFixture({ responseStatus: 302 });
+    const request = () =>
+      jsonRequest("/api/auth/sign-in/email", {
+        method: "POST",
+        body: JSON.stringify({ email: "redirect@example.test", password: "candidate" }),
+      });
+
+    for (let index = 0; index < 10; index += 1) {
+      expect((await app.request(request())).status).toBe(302);
+    }
+    expect((await app.request(request())).status).toBe(429);
+    expect(handlerCalls()).toBe(10);
+  });
+
+  it("resets failed-login reservations only at the injected window boundary", async () => {
+    const time = mutableClock();
+    const { app, handlerCalls } = createAuthLimitFixture({
+      clock: time.clock,
+      responseStatus: 401,
+    });
+    const request = () =>
+      jsonRequest("/api/auth/sign-in/email", {
+        method: "POST",
+        body: JSON.stringify({ email: "failed-window@example.test", password: "wrong" }),
+      });
+
+    for (let index = 0; index < 10; index += 1) {
+      expect((await app.request(request())).status).toBe(401);
+    }
+    expect((await app.request(request())).status).toBe(429);
+    time.advance(899_999);
+    expect((await app.request(request())).status).toBe(429);
+    time.advance(1);
+    expect((await app.request(request())).status).toBe(401);
+    expect(handlerCalls()).toBe(11);
   });
 
   it("allows 30 total IP login attempts and blocks the 31st before the handler", async () => {
@@ -771,6 +896,13 @@ describe("authentication route limits", () => {
             consumedKeys.push(key);
             return base.consume(key, limit, windowMs);
           },
+          async reserve(key, limit, windowMs) {
+            consumedKeys.push(key);
+            return base.reserve(key, limit, windowMs);
+          },
+          async release(reservation) {
+            await base.release(reservation);
+          },
         },
         keySecret: "digest-secret",
       }),
@@ -809,6 +941,12 @@ describe("authentication route limits", () => {
         rateLimit: {
           distributed: true,
           async consume() {
+            throw new Error("postgres unavailable SQL_SENTINEL");
+          },
+          async reserve() {
+            throw new Error("postgres unavailable SQL_SENTINEL");
+          },
+          async release() {
             throw new Error("postgres unavailable SQL_SENTINEL");
           },
         },
@@ -888,6 +1026,12 @@ describe("production limiter selection", () => {
             },
             async consume() {
               throw new Error("must not consume before initialization");
+            },
+            async reserve() {
+              throw new Error("must not reserve before initialization");
+            },
+            async release() {
+              throw new Error("must not release before initialization");
             },
           },
         },
@@ -1113,11 +1257,12 @@ describeWithPostgres("Better Auth cookie and trusted-origin integration", () => 
 
     const response = await auth.handler(
       new Request(
-        `${origin.origin}/api/auth/reset-password/${token}?callbackURL=${encodeURIComponent(origin.origin)}`,
+        `${origin.origin}/api/auth/reset-password/${token}?callbackURL=${encodeURIComponent(origin.origin)}&noise=QUERY_SENTINEL`,
         {
           headers: {
             origin: origin.origin,
             "x-request-id": "reset-log-request",
+            "x-untrusted-value": "HEADER_SENTINEL",
           },
         },
       ),
@@ -1125,11 +1270,13 @@ describeWithPostgres("Better Auth cookie and trusted-origin integration", () => 
 
     expect(response.status).toBe(503);
     expect(JSON.stringify(entries)).not.toContain(token);
+    expect(JSON.stringify(entries)).not.toContain("QUERY_SENTINEL");
+    expect(JSON.stringify(entries)).not.toContain("HEADER_SENTINEL");
     expect(entries).toEqual([
       expect.objectContaining({
         event: "auth_request_failed",
         requestId: "reset-log-request",
-        path: "/api/auth/*",
+        routeClass: "auth",
       }),
     ]);
   });
@@ -1218,7 +1365,7 @@ describe("rate-limit persistence contract", () => {
       {
         idx: 3,
         tag: "0003_phase2_rate_limits",
-        hash: "1bb138216bc401bf4f62c9806fb4c3c1f1fcfb056ad153a190e21a75386a25bb",
+        hash: "76cc555a90b5adefeecb243264f289a55f9d7b6495bc6a3574d00ac2f48b1614",
       },
     ]);
     expect(migrations.every(({ hash }) => /^[a-f0-9]{64}$/.test(hash))).toBe(true);
@@ -1232,7 +1379,11 @@ describe("rate-limit persistence contract", () => {
       "utf8",
     );
     expect(sql).toContain('CREATE TABLE "rate_limit_buckets"');
-    expect(sql).toContain('REVOKE DELETE ON TABLE "rate_limit_buckets"');
+    expect(sql).toContain('CONSTRAINT "rate_limit_buckets_request_count_nonnegative_check"');
+    expect(sql).toContain('CREATE FUNCTION "rate_limit_buckets_owner_delete_guard"()');
+    expect(sql).toContain("SECURITY INVOKER");
+    expect(sql).toContain('CREATE TRIGGER "rate_limit_buckets_owner_delete_guard"');
+    expect(sql).not.toContain("glyphquire_app");
     expect(createHash("sha256").update(sql).digest("hex")).toBe(migrations[3]?.hash);
   });
 });
@@ -1248,6 +1399,10 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
   let phase0Name: string;
   let freshUrl: string;
   let phase0Url: string;
+  let providerRuntimeRole: string;
+  let probeWithoutInsertRole: string;
+  let probeWithoutUpdateRole: string;
+  let probeWithoutDeleteRole: string;
   let phase0AuthConsoleOutput = "";
   let phase0AppResponse!: { status: number; requestId: string | null; body: unknown };
   const phase0AppLogEntries: Array<Parameters<AppSecurityLogger["error"]>[0]> = [];
@@ -1293,6 +1448,37 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
     }
     expect(await verifyMigrationBaseline(freshUrl, migrationsDirectory)).toBe("empty");
     await runDatabaseMigrations(freshDb, { migrationsFolder: migrationsDirectory });
+
+    const roleSuffix = randomUUID().replaceAll("-", "").slice(0, 20);
+    providerRuntimeRole = `provider_runtime_${roleSuffix}`;
+    probeWithoutInsertRole = `provider_no_insert_${roleSuffix}`;
+    probeWithoutUpdateRole = `provider_no_update_${roleSuffix}`;
+    probeWithoutDeleteRole = `provider_no_delete_${roleSuffix}`;
+    for (const role of [
+      providerRuntimeRole,
+      probeWithoutInsertRole,
+      probeWithoutUpdateRole,
+      probeWithoutDeleteRole,
+    ]) {
+      expect(role).toMatch(/^[a-z_][a-z0-9_]{0,62}$/);
+      await adminDb.$client.unsafe(
+        `create role "${role}" login nosuperuser nocreatedb nocreaterole noinherit password 'task5_provider_test'`,
+      );
+      await adminDb.$client.unsafe(`grant connect on database "${freshName}" to "${role}"`);
+      await freshDb.$client.unsafe(`grant usage on schema public to "${role}"`);
+    }
+    await freshDb.$client.unsafe(
+      `grant select, insert, update, delete on rate_limit_buckets to "${providerRuntimeRole}"`,
+    );
+    await freshDb.$client.unsafe(
+      `grant select, update on rate_limit_buckets to "${probeWithoutInsertRole}"`,
+    );
+    await freshDb.$client.unsafe(
+      `grant select, insert on rate_limit_buckets to "${probeWithoutUpdateRole}"`,
+    );
+    await freshDb.$client.unsafe(
+      `grant select, insert, update on rate_limit_buckets to "${probeWithoutDeleteRole}"`,
+    );
 
     const phase0Target = new URL(adminUrl);
     phase0Target.pathname = `/${phase0Name}`;
@@ -1385,6 +1571,14 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
         `;
         await adminDb.$client.unsafe(`drop database "${databaseName}"`);
       }
+      for (const role of [
+        providerRuntimeRole,
+        probeWithoutInsertRole,
+        probeWithoutUpdateRole,
+        probeWithoutDeleteRole,
+      ]) {
+        if (role) await adminDb.$client.unsafe(`drop role if exists "${role}"`);
+      }
       await adminDb.$client.end();
     }
   });
@@ -1413,7 +1607,7 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
       code: "SERVICE_UNAVAILABLE",
       status: 500,
       method: "POST",
-      path: "/api/auth/sign-up/email",
+      routeClass: "auth",
     });
   });
 
@@ -1434,7 +1628,7 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
         code: "SERVICE_UNAVAILABLE",
         status: 503,
         method: "POST",
-        path: "/api/auth/sign-up/email",
+        routeClass: "auth",
       },
     ]);
   });
@@ -1453,6 +1647,39 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
 
     expect(decisions.filter(({ allowed }) => allowed)).toHaveLength(30);
     expect(decisions.filter(({ allowed }) => !allowed)).toHaveLength(1);
+  });
+
+  it("atomically caps failed-login reservations across two API instances", async () => {
+    const time = mutableClock();
+    const first = new PostgresRateLimitAdapter(freshDb, { clock: time.clock });
+    const second = new PostgresRateLimitAdapter(secondFreshDb, { clock: time.clock });
+
+    const reservations = await Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        (index % 2 === 0 ? first : second).reserve("shared-failed-login-reservation", 10, 900_000),
+      ),
+    );
+
+    expect(reservations.filter(({ acquired }) => acquired)).toHaveLength(10);
+    expect(reservations.filter(({ acquired }) => !acquired)).toHaveLength(10);
+    await Promise.all(
+      reservations.flatMap((reservation, index) =>
+        reservation.acquired ? [(index % 2 === 0 ? first : second).release(reservation.token)] : [],
+      ),
+    );
+    expect((await first.reserve("shared-failed-login-reservation", 10, 900_000)).acquired).toBe(
+      true,
+    );
+  });
+
+  it("resets PostgreSQL failed-login reservations at the injected window boundary", async () => {
+    const time = mutableClock();
+    const adapter = new PostgresRateLimitAdapter(freshDb, { clock: time.clock });
+    expect((await adapter.reserve("postgres-reservation-window", 1, 60_000)).acquired).toBe(true);
+    time.advance(59_999);
+    expect((await adapter.reserve("postgres-reservation-window", 1, 60_000)).acquired).toBe(false);
+    time.advance(1);
+    expect((await adapter.reserve("postgres-reservation-window", 1, 60_000)).acquired).toBe(true);
   });
 
   it("resets the PostgreSQL bucket only at the injected window boundary", async () => {
@@ -1519,4 +1746,118 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
       }
     },
   );
+
+  it("requires SELECT, INSERT, and UPDATE during rollback-contained initialization", async () => {
+    for (const role of [probeWithoutInsertRole, probeWithoutUpdateRole]) {
+      const url = new URL(freshUrl);
+      url.username = role;
+      url.password = "task5_provider_test";
+      const restrictedDb = createDb(url.toString());
+      try {
+        await expect(new PostgresRateLimitAdapter(restrictedDb).initialize()).rejects.toMatchObject(
+          { code: "42501" },
+        );
+      } finally {
+        await restrictedDb.$client.end();
+      }
+    }
+
+    const probeRows = await freshDb.$client<{ count: number }[]>`
+      select count(*)::integer as count
+      from rate_limit_buckets
+      where bucket_key like 'rl:capability-probe:%'
+    `;
+    expect(probeRows[0]?.count).toBe(0);
+  });
+
+  it("initializes without DELETE privilege and leaves no capability-probe row", async () => {
+    const url = new URL(freshUrl);
+    url.username = probeWithoutDeleteRole;
+    url.password = "task5_provider_test";
+    const noDeleteDb = createDb(url.toString());
+    try {
+      const [privileges] = await noDeleteDb.$client<
+        { can_select: boolean; can_insert: boolean; can_update: boolean; can_delete: boolean }[]
+      >`
+        select
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'SELECT') as can_select,
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'INSERT') as can_insert,
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'UPDATE') as can_update,
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'DELETE') as can_delete
+      `;
+      expect(privileges).toEqual({
+        can_select: true,
+        can_insert: true,
+        can_update: true,
+        can_delete: false,
+      });
+      await expect(new PostgresRateLimitAdapter(noDeleteDb).initialize()).resolves.toBeUndefined();
+    } finally {
+      await noDeleteDb.$client.end();
+    }
+
+    const probeRows = await freshDb.$client<{ count: number }[]>`
+      select count(*)::integer as count
+      from rate_limit_buckets
+      where bucket_key like 'rl:capability-probe:%'
+    `;
+    expect(probeRows[0]?.count).toBe(0);
+  });
+
+  it("denies DELETE to a provider-named DML role while allowing exact-owner cleanup", async () => {
+    const url = new URL(freshUrl);
+    url.username = providerRuntimeRole;
+    url.password = "task5_provider_test";
+    const providerDb = createDb(url.toString());
+    const bucketKey = `provider-runtime-${randomUUID()}`;
+    try {
+      const [privileges] = await providerDb.$client<
+        {
+          can_select: boolean;
+          can_insert: boolean;
+          can_update: boolean;
+          can_delete: boolean;
+        }[]
+      >`
+        select
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'SELECT') as can_select,
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'INSERT') as can_insert,
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'UPDATE') as can_update,
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'DELETE') as can_delete
+      `;
+      expect(privileges).toEqual({
+        can_select: true,
+        can_insert: true,
+        can_update: true,
+        can_delete: true,
+      });
+
+      await new PostgresRateLimitAdapter(providerDb).initialize();
+      await providerDb.$client`
+        insert into rate_limit_buckets (
+          bucket_key, window_started_at, request_count, updated_at
+        ) values (${bucketKey}, now(), 1, now())
+      `;
+      expect(
+        await providerDb.$client`
+          select bucket_key from rate_limit_buckets where bucket_key = ${bucketKey}
+        `,
+      ).toHaveLength(1);
+      await providerDb.$client`
+        update rate_limit_buckets set request_count = 2 where bucket_key = ${bucketKey}
+      `;
+      await expect(
+        providerDb.$client`delete from rate_limit_buckets where bucket_key = ${bucketKey}`,
+      ).rejects.toMatchObject({ code: "42501" });
+
+      await freshDb.$client`delete from rate_limit_buckets where bucket_key = ${bucketKey}`;
+      expect(
+        await freshDb.$client`
+          select bucket_key from rate_limit_buckets where bucket_key = ${bucketKey}
+        `,
+      ).toHaveLength(0);
+    } finally {
+      await providerDb.$client.end();
+    }
+  });
 });

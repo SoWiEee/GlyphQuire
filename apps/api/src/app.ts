@@ -72,8 +72,9 @@ function isInitializable(port: RateLimitPort): port is RateLimitPort & {
   return typeof port.initialize === "function";
 }
 
-export function createApp(input: Env | EnvInput, dependencies: AppDependencies = {}) {
+export function createAppRuntime(input: Env | EnvInput, dependencies: AppDependencies = {}) {
   const env = resolvedEnv(input);
+  const ownsDb = dependencies.db === undefined;
   const db = dependencies.db ?? createDb(env.DATABASE_URL);
   const workspaceService = dependencies.workspaceService ?? new WorkspaceService(db);
   const logger = dependencies.logger ?? defaultAppLogger;
@@ -83,21 +84,25 @@ export function createApp(input: Env | EnvInput, dependencies: AppDependencies =
       ? new PostgresRateLimitAdapter(db, { clock: dependencies.clock })
       : new InMemoryRateLimitAdapter({ clock: dependencies.clock }));
 
-  let limiterReady = Promise.resolve(true);
+  let limiterReady = Promise.resolve();
   if (env.PRODUCTION) {
     if (!rateLimit.distributed || !isInitializable(rateLimit)) {
       throw new Error("Production requires an initializable distributed rate limiter");
     }
-    limiterReady = rateLimit.initialize().then(
-      () => true,
-      () => false,
-    );
+    limiterReady = rateLimit.initialize();
+    // The synchronous request-harness factory below may defer observing this
+    // promise until a request. The production bootstrap always awaits it.
+    void limiterReady.catch(() => undefined);
   }
   const requireLimiter: MiddlewareHandler<{ Variables: SecurityVariables }> = async (
     _context,
     next,
   ) => {
-    if (!(await limiterReady)) throw new PublicApiError("SERVICE_UNAVAILABLE", 503);
+    try {
+      await limiterReady;
+    } catch {
+      throw new PublicApiError("SERVICE_UNAVAILABLE", 503);
+    }
     await next();
   };
 
@@ -149,7 +154,22 @@ export function createApp(input: Env | EnvInput, dependencies: AppDependencies =
     .route("/api", healthRoutes)
     .route("/api", authRoutes);
 
-  return app;
+  return {
+    app,
+    ready: limiterReady,
+    async close() {
+      if (ownsDb) await db.$client.end();
+    },
+  };
+}
+
+/**
+ * Synchronous request-harness factory used by tests and in-process callers.
+ * The production server entrypoint must use createAppRuntime and await ready
+ * before opening a listening socket.
+ */
+export function createApp(input: Env | EnvInput, dependencies: AppDependencies = {}) {
+  return createAppRuntime(input, dependencies).app;
 }
 
 export type AppType = ReturnType<typeof createApp>;

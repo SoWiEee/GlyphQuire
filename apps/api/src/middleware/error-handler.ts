@@ -31,7 +31,7 @@ export interface SecurityLogEntry {
   code: ApiErrorCode;
   status: number;
   method: string;
-  path: string;
+  routeClass: "auth" | "api_v1" | "health" | "other";
 }
 
 export interface SecurityLogger {
@@ -83,6 +83,13 @@ function publicError(error: unknown) {
   };
 }
 
+function routeClass(path: string): SecurityLogEntry["routeClass"] {
+  if (path === "/api/auth" || path.startsWith("/api/auth/")) return "auth";
+  if (path === "/api/v1" || path.startsWith("/api/v1/")) return "api_v1";
+  if (path === "/api/health") return "health";
+  return "other";
+}
+
 export function createErrorHandler(logger: SecurityLogger = defaultLogger): ErrorHandler {
   return (error, context) => {
     const mapped = publicError(error);
@@ -95,7 +102,7 @@ export function createErrorHandler(logger: SecurityLogger = defaultLogger): Erro
         code: mapped.code,
         status: mapped.status,
         method: context.req.method,
-        path: context.req.path,
+        routeClass: routeClass(context.req.path),
       });
     } catch {
       // A logging outage must not replace the stable, scrubbed public error.

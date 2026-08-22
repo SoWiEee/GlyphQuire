@@ -5,6 +5,7 @@ import { PublicApiError } from "./error-handler.js";
 import type { RequestContext } from "./request-context.js";
 
 export const MAX_JSON_BODY_BYTES = 2.25 * 1024 * 1024;
+export const MAX_FORWARDED_IP_HOPS = 16;
 
 const safeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 const requestIdPattern = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -73,7 +74,13 @@ export function deriveClientIp(directPeer: string, headers: Headers, policy: Tru
   const forwarded = headers.get(policy.forwardedIpHeader);
   if (!forwarded) return directAddress;
   const chain = forwarded.split(",").map(normalizeIp);
-  if (chain.length === 0 || chain.some((address) => address === null)) return directAddress;
+  if (
+    chain.length === 0 ||
+    chain.length > MAX_FORWARDED_IP_HOPS ||
+    chain.some((address) => address === null)
+  ) {
+    return directAddress;
+  }
 
   let furthestTrustedAddress = directAddress;
   for (let index = chain.length - 1; index >= 0; index -= 1) {

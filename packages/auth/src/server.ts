@@ -3,19 +3,6 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
 import type { Database } from "@glyphquire/database";
 
-const staticAuthLogPaths = new Set([
-  "/api/auth/request-password-reset",
-  "/api/auth/reset-password",
-  "/api/auth/sign-in/email",
-  "/api/auth/sign-out",
-  "/api/auth/sign-up/email",
-]);
-
-function scrubbedAuthLogPath(requestUrl: string) {
-  const pathname = new URL(requestUrl).pathname;
-  return staticAuthLogPaths.has(pathname) ? pathname : "/api/auth/*";
-}
-
 export function createAuth(db: Database, options: AuthOptions) {
   const webOrigin = options.webOrigin ?? new URL(options.baseUrl);
   const secureCookies = webOrigin.protocol === "https:";
@@ -91,7 +78,7 @@ export function createAuth(db: Database, options: AuthOptions) {
         code: "SERVICE_UNAVAILABLE",
         status,
         method: request.method,
-        path: scrubbedAuthLogPath(request.url),
+        routeClass: "auth",
       };
       try {
         (options.errorLogger ?? defaultAuthErrorLogger).error(entry);
@@ -130,7 +117,7 @@ export interface AuthErrorLogEntry {
   code: "SERVICE_UNAVAILABLE";
   status: 500 | 503;
   method: string;
-  path: string;
+  routeClass: "auth";
 }
 
 export interface AuthErrorLogger {

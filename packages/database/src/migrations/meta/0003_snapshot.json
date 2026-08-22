@@ -1164,9 +1164,9 @@
           "name": "rate_limit_buckets_key_size_check",
           "value": "octet_length(\"rate_limit_buckets\".\"bucket_key\") between 1 and 255"
         },
-        "rate_limit_buckets_request_count_positive_check": {
-          "name": "rate_limit_buckets_request_count_positive_check",
-          "value": "\"rate_limit_buckets\".\"request_count\" > 0"
+        "rate_limit_buckets_request_count_nonnegative_check": {
+          "name": "rate_limit_buckets_request_count_nonnegative_check",
+          "value": "\"rate_limit_buckets\".\"request_count\" >= 0"
         }
       },
       "isRLSEnabled": false

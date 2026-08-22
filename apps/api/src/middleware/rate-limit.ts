@@ -13,10 +13,29 @@ export interface RateLimitDecision {
   retryAfterSeconds: number;
 }
 
+export interface RateLimitReservationToken {
+  readonly key: string;
+  readonly windowStartedAt: number;
+}
+
+export type RateLimitReservation =
+  | {
+      readonly acquired: true;
+      readonly decision: RateLimitDecision;
+      readonly token: RateLimitReservationToken;
+    }
+  | {
+      readonly acquired: false;
+      readonly decision: RateLimitDecision;
+      readonly token: null;
+    };
+
 export interface RateLimitPort {
   readonly distributed: boolean;
   initialize?(): Promise<void>;
   consume(key: string, limit: number, windowMs: number): Promise<RateLimitDecision>;
+  reserve(key: string, limit: number, windowMs: number): Promise<RateLimitReservation>;
+  release(reservation: RateLimitReservationToken): Promise<void>;
 }
 
 interface InMemoryBucket {
@@ -44,6 +63,34 @@ export class InMemoryRateLimitAdapter implements RateLimitPort {
     this.#buckets.set(key, bucket);
     return decisionFor(bucket.count, bucket.startedAt, now, limit, windowMs);
   }
+
+  async reserve(key: string, limit: number, windowMs: number): Promise<RateLimitReservation> {
+    assertRateLimitArguments(key, limit, windowMs);
+    const now = this.#clock();
+    assertClockValue(now);
+    const existing = this.#buckets.get(key);
+    if (!existing || now >= existing.startedAt + windowMs) {
+      const bucket = { count: 1, startedAt: now };
+      this.#buckets.set(key, bucket);
+      return acquiredReservation(key, bucket.count, bucket.startedAt, now, limit, windowMs);
+    }
+    if (existing.count >= limit) {
+      return deniedReservation(existing.count, existing.startedAt, now, limit, windowMs);
+    }
+
+    const bucket = { count: existing.count + 1, startedAt: existing.startedAt };
+    this.#buckets.set(key, bucket);
+    return acquiredReservation(key, bucket.count, bucket.startedAt, now, limit, windowMs);
+  }
+
+  async release(reservation: RateLimitReservationToken): Promise<void> {
+    assertReservationToken(reservation);
+    const existing = this.#buckets.get(reservation.key);
+    if (!existing || existing.startedAt !== reservation.windowStartedAt || existing.count === 0) {
+      return;
+    }
+    this.#buckets.set(reservation.key, { ...existing, count: existing.count - 1 });
+  }
 }
 
 export function assertRateLimitArguments(key: string, limit: number, windowMs: number) {
@@ -55,6 +102,23 @@ export function assertRateLimitArguments(key: string, limit: number, windowMs: n
   }
   if (!Number.isSafeInteger(windowMs) || windowMs <= 0) {
     throw new Error("rate-limit window must be a positive safe integer");
+  }
+}
+
+export function assertClockValue(now: number) {
+  if (!Number.isSafeInteger(now) || now < 0) {
+    throw new Error("rate-limit clock must return a nonnegative safe integer");
+  }
+}
+
+export function assertReservationToken(reservation: RateLimitReservationToken) {
+  if (
+    reservation.key.length === 0 ||
+    Buffer.byteLength(reservation.key) > 255 ||
+    !Number.isSafeInteger(reservation.windowStartedAt) ||
+    reservation.windowStartedAt < 0
+  ) {
+    throw new Error("invalid rate-limit reservation token");
   }
 }
 
@@ -72,6 +136,39 @@ export function decisionFor(
     remaining: Math.max(0, limit - count),
     resetAt,
     retryAfterSeconds: Math.max(1, Math.ceil((resetAt - now) / 1000)),
+  };
+}
+
+function acquiredReservation(
+  key: string,
+  count: number,
+  startedAt: number,
+  now: number,
+  limit: number,
+  windowMs: number,
+): RateLimitReservation {
+  return {
+    acquired: true,
+    decision: decisionFor(count, startedAt, now, limit, windowMs),
+    token: { key, windowStartedAt: startedAt },
+  };
+}
+
+function deniedReservation(
+  count: number,
+  startedAt: number,
+  now: number,
+  limit: number,
+  windowMs: number,
+): RateLimitReservation {
+  return {
+    acquired: false,
+    decision: {
+      ...decisionFor(count, startedAt, now, limit, windowMs),
+      allowed: false,
+      remaining: 0,
+    },
+    token: null,
   };
 }
 
@@ -176,6 +273,26 @@ export function createAuthRateLimitMiddleware(options: {
     }
   }
 
+  async function reserve(material: string, limit: number, windowMs: number) {
+    try {
+      return await options.rateLimit.reserve(
+        opaqueKey(options.keySecret, material),
+        limit,
+        windowMs,
+      );
+    } catch {
+      throw new PublicApiError("SERVICE_UNAVAILABLE", 503);
+    }
+  }
+
+  async function release(reservation: RateLimitReservationToken) {
+    try {
+      await options.rateLimit.release(reservation);
+    } catch {
+      throw new PublicApiError("SERVICE_UNAVAILABLE", 503);
+    }
+  }
+
   return async (context, next) => {
     if (context.req.method !== "POST") {
       await next();
@@ -208,10 +325,18 @@ export function createAuthRateLimitMiddleware(options: {
     const allAttempts = await consume(`auth:login:${clientIp}`, 30, 900_000);
     if (!allAttempts.allowed) return rateLimitedResponse(context, allAttempts);
 
+    const failureReservation = await reserve(
+      `auth:failed-login:${clientIp}:${account}`,
+      10,
+      900_000,
+    );
+    if (!failureReservation.acquired) {
+      return rateLimitedResponse(context, failureReservation.decision);
+    }
+
     await next();
-    if (context.res.status >= 400) {
-      const failures = await consume(`auth:failed-login:${clientIp}:${account}`, 10, 900_000);
-      if (!failures.allowed) return rateLimitedResponse(context, failures);
+    if (context.res.status >= 200 && context.res.status < 300) {
+      await release(failureReservation.token);
     }
   };
 }
