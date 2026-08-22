@@ -31,7 +31,9 @@ import { notes } from "./notes.js";
 
 const migrationsDirectory = fileURLToPath(new URL("../migrations/", import.meta.url));
 const migrationDatabaseUrl = process.env.TEST_MIGRATION_DATABASE_URL;
+const runtimeDatabaseUrl = process.env.TEST_DATABASE_URL;
 const describeWithPostgres = migrationDatabaseUrl ? describe : describe.skip;
+const itWithRuntimePostgres = runtimeDatabaseUrl ? it : it.skip;
 
 const frozenMigrationArtifacts = {
   "0000_phase0_auth.sql": "7fbba803d17ce335f8acc41fd7027c3c1278d4af79225c48ac6d0ab885028863",
@@ -78,6 +80,86 @@ async function sha256(relativePath: string) {
   return createHash("sha256")
     .update(await readFile(new URL(`../migrations/${relativePath}`, import.meta.url)))
     .digest("hex");
+}
+
+type DocumentJobFixture = {
+  actorId: string;
+  workspaceId: string;
+  noteId: string;
+  noteOperationId: string;
+  operationId: string;
+  jobId: string;
+};
+
+async function insertDocumentJobFixture(sql: Sql): Promise<DocumentJobFixture> {
+  const actorId = `job-actor-${randomUUID()}`;
+  const operationId = randomUUID();
+  const contentHash = "f".repeat(64);
+
+  await sql`
+    insert into "user" (id, name, email)
+    values (${actorId}, 'Job Actor', ${`${actorId}@example.test`})
+  `;
+  const [workspace] = await sql<{ id: string }[]>`
+    insert into workspaces (personal_owner_id)
+    values (${actorId})
+    returning id
+  `;
+  await sql`
+    insert into workspace_members (workspace_id, user_id, role)
+    values (${workspace!.id}, ${actorId}, 'owner')
+  `;
+  const [note] = await sql<{ id: string }[]>`
+    insert into notes (
+      workspace_id, title, content_markdown, revision, content_hash,
+      owner_id, schema_version, visibility
+    )
+    values (${workspace!.id}, 'Outbox note', '', 1, ${contentHash}, ${actorId}, 1, 'private')
+    returning id
+  `;
+  const [operation] = await sql<{ id: string }[]>`
+    insert into note_operations (
+      workspace_id, note_id, actor_id, operation_id, operation_kind,
+      base_revision, request_hash, recorded_response
+    )
+    values (
+      ${workspace!.id}, ${note!.id}, ${actorId}, ${operationId}, 'create',
+      null, ${"e".repeat(64)}, ${sql.json({ noteId: note!.id, revision: 1 })}
+    )
+    returning id
+  `;
+  const [job] = await sql<{ id: string }[]>`
+    insert into document_jobs (
+      workspace_id, note_id, note_operation_id, operation_id, revision, kind
+    )
+    values (
+      ${workspace!.id}, ${note!.id}, ${operation!.id}, ${operationId}, 1, 'upsert'
+    )
+    returning id
+  `;
+
+  return {
+    actorId,
+    workspaceId: workspace!.id,
+    noteId: note!.id,
+    noteOperationId: operation!.id,
+    operationId,
+    jobId: job!.id,
+  };
+}
+
+async function claimDocumentJob(sql: Sql, fixture: DocumentJobFixture, attempts = 1) {
+  await sql`
+    update document_jobs
+    set
+      status = 'processing',
+      attempts = ${attempts},
+      locked_at = now(),
+      locked_by = 'dispatcher-1',
+      last_error = null,
+      updated_at = now()
+    where id = ${fixture.jobId}
+  `;
 }
 
 describe("note persistence schema", () => {
@@ -316,6 +398,29 @@ describe("note persistence migration", () => {
     expect(migrationSql).toMatch(
       /CREATE TRIGGER "note_operations_immutable"[\s\S]+BEFORE UPDATE OR DELETE/,
     );
+    expect(migrationSql).toMatch(/CREATE TRIGGER "document_jobs_update_guard"[\s\S]+BEFORE UPDATE/);
+    for (const identityColumn of [
+      "id",
+      "workspace_id",
+      "note_id",
+      "note_operation_id",
+      "operation_id",
+      "revision",
+      "kind",
+      "created_at",
+    ]) {
+      expect(migrationSql).toContain(
+        `NEW."${identityColumn}" IS DISTINCT FROM OLD."${identityColumn}"`,
+      );
+    }
+    expect(migrationSql).toMatch(/OLD\."status" IN \('completed', 'dead_letter'\)/);
+    expect(migrationSql).toMatch(/NEW\."attempts" < OLD\."attempts"/);
+    expect(migrationSql).toMatch(
+      /OLD\."status" = 'pending'[\s\S]+NEW\."status" IN \('pending', 'processing'\)/,
+    );
+    expect(migrationSql).toMatch(
+      /OLD\."status" = 'processing'[\s\S]+NEW\."status" IN \('processing', 'pending', 'completed', 'dead_letter'\)/,
+    );
   });
 });
 
@@ -323,6 +428,8 @@ describeWithPostgres("note persistence database constraints", () => {
   let admin: Sql;
   let databaseName: string;
   let databaseUrl: string;
+  let runtimeTestDatabaseUrl: string | undefined;
+  let runtimeRole: string | undefined;
   let databaseCreated = false;
 
   beforeAll(async () => {
@@ -345,6 +452,38 @@ describeWithPostgres("note persistence database constraints", () => {
       await migrate(db, { migrationsFolder: migrationsDirectory });
     } finally {
       await db.$client.end();
+    }
+
+    if (runtimeDatabaseUrl) {
+      const runtimeUrl = new URL(runtimeDatabaseUrl);
+      if (!["127.0.0.1", "localhost"].includes(runtimeUrl.hostname)) {
+        throw new Error("note persistence runtime tests require a loopback PostgreSQL URL");
+      }
+      if ((runtimeUrl.port || "5432") !== (url.port || "5432")) {
+        throw new Error("migration and runtime PostgreSQL URLs must target the same server");
+      }
+
+      runtimeRole = decodeURIComponent(runtimeUrl.username);
+      if (!/^[a-z_][a-z0-9_]{0,62}$/.test(runtimeRole)) {
+        throw new Error("runtime PostgreSQL role must use a simple unquoted identifier");
+      }
+
+      await admin.unsafe(`grant connect on database "${databaseName}" to "${runtimeRole}"`);
+      const migrationSql = postgres(databaseUrl, { max: 1, onnotice() {} });
+      try {
+        await migrationSql.unsafe(`grant usage on schema public to "${runtimeRole}"`);
+        await migrationSql.unsafe(
+          `grant select, insert, update, delete on all tables in schema public to "${runtimeRole}"`,
+        );
+        await migrationSql.unsafe(
+          `grant usage on all sequences in schema public to "${runtimeRole}"`,
+        );
+      } finally {
+        await migrationSql.end();
+      }
+
+      runtimeUrl.pathname = `/${databaseName}`;
+      runtimeTestDatabaseUrl = runtimeUrl.toString();
     }
   });
 
@@ -634,6 +773,290 @@ describeWithPostgres("note persistence database constraints", () => {
         set status = 'completed', locked_at = null, locked_by = null, completed_at = now()
         where id = ${job!.id}
       `;
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("rejects reopening or otherwise updating a completed document job", async () => {
+    const sql = postgres(databaseUrl, { max: 1, onnotice() {} });
+    try {
+      const fixture = await insertDocumentJobFixture(sql);
+      await claimDocumentJob(sql, fixture);
+      await sql`
+        update document_jobs
+        set
+          status = 'completed',
+          locked_at = null,
+          locked_by = null,
+          completed_at = now(),
+          updated_at = now()
+        where id = ${fixture.jobId}
+      `;
+
+      await expect(
+        sql`
+          update document_jobs
+          set
+            status = 'pending',
+            completed_at = null,
+            available_at = now(),
+            updated_at = now()
+          where id = ${fixture.jobId}
+        `,
+      ).rejects.toMatchObject({ code: "55000" });
+      await expect(
+        sql`
+          update document_jobs
+          set last_error = 'late mutation'
+          where id = ${fixture.jobId}
+        `,
+      ).rejects.toMatchObject({ code: "55000" });
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("rejects identity mutation that would free the original unique job identity", async () => {
+    const sql = postgres(databaseUrl, { max: 1, onnotice() {} });
+    try {
+      const fixture = await insertDocumentJobFixture(sql);
+
+      await expect(
+        sql`
+          with moved_job as (
+            update document_jobs
+            set revision = 2, kind = 'delete'
+            where id = ${fixture.jobId}
+            returning workspace_id, note_id, note_operation_id, operation_id
+          )
+          insert into document_jobs (
+            workspace_id, note_id, note_operation_id, operation_id, revision, kind
+          )
+          select workspace_id, note_id, note_operation_id, operation_id, 1, 'upsert'
+          from moved_job
+        `,
+      ).rejects.toMatchObject({ code: "55000" });
+
+      const [state] = await sql<{ count: number; revisions: number[]; kinds: string[] }[]>`
+        select
+          count(*)::integer as count,
+          array_agg(revision order by revision)::integer[] as revisions,
+          array_agg(kind order by revision)::text[] as kinds
+        from document_jobs
+        where note_id = ${fixture.noteId}
+          and operation_id = ${fixture.operationId}
+      `;
+      expect(state).toEqual({ count: 1, revisions: [1], kinds: ["upsert"] });
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("rejects reopening or otherwise updating a dead-letter document job", async () => {
+    const sql = postgres(databaseUrl, { max: 1, onnotice() {} });
+    try {
+      const fixture = await insertDocumentJobFixture(sql);
+      await claimDocumentJob(sql, fixture);
+      await sql`
+        update document_jobs
+        set
+          status = 'dead_letter',
+          locked_at = null,
+          locked_by = null,
+          dead_lettered_at = now(),
+          last_error = 'terminal failure',
+          updated_at = now()
+        where id = ${fixture.jobId}
+      `;
+
+      await expect(
+        sql`
+          update document_jobs
+          set
+            status = 'pending',
+            dead_lettered_at = null,
+            available_at = now(),
+            updated_at = now()
+          where id = ${fixture.jobId}
+        `,
+      ).rejects.toMatchObject({ code: "55000" });
+      await expect(
+        sql`
+          update document_jobs
+          set last_error = 'rewritten failure'
+          where id = ${fixture.jobId}
+        `,
+      ).rejects.toMatchObject({ code: "55000" });
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("rejects attempts regression and direct pending completion", async () => {
+    const sql = postgres(databaseUrl, { max: 1, onnotice() {} });
+    try {
+      const processingFixture = await insertDocumentJobFixture(sql);
+      await claimDocumentJob(sql, processingFixture, 2);
+      await expect(
+        sql`
+          update document_jobs
+          set attempts = 1, updated_at = now()
+          where id = ${processingFixture.jobId}
+        `,
+      ).rejects.toMatchObject({ code: "23514" });
+
+      const pendingFixture = await insertDocumentJobFixture(sql);
+      await expect(
+        sql`
+          update document_jobs
+          set
+            status = 'completed',
+            attempts = 1,
+            completed_at = now(),
+            updated_at = now()
+          where id = ${pendingFixture.jobId}
+        `,
+      ).rejects.toMatchObject({ code: "23514" });
+    } finally {
+      await sql.end();
+    }
+  });
+
+  it("permits scheduling, claim, heartbeat, reclaim, retry, re-claim, and terminal paths", async () => {
+    const sql = postgres(databaseUrl, { max: 1, onnotice() {} });
+    try {
+      const completedFixture = await insertDocumentJobFixture(sql);
+      await sql`
+        update document_jobs
+        set available_at = now() + interval '1 second', last_error = 'scheduled', updated_at = now()
+        where id = ${completedFixture.jobId}
+      `;
+      await claimDocumentJob(sql, completedFixture);
+      await sql`
+        update document_jobs
+        set locked_at = locked_at + interval '1 millisecond', updated_at = now()
+        where id = ${completedFixture.jobId}
+      `;
+      await sql`
+        update document_jobs
+        set attempts = 2, locked_at = now(), locked_by = 'dispatcher-2', updated_at = now()
+        where id = ${completedFixture.jobId}
+      `;
+      await sql`
+        update document_jobs
+        set
+          status = 'pending',
+          available_at = now() + interval '2 seconds',
+          locked_at = null,
+          locked_by = null,
+          last_error = 'retryable',
+          updated_at = now()
+        where id = ${completedFixture.jobId}
+      `;
+      await sql`
+        update document_jobs
+        set
+          status = 'processing',
+          attempts = 3,
+          locked_at = now(),
+          locked_by = 'dispatcher-3',
+          last_error = null,
+          updated_at = now()
+        where id = ${completedFixture.jobId}
+      `;
+      await sql`
+        update document_jobs
+        set
+          status = 'completed',
+          locked_at = null,
+          locked_by = null,
+          completed_at = now(),
+          updated_at = now()
+        where id = ${completedFixture.jobId}
+      `;
+
+      const deadLetterFixture = await insertDocumentJobFixture(sql);
+      await claimDocumentJob(sql, deadLetterFixture);
+      await sql`
+        update document_jobs
+        set
+          status = 'dead_letter',
+          locked_at = null,
+          locked_by = null,
+          dead_lettered_at = now(),
+          last_error = 'terminal failure',
+          updated_at = now()
+        where id = ${deadLetterFixture.jobId}
+      `;
+
+      const rows = await sql<
+        { id: string; status: string; attempts: number; last_error: string | null }[]
+      >`
+        select id, status, attempts, last_error
+        from document_jobs
+        where id in (${completedFixture.jobId}, ${deadLetterFixture.jobId})
+        order by id
+      `;
+      expect(rows).toEqual(
+        [
+          {
+            id: completedFixture.jobId,
+            status: "completed",
+            attempts: 3,
+            last_error: null,
+          },
+          {
+            id: deadLetterFixture.jobId,
+            status: "dead_letter",
+            attempts: 1,
+            last_error: "terminal failure",
+          },
+        ].sort((left, right) => left.id.localeCompare(right.id)),
+      );
+    } finally {
+      await sql.end();
+    }
+  });
+
+  itWithRuntimePostgres("enforces the update guard for the runtime DML role", async () => {
+    const sql = postgres(runtimeTestDatabaseUrl!, { max: 1, onnotice() {} });
+    try {
+      const [privileges] = await sql<
+        { role_name: string; can_update: boolean; owns_table: boolean }[]
+      >`
+        select
+          current_user as role_name,
+          has_table_privilege(current_user, 'public.document_jobs', 'UPDATE') as can_update,
+          pg_catalog.pg_get_userbyid(table_class.relowner) = current_user as owns_table
+        from pg_catalog.pg_class table_class
+        where table_class.oid = 'public.document_jobs'::regclass
+      `;
+      expect(privileges).toEqual({
+        role_name: runtimeRole,
+        can_update: true,
+        owns_table: false,
+      });
+
+      const fixture = await insertDocumentJobFixture(sql);
+      await claimDocumentJob(sql, fixture);
+      await sql`
+        update document_jobs
+        set
+          status = 'completed',
+          locked_at = null,
+          locked_by = null,
+          completed_at = now(),
+          updated_at = now()
+        where id = ${fixture.jobId}
+      `;
+      await expect(
+        sql`
+          update document_jobs
+          set status = 'pending', completed_at = null, available_at = now(), updated_at = now()
+          where id = ${fixture.jobId}
+        `,
+      ).rejects.toMatchObject({ code: "55000" });
     } finally {
       await sql.end();
     }

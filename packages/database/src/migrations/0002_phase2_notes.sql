@@ -127,6 +127,51 @@ CREATE UNIQUE INDEX "note_versions_note_revision_unique" ON "note_versions" USIN
 CREATE INDEX "note_versions_workspace_note_revision_idx" ON "note_versions" USING btree ("workspace_id","note_id","revision");--> statement-breakpoint
 CREATE INDEX "notes_workspace_deleted_updated_id_idx" ON "notes" USING btree ("workspace_id","deleted_at","updated_at","id");--> statement-breakpoint
 CREATE INDEX "notes_workspace_id_revision_visibility_deleted_idx" ON "notes" USING btree ("workspace_id","id","revision","visibility","deleted_at");--> statement-breakpoint
+CREATE FUNCTION "guard_document_job_update"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+	IF OLD."status" IN ('completed', 'dead_letter') THEN
+		RAISE EXCEPTION 'terminal document jobs are immutable'
+			USING ERRCODE = '55000';
+	END IF;
+
+	IF NEW."id" IS DISTINCT FROM OLD."id"
+		OR NEW."workspace_id" IS DISTINCT FROM OLD."workspace_id"
+		OR NEW."note_id" IS DISTINCT FROM OLD."note_id"
+		OR NEW."note_operation_id" IS DISTINCT FROM OLD."note_operation_id"
+		OR NEW."operation_id" IS DISTINCT FROM OLD."operation_id"
+		OR NEW."revision" IS DISTINCT FROM OLD."revision"
+		OR NEW."kind" IS DISTINCT FROM OLD."kind"
+		OR NEW."created_at" IS DISTINCT FROM OLD."created_at" THEN
+		RAISE EXCEPTION 'document job identity is immutable'
+			USING ERRCODE = '55000';
+	END IF;
+
+	IF NEW."attempts" < OLD."attempts" THEN
+		RAISE EXCEPTION 'document job attempts cannot decrease'
+			USING ERRCODE = '23514';
+	END IF;
+
+	IF NOT (
+		(OLD."status" = 'pending' AND NEW."status" IN ('pending', 'processing'))
+		OR (
+			OLD."status" = 'processing'
+			AND NEW."status" IN ('processing', 'pending', 'completed', 'dead_letter')
+		)
+	) THEN
+		RAISE EXCEPTION 'invalid document job status transition'
+			USING ERRCODE = '23514';
+	END IF;
+
+	RETURN NEW;
+END
+$function$;--> statement-breakpoint
+CREATE TRIGGER "document_jobs_update_guard"
+BEFORE UPDATE ON "document_jobs"
+FOR EACH ROW
+EXECUTE FUNCTION "guard_document_job_update"();--> statement-breakpoint
 CREATE FUNCTION "guard_note_revision_update"()
 RETURNS trigger
 LANGUAGE plpgsql
