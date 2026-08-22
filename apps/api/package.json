@@ -5,8 +5,10 @@
   "type": "module",
   "exports": {
     "./app": {
-      "import": "./src/app.ts",
-      "types": "./src/app.ts"
+      "types": "./src/app.ts",
+      "development": "./src/app.ts",
+      "import": "./dist/app.js",
+      "default": "./dist/app.js"
     }
   },
   "scripts": {

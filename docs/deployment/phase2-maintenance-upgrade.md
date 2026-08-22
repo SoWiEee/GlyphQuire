@@ -125,7 +125,11 @@ arguments, CI output, or logs:
 - the runtime login is
   `NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS`,
   owns no objects, cannot create in the database or schema, and receives only
-  table `SELECT`, `INSERT`, `UPDATE`, `DELETE` plus sequence `USAGE`;
+  table `SELECT`, `INSERT`, `UPDATE`, `DELETE` plus sequence `USAGE`, except
+  `rate_limit_buckets` and `rate_limit_reservations`, which require only
+  `SELECT`, `INSERT`, and `UPDATE`; migration 0003 also denies DELETE on both
+  rate-limit tables to every role other than that exact table's owner even if
+  a provider applies an overly broad table grant;
 - neither login is a member of another role; production preflight must reject
   every direct membership because `NOINHERIT` alone still permits `SET ROLE`;
 - the runtime login receives no access to the `drizzle` schema or migration

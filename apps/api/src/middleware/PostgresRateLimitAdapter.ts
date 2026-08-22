@@ -87,6 +87,7 @@ export class PostgresRateLimitAdapter implements RateLimitPort {
     const now = this.#clock();
     assertClockValue(now);
     const nowIso = new Date(now).toISOString();
+    const reservationId = randomUUID();
 
     return this.#db.$client.begin(async (sql) => {
       await sql`
@@ -139,11 +140,26 @@ export class PostgresRateLimitAdapter implements RateLimitPort {
           updated_at = ${nowIso}
         where bucket_key = ${key}
       `;
+      await sql`
+        insert into rate_limit_reservations (
+          reservation_id,
+          bucket_key,
+          window_started_at,
+          created_at,
+          released_at
+        ) values (
+          ${reservationId},
+          ${key},
+          ${new Date(nextStartedAt).toISOString()},
+          ${nowIso},
+          null
+        )
+      `;
 
       return {
         acquired: true,
         decision: decisionFor(nextCount, nextStartedAt, now, limit, windowMs),
-        token: { key, windowStartedAt: nextStartedAt },
+        token: { reservationId, key, windowStartedAt: nextStartedAt },
       };
     });
   }
@@ -155,19 +171,30 @@ export class PostgresRateLimitAdapter implements RateLimitPort {
     const now = this.#clock();
     assertClockValue(now);
     await this.#db.$client`
-      update rate_limit_buckets
+      with released_reservation as (
+        update rate_limit_reservations
+        set released_at = ${new Date(now).toISOString()}
+        where reservation_id = ${reservation.reservationId}
+          and bucket_key = ${reservation.key}
+          and window_started_at = ${new Date(reservation.windowStartedAt).toISOString()}
+          and released_at is null
+        returning bucket_key, window_started_at
+      )
+      update rate_limit_buckets as bucket
       set
-        request_count = request_count - 1,
+        request_count = bucket.request_count - 1,
         updated_at = ${new Date(now).toISOString()}
-      where bucket_key = ${reservation.key}
-        and window_started_at = ${new Date(reservation.windowStartedAt).toISOString()}
-        and request_count > 0
+      from released_reservation
+      where bucket.bucket_key = released_reservation.bucket_key
+        and bucket.window_started_at = released_reservation.window_started_at
+        and bucket.request_count > 0
     `;
   }
 
   async #probe() {
     const probeRollback = new Error("rate-limit capability probe rollback");
     const probeKey = `rl:capability-probe:${randomUUID()}`;
+    const probeReservationId = randomUUID();
     try {
       await this.#db.$client.begin(async (sql) => {
         const nowIso = new Date(0).toISOString();
@@ -189,6 +216,34 @@ export class PostgresRateLimitAdapter implements RateLimitPort {
           set request_count = 2
           where bucket_key = ${probeKey}
         `;
+        await sql`
+          insert into rate_limit_reservations (
+            reservation_id,
+            bucket_key,
+            window_started_at,
+            created_at,
+            released_at
+          ) values (
+            ${probeReservationId},
+            ${probeKey},
+            ${nowIso},
+            ${nowIso},
+            null
+          )
+        `;
+        await sql`
+          update rate_limit_reservations
+          set released_at = ${nowIso}
+          where reservation_id = ${probeReservationId}
+        `;
+        const reservationRows = await sql<{ released: boolean }[]>`
+          select released_at is not null as released
+          from rate_limit_reservations
+          where reservation_id = ${probeReservationId}
+        `;
+        if (reservationRows[0]?.released !== true) {
+          throw new Error("rate-limit reservation capability probe returned an unexpected row");
+        }
         const rows = await sql<{ request_count: number }[]>`
           select request_count
           from rate_limit_buckets

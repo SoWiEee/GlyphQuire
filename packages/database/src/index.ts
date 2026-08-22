@@ -22,6 +22,7 @@ export {
   documentJobs,
   documentJobsRelations,
   rateLimitBuckets,
+  rateLimitReservations,
   type WorkspaceRole,
   type NoteVisibility,
   type SnapshotReason,

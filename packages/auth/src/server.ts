@@ -1,7 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
 import type { Database } from "@glyphquire/database";
+
+const canonicalRequestIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+function safeRequestId(request: Request) {
+  const supplied = request.headers.get("x-request-id");
+  return supplied && canonicalRequestIdPattern.test(supplied) ? supplied : randomUUID();
+}
 
 export function createAuth(db: Database, options: AuthOptions) {
   const webOrigin = options.webOrigin ?? new URL(options.baseUrl);
@@ -63,20 +72,18 @@ export function createAuth(db: Database, options: AuthOptions) {
 
   const providerHandler = auth.handler;
   const safeHandler = async (request: Request) => {
+    const requestId = safeRequestId(request);
+    const headers = new Headers(request.headers);
+    headers.set("x-request-id", requestId);
+    const sanitizedRequest = new Request(request, { headers });
     try {
-      return await providerHandler(request);
+      return await providerHandler(sanitizedRequest);
     } catch {
-      const suppliedRequestId = request.headers.get("x-request-id");
-      const requestId =
-        suppliedRequestId && /^[A-Za-z0-9._:-]{1,128}$/.test(suppliedRequestId)
-          ? suppliedRequestId
-          : undefined;
-      const status = requestId ? 503 : 500;
       const entry: AuthErrorLogEntry = {
         event: "auth_request_failed",
-        requestId: requestId ?? "unavailable",
+        requestId,
         code: "SERVICE_UNAVAILABLE",
-        status,
+        status: 503,
         method: request.method,
         routeClass: "auth",
       };
@@ -86,7 +93,6 @@ export function createAuth(db: Database, options: AuthOptions) {
         // Logging must not replace the stable public response.
       }
 
-      if (!requestId) return new Response(null, { status });
       return Response.json(
         {
           error: {
@@ -96,7 +102,7 @@ export function createAuth(db: Database, options: AuthOptions) {
           },
         },
         {
-          status,
+          status: 503,
           headers: {
             "cache-control": "no-store",
             "x-request-id": requestId,
@@ -115,7 +121,7 @@ export interface AuthErrorLogEntry {
   event: "auth_request_failed";
   requestId: string;
   code: "SERVICE_UNAVAILABLE";
-  status: 500 | 503;
+  status: 503;
   method: string;
   routeClass: "auth";
 }

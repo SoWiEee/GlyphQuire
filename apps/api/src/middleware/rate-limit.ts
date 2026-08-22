@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import type { MiddlewareHandler } from "hono";
 import { PublicApiError } from "./error-handler.js";
 import type { SecurityVariables } from "./security.js";
@@ -14,6 +14,7 @@ export interface RateLimitDecision {
 }
 
 export interface RateLimitReservationToken {
+  readonly reservationId: string;
   readonly key: string;
   readonly windowStartedAt: number;
 }
@@ -43,9 +44,16 @@ interface InMemoryBucket {
   startedAt: number;
 }
 
+interface InMemoryReservation {
+  key: string;
+  windowStartedAt: number;
+  released: boolean;
+}
+
 export class InMemoryRateLimitAdapter implements RateLimitPort {
   readonly distributed = false;
   readonly #buckets = new Map<string, InMemoryBucket>();
+  readonly #reservations = new Map<string, InMemoryReservation>();
   readonly #clock: Clock;
 
   constructor(options: { clock?: Clock } = {}) {
@@ -72,7 +80,7 @@ export class InMemoryRateLimitAdapter implements RateLimitPort {
     if (!existing || now >= existing.startedAt + windowMs) {
       const bucket = { count: 1, startedAt: now };
       this.#buckets.set(key, bucket);
-      return acquiredReservation(key, bucket.count, bucket.startedAt, now, limit, windowMs);
+      return this.#acquiredReservation(key, bucket.count, bucket.startedAt, now, limit, windowMs);
     }
     if (existing.count >= limit) {
       return deniedReservation(existing.count, existing.startedAt, now, limit, windowMs);
@@ -80,16 +88,44 @@ export class InMemoryRateLimitAdapter implements RateLimitPort {
 
     const bucket = { count: existing.count + 1, startedAt: existing.startedAt };
     this.#buckets.set(key, bucket);
-    return acquiredReservation(key, bucket.count, bucket.startedAt, now, limit, windowMs);
+    return this.#acquiredReservation(key, bucket.count, bucket.startedAt, now, limit, windowMs);
   }
 
   async release(reservation: RateLimitReservationToken): Promise<void> {
     assertReservationToken(reservation);
+    const stored = this.#reservations.get(reservation.reservationId);
+    if (
+      !stored ||
+      stored.released ||
+      stored.key !== reservation.key ||
+      stored.windowStartedAt !== reservation.windowStartedAt
+    ) {
+      return;
+    }
+    stored.released = true;
+
     const existing = this.#buckets.get(reservation.key);
     if (!existing || existing.startedAt !== reservation.windowStartedAt || existing.count === 0) {
       return;
     }
     this.#buckets.set(reservation.key, { ...existing, count: existing.count - 1 });
+  }
+
+  #acquiredReservation(
+    key: string,
+    count: number,
+    startedAt: number,
+    now: number,
+    limit: number,
+    windowMs: number,
+  ): RateLimitReservation {
+    const reservationId = randomUUID();
+    this.#reservations.set(reservationId, {
+      key,
+      windowStartedAt: startedAt,
+      released: false,
+    });
+    return acquiredReservation(reservationId, key, count, startedAt, now, limit, windowMs);
   }
 }
 
@@ -113,6 +149,9 @@ export function assertClockValue(now: number) {
 
 export function assertReservationToken(reservation: RateLimitReservationToken) {
   if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      reservation.reservationId,
+    ) ||
     reservation.key.length === 0 ||
     Buffer.byteLength(reservation.key) > 255 ||
     !Number.isSafeInteger(reservation.windowStartedAt) ||
@@ -140,6 +179,7 @@ export function decisionFor(
 }
 
 function acquiredReservation(
+  reservationId: string,
   key: string,
   count: number,
   startedAt: number,
@@ -150,7 +190,7 @@ function acquiredReservation(
   return {
     acquired: true,
     decision: decisionFor(count, startedAt, now, limit, windowMs),
-    token: { key, windowStartedAt: startedAt },
+    token: { reservationId, key, windowStartedAt: startedAt },
   };
 }
 

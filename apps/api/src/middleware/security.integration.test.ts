@@ -7,6 +7,7 @@ import { createAuth } from "@glyphquire/auth";
 import {
   createDb,
   rateLimitBuckets,
+  rateLimitReservations,
   readRepositoryMigrations,
   runDatabaseMigrations,
   verifyMigrationBaseline,
@@ -45,6 +46,8 @@ import {
 } from "./security.js";
 
 const webOrigin = new URL("http://localhost:5173");
+const canonicalRequestIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 function noOpWorkspaceService() {
   return {
@@ -348,27 +351,46 @@ describe("safe responses, logs, and hardening headers", () => {
   it("emits a validated request ID and the fixed security headers", async () => {
     const { app } = createProtectedFixture();
     const request = jsonRequest("/api/v1/write", { method: "POST", body: "{}" });
-    request.headers.set("x-request-id", "client-request_123");
+    const canonicalRequestId = "c0ffee00-1234-4abc-8def-0123456789ab";
+    request.headers.set("x-request-id", canonicalRequestId);
 
     const response = await app.request(request);
 
-    expect(response.headers.get("x-request-id")).toBe("client-request_123");
+    expect(response.headers.get("x-request-id")).toBe(canonicalRequestId);
     expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
     expect(response.headers.get("x-frame-options")).toBe("DENY");
     expect(response.headers.get("referrer-policy")).toBe("no-referrer");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   });
 
-  it("replaces an invalid request ID", async () => {
-    const { app } = createProtectedFixture();
-    const request = jsonRequest("/api/v1/write", { method: "POST", body: "{}" });
-    request.headers.set("x-request-id", "bad id STACK_SENTINEL");
+  it.each([
+    "bad id STACK_SENTINEL",
+    "client-request_123",
+    "Bearer eyJhbGciOiJIUzI1NiJ9.TOKEN_SENTINEL.signature",
+    "C0FFEE00-1234-4ABC-8DEF-0123456789AB",
+    "00000000-0000-0000-0000-000000000000",
+    "c0ffee00-1234-0abc-8def-0123456789ab",
+    "c0ffee00-1234-4abc-0def-0123456789ab",
+  ])("replaces and never logs an unsafe request ID %s", async (unsafeRequestId) => {
+    const entries: SecurityLogEntry[] = [];
+    const { app } = createProtectedFixture({
+      logger: { error: (entry) => entries.push(entry) },
+    });
+    const request = jsonRequest("/api/v1/error", { method: "POST", body: "{}" });
+    request.headers.set("x-request-id", unsafeRequestId);
 
     const response = await app.request(request);
+    const responseBody = await response.text();
+    const safeRequestId = response.headers.get("x-request-id");
+    const combined = `${responseBody} ${JSON.stringify(entries)}`;
 
-    expect(response.headers.get("x-request-id")).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
-    );
+    expect(response.status).toBe(503);
+    expect(safeRequestId).toMatch(canonicalRequestIdPattern);
+    expect(safeRequestId).not.toBe(unsafeRequestId);
+    expect(combined).not.toContain(unsafeRequestId);
+    expect(entries).toEqual([
+      expect.objectContaining({ requestId: safeRequestId, routeClass: "api_v1" }),
+    ]);
   });
 
   it("logs only a fixed route class and never attacker-controlled request data", async () => {
@@ -679,6 +701,70 @@ describe("note rate limits", () => {
     }
 
     expect(strictest).toMatchObject({ allowed: false, limit: 60, retryAfterSeconds: 60 });
+  });
+});
+
+describe("failed-login reservation tokens", () => {
+  it("issues distinct UUID reservations and refunds each reservation at most once", async () => {
+    const adapter = new InMemoryRateLimitAdapter();
+    const first = await adapter.reserve("in-memory-release-once", 2, 60_000);
+    const second = await adapter.reserve("in-memory-release-once", 2, 60_000);
+    expect(first.acquired).toBe(true);
+    expect(second.acquired).toBe(true);
+    if (!first.acquired || !second.acquired) throw new Error("expected acquired reservations");
+    expect(first.token.reservationId).toMatch(canonicalRequestIdPattern);
+    expect(second.token.reservationId).toMatch(canonicalRequestIdPattern);
+    expect(first.token.reservationId).not.toBe(second.token.reservationId);
+
+    await adapter.release(first.token);
+    await adapter.release(first.token);
+
+    expect((await adapter.reserve("in-memory-release-once", 2, 60_000)).acquired).toBe(true);
+    expect((await adapter.reserve("in-memory-release-once", 2, 60_000)).acquired).toBe(false);
+  });
+
+  it("atomically consumes a reservation during concurrent double release", async () => {
+    const adapter = new InMemoryRateLimitAdapter();
+    const first = await adapter.reserve("in-memory-concurrent-release", 2, 60_000);
+    expect(first.acquired).toBe(true);
+    expect((await adapter.reserve("in-memory-concurrent-release", 2, 60_000)).acquired).toBe(true);
+    if (!first.acquired) throw new Error("expected acquired reservation");
+
+    await Promise.all([adapter.release(first.token), adapter.release(first.token)]);
+
+    expect((await adapter.reserve("in-memory-concurrent-release", 2, 60_000)).acquired).toBe(true);
+    expect((await adapter.reserve("in-memory-concurrent-release", 2, 60_000)).acquired).toBe(false);
+  });
+
+  it("does not refund unknown or mismatched reservation tokens", async () => {
+    const adapter = new InMemoryRateLimitAdapter();
+    const acquired = await adapter.reserve("in-memory-token-binding", 1, 60_000);
+    expect(acquired.acquired).toBe(true);
+    if (!acquired.acquired) throw new Error("expected acquired reservation");
+
+    await adapter.release({ ...acquired.token, reservationId: randomUUID() });
+    await adapter.release({ ...acquired.token, key: "in-memory-other-key" });
+    await adapter.release({
+      ...acquired.token,
+      windowStartedAt: acquired.token.windowStartedAt + 1,
+    });
+
+    expect((await adapter.reserve("in-memory-token-binding", 1, 60_000)).acquired).toBe(false);
+  });
+
+  it("does not let an old-window reservation decrement the current window", async () => {
+    const time = mutableClock();
+    const adapter = new InMemoryRateLimitAdapter({ clock: time.clock });
+    const oldWindow = await adapter.reserve("in-memory-window-binding", 1, 60_000);
+    expect(oldWindow.acquired).toBe(true);
+    if (!oldWindow.acquired) throw new Error("expected acquired reservation");
+    time.advance(60_000);
+    expect((await adapter.reserve("in-memory-window-binding", 1, 60_000)).acquired).toBe(true);
+
+    await adapter.release(oldWindow.token);
+    await adapter.release(oldWindow.token);
+
+    expect((await adapter.reserve("in-memory-window-binding", 1, 60_000)).acquired).toBe(false);
   });
 });
 
@@ -1261,7 +1347,7 @@ describeWithPostgres("Better Auth cookie and trusted-origin integration", () => 
         {
           headers: {
             origin: origin.origin,
-            "x-request-id": "reset-log-request",
+            "x-request-id": "Bearer RESET_REQUEST_ID_SENTINEL",
             "x-untrusted-value": "HEADER_SENTINEL",
           },
         },
@@ -1272,10 +1358,13 @@ describeWithPostgres("Better Auth cookie and trusted-origin integration", () => 
     expect(JSON.stringify(entries)).not.toContain(token);
     expect(JSON.stringify(entries)).not.toContain("QUERY_SENTINEL");
     expect(JSON.stringify(entries)).not.toContain("HEADER_SENTINEL");
+    expect(JSON.stringify(entries)).not.toContain("RESET_REQUEST_ID_SENTINEL");
+    const safeRequestId = response.headers.get("x-request-id");
+    expect(safeRequestId).toMatch(canonicalRequestIdPattern);
     expect(entries).toEqual([
       expect.objectContaining({
         event: "auth_request_failed",
-        requestId: "reset-log-request",
+        requestId: safeRequestId,
         routeClass: "auth",
       }),
     ]);
@@ -1342,6 +1431,11 @@ describe("rate-limit persistence contract", () => {
     expect(rateLimitBuckets.windowStartedAt.name).toBe("window_started_at");
     expect(rateLimitBuckets.requestCount.name).toBe("request_count");
     expect(rateLimitBuckets.requestCount.notNull).toBe(true);
+    expect(rateLimitReservations.reservationId.name).toBe("reservation_id");
+    expect(rateLimitReservations.reservationId.primary).toBe(true);
+    expect(rateLimitReservations.bucketKey.name).toBe("bucket_key");
+    expect(rateLimitReservations.windowStartedAt.name).toBe("window_started_at");
+    expect(rateLimitReservations.releasedAt.name).toBe("released_at");
   });
 
   it("commits exactly the frozen 0000-0002 prefix followed by 0003", async () => {
@@ -1365,7 +1459,7 @@ describe("rate-limit persistence contract", () => {
       {
         idx: 3,
         tag: "0003_phase2_rate_limits",
-        hash: "76cc555a90b5adefeecb243264f289a55f9d7b6495bc6a3574d00ac2f48b1614",
+        hash: "6b612d6e34faad76b973a6fb0701168d28b34f78921be444c26e6485b3e61562",
       },
     ]);
     expect(migrations.every(({ hash }) => /^[a-f0-9]{64}$/.test(hash))).toBe(true);
@@ -1379,10 +1473,12 @@ describe("rate-limit persistence contract", () => {
       "utf8",
     );
     expect(sql).toContain('CREATE TABLE "rate_limit_buckets"');
+    expect(sql).toContain('CREATE TABLE "rate_limit_reservations"');
     expect(sql).toContain('CONSTRAINT "rate_limit_buckets_request_count_nonnegative_check"');
-    expect(sql).toContain('CREATE FUNCTION "rate_limit_buckets_owner_delete_guard"()');
+    expect(sql).toContain('CREATE FUNCTION "rate_limit_owner_delete_guard"()');
     expect(sql).toContain("SECURITY INVOKER");
     expect(sql).toContain('CREATE TRIGGER "rate_limit_buckets_owner_delete_guard"');
+    expect(sql).toContain('CREATE TRIGGER "rate_limit_reservations_owner_delete_guard"');
     expect(sql).not.toContain("glyphquire_app");
     expect(createHash("sha256").update(sql).digest("hex")).toBe(migrations[3]?.hash);
   });
@@ -1471,13 +1567,25 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
       `grant select, insert, update, delete on rate_limit_buckets to "${providerRuntimeRole}"`,
     );
     await freshDb.$client.unsafe(
+      `grant select, insert, update on rate_limit_reservations to "${providerRuntimeRole}"`,
+    );
+    await freshDb.$client.unsafe(
       `grant select, update on rate_limit_buckets to "${probeWithoutInsertRole}"`,
+    );
+    await freshDb.$client.unsafe(
+      `grant select, update on rate_limit_reservations to "${probeWithoutInsertRole}"`,
     );
     await freshDb.$client.unsafe(
       `grant select, insert on rate_limit_buckets to "${probeWithoutUpdateRole}"`,
     );
     await freshDb.$client.unsafe(
+      `grant select, insert on rate_limit_reservations to "${probeWithoutUpdateRole}"`,
+    );
+    await freshDb.$client.unsafe(
       `grant select, insert, update on rate_limit_buckets to "${probeWithoutDeleteRole}"`,
+    );
+    await freshDb.$client.unsafe(
+      `grant select, insert, update on rate_limit_reservations to "${probeWithoutDeleteRole}"`,
     );
 
     const phase0Target = new URL(adminUrl);
@@ -1512,7 +1620,7 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
           }),
         }),
       );
-      expect(incompatibleSignup.status).toBe(500);
+      expect(incompatibleSignup.status).toBe(503);
     } finally {
       console.error = originalConsoleError;
     }
@@ -1603,9 +1711,9 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
     expect(phase0AuthConsoleOutput).not.toContain("DrizzleQueryError");
     expect(JSON.parse(phase0AuthConsoleOutput)).toEqual({
       event: "auth_request_failed",
-      requestId: "unavailable",
+      requestId: expect.stringMatching(canonicalRequestIdPattern),
       code: "SERVICE_UNAVAILABLE",
-      status: 500,
+      status: 503,
       method: "POST",
       routeClass: "auth",
     });
@@ -1669,6 +1777,79 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
     );
     expect((await first.reserve("shared-failed-login-reservation", 10, 900_000)).acquired).toBe(
       true,
+    );
+  });
+
+  it("releases one PostgreSQL reservation at most once across instances and retries", async () => {
+    const time = mutableClock();
+    const first = new PostgresRateLimitAdapter(freshDb, { clock: time.clock });
+    const second = new PostgresRateLimitAdapter(secondFreshDb, { clock: time.clock });
+    const firstReservation = await first.reserve("postgres-release-once", 2, 60_000);
+    const secondReservation = await second.reserve("postgres-release-once", 2, 60_000);
+    expect(firstReservation.acquired).toBe(true);
+    expect(secondReservation.acquired).toBe(true);
+    if (!firstReservation.acquired || !secondReservation.acquired) {
+      throw new Error("expected acquired reservations");
+    }
+    expect(firstReservation.token.reservationId).toMatch(canonicalRequestIdPattern);
+    expect(secondReservation.token.reservationId).toMatch(canonicalRequestIdPattern);
+    expect(firstReservation.token.reservationId).not.toBe(secondReservation.token.reservationId);
+
+    await first.release(firstReservation.token);
+    await second.release(firstReservation.token);
+
+    expect((await second.reserve("postgres-release-once", 2, 60_000)).acquired).toBe(true);
+    expect((await first.reserve("postgres-release-once", 2, 60_000)).acquired).toBe(false);
+  });
+
+  it("atomically consumes a PostgreSQL reservation during concurrent double release", async () => {
+    const time = mutableClock();
+    const first = new PostgresRateLimitAdapter(freshDb, { clock: time.clock });
+    const second = new PostgresRateLimitAdapter(secondFreshDb, { clock: time.clock });
+    const reservation = await first.reserve("postgres-concurrent-release", 2, 60_000);
+    expect(reservation.acquired).toBe(true);
+    expect((await second.reserve("postgres-concurrent-release", 2, 60_000)).acquired).toBe(true);
+    if (!reservation.acquired) throw new Error("expected acquired reservation");
+
+    await Promise.all([first.release(reservation.token), second.release(reservation.token)]);
+
+    expect((await first.reserve("postgres-concurrent-release", 2, 60_000)).acquired).toBe(true);
+    expect((await second.reserve("postgres-concurrent-release", 2, 60_000)).acquired).toBe(false);
+  });
+
+  it("does not release unknown or mismatched PostgreSQL reservation tokens", async () => {
+    const adapter = new PostgresRateLimitAdapter(freshDb);
+    const reservation = await adapter.reserve("postgres-token-binding", 1, 60_000);
+    expect(reservation.acquired).toBe(true);
+    if (!reservation.acquired) throw new Error("expected acquired reservation");
+
+    await adapter.release({ ...reservation.token, reservationId: randomUUID() });
+    await adapter.release({ ...reservation.token, key: "postgres-other-key" });
+    await adapter.release({
+      ...reservation.token,
+      windowStartedAt: reservation.token.windowStartedAt + 1,
+    });
+
+    expect((await adapter.reserve("postgres-token-binding", 1, 60_000)).acquired).toBe(false);
+  });
+
+  it("does not let an old PostgreSQL reservation decrement the current window", async () => {
+    const time = mutableClock();
+    const first = new PostgresRateLimitAdapter(freshDb, { clock: time.clock });
+    const second = new PostgresRateLimitAdapter(secondFreshDb, { clock: time.clock });
+    const oldWindow = await first.reserve("postgres-release-window-binding", 1, 60_000);
+    expect(oldWindow.acquired).toBe(true);
+    if (!oldWindow.acquired) throw new Error("expected acquired reservation");
+    time.advance(60_000);
+    expect((await second.reserve("postgres-release-window-binding", 1, 60_000)).acquired).toBe(
+      true,
+    );
+
+    await second.release(oldWindow.token);
+    await first.release(oldWindow.token);
+
+    expect((await first.reserve("postgres-release-window-binding", 1, 60_000)).acquired).toBe(
+      false,
     );
   });
 
@@ -1777,19 +1958,36 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
     const noDeleteDb = createDb(url.toString());
     try {
       const [privileges] = await noDeleteDb.$client<
-        { can_select: boolean; can_insert: boolean; can_update: boolean; can_delete: boolean }[]
+        {
+          bucket_select: boolean;
+          bucket_insert: boolean;
+          bucket_update: boolean;
+          bucket_delete: boolean;
+          reservation_select: boolean;
+          reservation_insert: boolean;
+          reservation_update: boolean;
+          reservation_delete: boolean;
+        }[]
       >`
         select
-          has_table_privilege(current_user, 'public.rate_limit_buckets', 'SELECT') as can_select,
-          has_table_privilege(current_user, 'public.rate_limit_buckets', 'INSERT') as can_insert,
-          has_table_privilege(current_user, 'public.rate_limit_buckets', 'UPDATE') as can_update,
-          has_table_privilege(current_user, 'public.rate_limit_buckets', 'DELETE') as can_delete
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'SELECT') as bucket_select,
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'INSERT') as bucket_insert,
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'UPDATE') as bucket_update,
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'DELETE') as bucket_delete,
+          has_table_privilege(current_user, 'public.rate_limit_reservations', 'SELECT') as reservation_select,
+          has_table_privilege(current_user, 'public.rate_limit_reservations', 'INSERT') as reservation_insert,
+          has_table_privilege(current_user, 'public.rate_limit_reservations', 'UPDATE') as reservation_update,
+          has_table_privilege(current_user, 'public.rate_limit_reservations', 'DELETE') as reservation_delete
       `;
       expect(privileges).toEqual({
-        can_select: true,
-        can_insert: true,
-        can_update: true,
-        can_delete: false,
+        bucket_select: true,
+        bucket_insert: true,
+        bucket_update: true,
+        bucket_delete: false,
+        reservation_select: true,
+        reservation_insert: true,
+        reservation_update: true,
+        reservation_delete: false,
       });
       await expect(new PostgresRateLimitAdapter(noDeleteDb).initialize()).resolves.toBeUndefined();
     } finally {
@@ -1797,9 +1995,11 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
     }
 
     const probeRows = await freshDb.$client<{ count: number }[]>`
-      select count(*)::integer as count
-      from rate_limit_buckets
-      where bucket_key like 'rl:capability-probe:%'
+      select (
+        (select count(*) from rate_limit_buckets where bucket_key like 'rl:capability-probe:%')
+        +
+        (select count(*) from rate_limit_reservations where bucket_key like 'rl:capability-probe:%')
+      )::integer as count
     `;
     expect(probeRows[0]?.count).toBe(0);
   });
@@ -1813,31 +2013,42 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
     try {
       const [privileges] = await providerDb.$client<
         {
-          can_select: boolean;
-          can_insert: boolean;
-          can_update: boolean;
-          can_delete: boolean;
+          bucket_select: boolean;
+          bucket_insert: boolean;
+          bucket_update: boolean;
+          bucket_delete: boolean;
+          reservation_select: boolean;
+          reservation_insert: boolean;
+          reservation_update: boolean;
+          reservation_delete: boolean;
         }[]
       >`
         select
-          has_table_privilege(current_user, 'public.rate_limit_buckets', 'SELECT') as can_select,
-          has_table_privilege(current_user, 'public.rate_limit_buckets', 'INSERT') as can_insert,
-          has_table_privilege(current_user, 'public.rate_limit_buckets', 'UPDATE') as can_update,
-          has_table_privilege(current_user, 'public.rate_limit_buckets', 'DELETE') as can_delete
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'SELECT') as bucket_select,
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'INSERT') as bucket_insert,
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'UPDATE') as bucket_update,
+          has_table_privilege(current_user, 'public.rate_limit_buckets', 'DELETE') as bucket_delete,
+          has_table_privilege(current_user, 'public.rate_limit_reservations', 'SELECT') as reservation_select,
+          has_table_privilege(current_user, 'public.rate_limit_reservations', 'INSERT') as reservation_insert,
+          has_table_privilege(current_user, 'public.rate_limit_reservations', 'UPDATE') as reservation_update,
+          has_table_privilege(current_user, 'public.rate_limit_reservations', 'DELETE') as reservation_delete
       `;
       expect(privileges).toEqual({
-        can_select: true,
-        can_insert: true,
-        can_update: true,
-        can_delete: true,
+        bucket_select: true,
+        bucket_insert: true,
+        bucket_update: true,
+        bucket_delete: true,
+        reservation_select: true,
+        reservation_insert: true,
+        reservation_update: true,
+        reservation_delete: false,
       });
 
-      await new PostgresRateLimitAdapter(providerDb).initialize();
-      await providerDb.$client`
-        insert into rate_limit_buckets (
-          bucket_key, window_started_at, request_count, updated_at
-        ) values (${bucketKey}, now(), 1, now())
-      `;
+      const adapter = new PostgresRateLimitAdapter(providerDb);
+      await adapter.initialize();
+      const reservation = await adapter.reserve(bucketKey, 2, 60_000);
+      expect(reservation.acquired).toBe(true);
+      if (!reservation.acquired) throw new Error("expected acquired reservation");
       expect(
         await providerDb.$client`
           select bucket_key from rate_limit_buckets where bucket_key = ${bucketKey}
@@ -1846,6 +2057,13 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
       await providerDb.$client`
         update rate_limit_buckets set request_count = 2 where bucket_key = ${bucketKey}
       `;
+      await adapter.release(reservation.token);
+      await expect(
+        providerDb.$client`
+          delete from rate_limit_reservations
+          where reservation_id = ${reservation.token.reservationId}
+        `,
+      ).rejects.toMatchObject({ code: "42501" });
       await expect(
         providerDb.$client`delete from rate_limit_buckets where bucket_key = ${bucketKey}`,
       ).rejects.toMatchObject({ code: "42501" });

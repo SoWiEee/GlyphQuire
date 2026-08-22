@@ -138,12 +138,8 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -384,12 +380,8 @@
           "name": "document_jobs_workspace_id_workspaces_id_fk",
           "tableFrom": "document_jobs",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -397,14 +389,8 @@
           "name": "document_jobs_note_workspace_fk",
           "tableFrom": "document_jobs",
           "tableTo": "notes",
-          "columnsFrom": [
-            "note_id",
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id",
-            "workspace_id"
-          ],
+          "columnsFrom": ["note_id", "workspace_id"],
+          "columnsTo": ["id", "workspace_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -412,18 +398,8 @@
           "name": "document_jobs_operation_identity_fk",
           "tableFrom": "document_jobs",
           "tableTo": "note_operations",
-          "columnsFrom": [
-            "note_operation_id",
-            "workspace_id",
-            "note_id",
-            "operation_id"
-          ],
-          "columnsTo": [
-            "id",
-            "workspace_id",
-            "note_id",
-            "operation_id"
-          ],
+          "columnsFrom": ["note_operation_id", "workspace_id", "note_id", "operation_id"],
+          "columnsTo": ["id", "workspace_id", "note_id", "operation_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -636,12 +612,8 @@
           "name": "note_operations_workspace_id_workspaces_id_fk",
           "tableFrom": "note_operations",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -649,12 +621,8 @@
           "name": "note_operations_actor_id_user_id_fk",
           "tableFrom": "note_operations",
           "tableTo": "user",
-          "columnsFrom": [
-            "actor_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -662,14 +630,8 @@
           "name": "note_operations_note_workspace_fk",
           "tableFrom": "note_operations",
           "tableTo": "notes",
-          "columnsFrom": [
-            "note_id",
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id",
-            "workspace_id"
-          ],
+          "columnsFrom": ["note_id", "workspace_id"],
+          "columnsTo": ["id", "workspace_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -815,12 +777,8 @@
           "name": "note_versions_workspace_id_workspaces_id_fk",
           "tableFrom": "note_versions",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -828,12 +786,8 @@
           "name": "note_versions_created_by_id_user_id_fk",
           "tableFrom": "note_versions",
           "tableTo": "user",
-          "columnsFrom": [
-            "created_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -841,14 +795,8 @@
           "name": "note_versions_note_workspace_fk",
           "tableFrom": "note_versions",
           "tableTo": "notes",
-          "columnsFrom": [
-            "note_id",
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id",
-            "workspace_id"
-          ],
+          "columnsFrom": ["note_id", "workspace_id"],
+          "columnsTo": ["id", "workspace_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1059,12 +1007,8 @@
           "name": "notes_workspace_id_workspaces_id_fk",
           "tableFrom": "notes",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1072,12 +1016,8 @@
           "name": "notes_owner_id_user_id_fk",
           "tableFrom": "notes",
           "tableTo": "user",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1171,6 +1111,81 @@
       },
       "isRLSEnabled": false
     },
+    "public.rate_limit_reservations": {
+      "name": "rate_limit_reservations",
+      "schema": "",
+      "columns": {
+        "reservation_id": {
+          "name": "reservation_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "bucket_key": {
+          "name": "bucket_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "window_started_at": {
+          "name": "window_started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "released_at": {
+          "name": "released_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "rate_limit_reservations_bucket_window_idx": {
+          "name": "rate_limit_reservations_bucket_window_idx",
+          "columns": [
+            {
+              "expression": "bucket_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "window_started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "rate_limit_reservations_bucket_fk": {
+          "name": "rate_limit_reservations_bucket_fk",
+          "tableFrom": "rate_limit_reservations",
+          "tableTo": "rate_limit_buckets",
+          "columnsFrom": ["bucket_key"],
+          "columnsTo": ["bucket_key"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.session": {
       "name": "session",
       "schema": "",
@@ -1248,12 +1263,8 @@
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1263,9 +1274,7 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -1329,9 +1338,7 @@
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -1492,12 +1499,8 @@
           "name": "workspace_members_workspace_id_workspaces_id_fk",
           "tableFrom": "workspace_members",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1505,12 +1508,8 @@
           "name": "workspace_members_user_id_user_id_fk",
           "tableFrom": "workspace_members",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1587,12 +1586,8 @@
           "name": "workspaces_personal_owner_id_user_id_fk",
           "tableFrom": "workspaces",
           "tableTo": "user",
-          "columnsFrom": [
-            "personal_owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["personal_owner_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }

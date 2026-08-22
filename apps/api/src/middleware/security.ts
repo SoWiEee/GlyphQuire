@@ -8,7 +8,8 @@ export const MAX_JSON_BODY_BYTES = 2.25 * 1024 * 1024;
 export const MAX_FORWARDED_IP_HOPS = 16;
 
 const safeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
-const requestIdPattern = /^[A-Za-z0-9._:-]{1,128}$/;
+const canonicalRequestIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const headerNamePattern = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
 export interface SecurityVariables {
@@ -104,7 +105,7 @@ export function createClientIpMiddleware(
 
 function acceptedRequestId(headers: Headers) {
   const supplied = headers.get("x-request-id");
-  return supplied && requestIdPattern.test(supplied) ? supplied : randomUUID();
+  return supplied && canonicalRequestIdPattern.test(supplied) ? supplied : randomUUID();
 }
 
 export function createSecurityHeadersMiddleware(): MiddlewareHandler<{
