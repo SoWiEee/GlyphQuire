@@ -55,12 +55,21 @@ importers:
 
   apps/api:
     dependencies:
+      "@glyphquire/api-contract":
+        specifier: workspace:*
+        version: link:../../packages/api-contract
       "@glyphquire/auth":
         specifier: workspace:*
         version: link:../../packages/auth
       "@glyphquire/database":
         specifier: workspace:*
         version: link:../../packages/database
+      "@glyphquire/document-engine":
+        specifier: workspace:*
+        version: link:../../packages/document-engine
+      "@glyphquire/queue":
+        specifier: workspace:*
+        version: link:../../packages/queue
       "@glyphquire/shared":
         specifier: workspace:*
         version: link:../../packages/shared
@@ -83,6 +92,12 @@ importers:
 
   apps/web:
     dependencies:
+      "@glyphquire/api-contract":
+        specifier: workspace:*
+        version: link:../../packages/api-contract
+      "@glyphquire/document-engine":
+        specifier: workspace:*
+        version: link:../../packages/document-engine
       pinia:
         specifier: ^3.0.0
         version: 3.0.4(typescript@5.9.3)(vue@3.5.41(typescript@5.9.3))
@@ -114,16 +129,16 @@ importers:
 
   packages/api-contract:
     dependencies:
-      "@glyphquire/api":
-        specifier: workspace:*
-        version: link:../../apps/api
-      hono:
-        specifier: ^4.7.0
-        version: 4.13.3
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^5.8.0
         version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.11.6)(lightningcss@1.32.0)
 
   packages/auth:
     dependencies:

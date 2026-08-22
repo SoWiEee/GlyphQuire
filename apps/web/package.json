@@ -12,6 +12,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@glyphquire/api-contract": "workspace:*",
+    "@glyphquire/document-engine": "workspace:*",
     "vue": "^3.5.0",
     "vue-router": "^4.5.0",
     "pinia": "^3.0.0"
