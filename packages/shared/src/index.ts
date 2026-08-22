@@ -5,4 +5,5 @@ export {
   s3EnvSchema,
   authEnvSchema,
   appEnvSchema,
+  webOriginSchema,
 } from "./env.js";

@@ -357,19 +357,19 @@ describe("note persistence schema", () => {
 });
 
 describe("note persistence migration", () => {
-  it("preserves frozen migrations and commits exactly 0000 through 0002", async () => {
+  it("preserves the frozen 0000 through 0002 migration prefix", async () => {
     for (const [path, expectedHash] of Object.entries(frozenMigrationArtifacts)) {
       expect(await sha256(path)).toBe(expectedHash);
     }
 
     const migrations = await readRepositoryMigrations(migrationsDirectory);
-    expect(migrations.map(({ idx, tag }) => ({ idx, tag }))).toEqual([
+    expect(migrations.slice(0, 3).map(({ idx, tag }) => ({ idx, tag }))).toEqual([
       { idx: 0, tag: "0000_phase0_auth" },
       { idx: 1, tag: "0001_phase2_workspaces" },
       { idx: 2, tag: "0002_phase2_notes" },
     ]);
-    expect(migrations.every(({ hash }) => /^[a-f0-9]{64}$/.test(hash))).toBe(true);
-    expect(new Set(migrations.map(({ when }) => when)).size).toBe(3);
+    expect(migrations.slice(0, 3).every(({ hash }) => /^[a-f0-9]{64}$/.test(hash))).toBe(true);
+    expect(new Set(migrations.slice(0, 3).map(({ when }) => when)).size).toBe(3);
   });
 
   it("enforces tenant binding, monotonic current revisions, and immutable records in SQL", async () => {

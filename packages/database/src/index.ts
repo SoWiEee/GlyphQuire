@@ -1,4 +1,6 @@
 export { createDb, type Database } from "./client.js";
+export { migrate as runDatabaseMigrations } from "drizzle-orm/postgres-js/migrator";
+export { readRepositoryMigrations, verifyMigrationBaseline } from "./migrations/verify-baseline.js";
 export {
   user,
   session,
@@ -19,6 +21,7 @@ export {
   noteOperationsRelations,
   documentJobs,
   documentJobsRelations,
+  rateLimitBuckets,
   type WorkspaceRole,
   type NoteVisibility,
   type SnapshotReason,
