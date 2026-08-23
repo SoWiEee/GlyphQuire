@@ -43,7 +43,7 @@ export function authorize(
   if (!actor || !resource) {
     throw new PublicApiError("NOTE_NOT_FOUND", 404);
   }
-  if (MUTATING_ACTIONS.has(action) && resource.role === "viewer") {
+  if (MUTATING_ACTIONS.has(action) && resource.role !== "owner" && resource.role !== "editor") {
     throw new PublicApiError("NOTE_NOT_FOUND", 404);
   }
 }
