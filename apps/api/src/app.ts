@@ -33,6 +33,7 @@ import {
 import { createAuthRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { createNoteRoutes } from "./routes/v1/notes.js";
+import { createVersionRoutes } from "./routes/v1/versions.js";
 
 type AuthErrorLogger = NonNullable<AuthOptions["errorLogger"]>;
 type AuthErrorLogEntry = Parameters<AuthErrorLogger["error"]>[0];
@@ -157,7 +158,8 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
     .onError(createErrorHandler(logger as SecurityLogger))
     .route("/api", healthRoutes)
     .route("/api", authRoutes)
-    .route("/api/v1", createNoteRoutes(noteService));
+    .route("/api/v1", createNoteRoutes(noteService))
+    .route("/api/v1", createVersionRoutes(noteService));
 
   return {
     app,

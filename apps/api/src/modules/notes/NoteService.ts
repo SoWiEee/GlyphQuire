@@ -3,6 +3,8 @@ import {
   documentJobs,
   noteOperations,
   notes,
+  noteVersions,
+  user,
   workspaceMembers,
   type Database,
   type DocumentJobKind,
@@ -11,18 +13,26 @@ import {
   type NoteOperationKind,
 } from "@glyphquire/database";
 import type {
+  CheckpointNoteInput,
+  CheckpointNoteResult,
   CreateNoteServiceInput,
+  CursorPaginationQuery,
   DeleteNoteInput,
   ListNotesInput,
   NotePage,
   NoteResult,
   NoteSummary,
+  NoteVersionPage,
+  NoteVersionResult,
   RenameNoteInput,
   RestoreNoteInput,
+  RestoreNoteVersionInput,
+  SaveNoteInput,
 } from "@glyphquire/api-contract";
 import { and, desc, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { PublicApiError } from "../../middleware/error-handler.js";
 import { authorize, type NoteAction } from "./authorization.js";
+import { NoteWriter, type DocumentValidator, type NoteWriterHooks } from "./NoteWriter.js";
 
 type DbTransaction = Parameters<Database["transaction"]>[0] extends (tx: infer Tx) => unknown
   ? Tx
@@ -30,8 +40,14 @@ type DbTransaction = Parameters<Database["transaction"]>[0] extends (tx: infer T
 
 type DeletionState = "active" | "deleted";
 
-/** Fault-injection hooks for exercising transaction atomicity in tests. */
-export interface NoteServiceHooks {
+/**
+ * Fault-injection hooks for exercising transaction atomicity in tests.
+ * Extends NoteWriterHooks so the exact same failing-hooks object exercises
+ * every write path uniformly: create/rename/softDelete/restore's own
+ * transactions here, and save/checkpoint/restoreVersion's transactions in
+ * NoteWriter.
+ */
+export interface NoteServiceHooks extends NoteWriterHooks {
   beforeNoteChange?(): void | Promise<void>;
   afterNoteChange?(): void | Promise<void>;
   beforeOperationInsert?(): void | Promise<void>;
@@ -47,6 +63,20 @@ export interface NoteService {
   rename(actorId: string, noteId: string, input: RenameNoteInput): Promise<NoteResult>;
   softDelete(actorId: string, noteId: string, input: DeleteNoteInput): Promise<NoteResult>;
   restore(actorId: string, noteId: string, input: RestoreNoteInput): Promise<NoteResult>;
+  save(actorId: string, noteId: string, input: SaveNoteInput): Promise<NoteResult>;
+  checkpoint(
+    actorId: string,
+    noteId: string,
+    input: CheckpointNoteInput,
+  ): Promise<CheckpointNoteResult>;
+  listVersions(actorId: string, noteId: string, input: CursorPaginationQuery): Promise<NoteVersionPage>;
+  getVersion(actorId: string, noteId: string, versionId: string): Promise<NoteVersionResult>;
+  restoreVersion(
+    actorId: string,
+    noteId: string,
+    versionId: string,
+    input: RestoreNoteVersionInput,
+  ): Promise<NoteResult>;
 }
 
 /** Signals that the unique-scoped operation insert lost a concurrent race. */
@@ -122,11 +152,150 @@ function decodeCursor(cursor: string): { updatedAt: Date; id: string } {
   }
 }
 
+const VERSION_CURSOR_DELIMITER = "|";
+
+function encodeVersionCursor(revision: number, id: string): string {
+  return Buffer.from(`${revision}${VERSION_CURSOR_DELIMITER}${id}`, "utf8").toString("base64url");
+}
+
+function decodeVersionCursor(cursor: string): { revision: number; id: string } {
+  try {
+    const decoded = Buffer.from(cursor, "base64url").toString("utf8");
+    const separatorIndex = decoded.indexOf(VERSION_CURSOR_DELIMITER);
+    if (separatorIndex === -1) throw new Error("malformed cursor");
+    const revision = Number(decoded.slice(0, separatorIndex));
+    const id = decoded.slice(separatorIndex + 1);
+    if (!id || !Number.isInteger(revision) || revision <= 0) throw new Error("malformed cursor");
+    return { revision, id };
+  } catch {
+    throw new PublicApiError("DOCUMENT_INVALID", 400);
+  }
+}
+
+function toNoteVersionSummary(row: {
+  id: string;
+  noteId: string;
+  revision: number;
+  reason: NoteVersionResult["reason"];
+  createdAt: Date;
+  createdByName: string;
+}) {
+  return {
+    id: row.id,
+    noteId: row.noteId,
+    revision: row.revision,
+    reason: row.reason,
+    createdBy: { displayName: row.createdByName },
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 export class NoteServiceImpl implements NoteService {
+  private readonly noteWriter: NoteWriter;
+
   constructor(
     private readonly db: Database,
     private readonly hooks: NoteServiceHooks = {},
-  ) {}
+    documentValidator?: DocumentValidator,
+  ) {
+    this.noteWriter = new NoteWriter(db, documentValidator, hooks);
+  }
+
+  async save(actorId: string, noteId: string, input: SaveNoteInput): Promise<NoteResult> {
+    return this.noteWriter.save(actorId, noteId, input);
+  }
+
+  async checkpoint(
+    actorId: string,
+    noteId: string,
+    input: CheckpointNoteInput,
+  ): Promise<CheckpointNoteResult> {
+    return this.noteWriter.checkpoint(actorId, noteId, input);
+  }
+
+  async restoreVersion(
+    actorId: string,
+    noteId: string,
+    versionId: string,
+    input: RestoreNoteVersionInput,
+  ): Promise<NoteResult> {
+    return this.noteWriter.restoreVersion(actorId, noteId, versionId, input);
+  }
+
+  async listVersions(
+    actorId: string,
+    noteId: string,
+    input: CursorPaginationQuery,
+  ): Promise<NoteVersionPage> {
+    const { workspaceId } = await this.loadAuthorizedNote(actorId, noteId, "listVersions");
+    const cursor = input.cursor ? decodeVersionCursor(input.cursor) : undefined;
+    const conditions = [eq(noteVersions.noteId, noteId), eq(noteVersions.workspaceId, workspaceId)];
+    if (cursor) {
+      conditions.push(
+        or(
+          lt(noteVersions.revision, cursor.revision),
+          and(eq(noteVersions.revision, cursor.revision), lt(noteVersions.id, cursor.id)),
+        )!,
+      );
+    }
+
+    const rows = await this.db
+      .select({
+        id: noteVersions.id,
+        noteId: noteVersions.noteId,
+        revision: noteVersions.revision,
+        reason: noteVersions.reason,
+        createdAt: noteVersions.createdAt,
+        createdByName: user.name,
+      })
+      .from(noteVersions)
+      .innerJoin(user, eq(user.id, noteVersions.createdById))
+      .where(and(...conditions))
+      .orderBy(desc(noteVersions.revision), desc(noteVersions.id))
+      .limit(input.pageSize + 1);
+
+    const hasMore = rows.length > input.pageSize;
+    const page = hasMore ? rows.slice(0, input.pageSize) : rows;
+    const last = page[page.length - 1];
+
+    return {
+      items: page.map((row) => toNoteVersionSummary(row)),
+      nextCursor: hasMore && last ? encodeVersionCursor(last.revision, last.id) : null,
+    };
+  }
+
+  async getVersion(actorId: string, noteId: string, versionId: string): Promise<NoteVersionResult> {
+    const { workspaceId } = await this.loadAuthorizedNote(actorId, noteId, "getVersion");
+    const rows = await this.db
+      .select({
+        id: noteVersions.id,
+        noteId: noteVersions.noteId,
+        revision: noteVersions.revision,
+        reason: noteVersions.reason,
+        createdAt: noteVersions.createdAt,
+        createdByName: user.name,
+        contentMarkdown: noteVersions.contentMarkdown,
+        schemaVersion: noteVersions.schemaVersion,
+      })
+      .from(noteVersions)
+      .innerJoin(user, eq(user.id, noteVersions.createdById))
+      .where(
+        and(
+          eq(noteVersions.id, versionId),
+          eq(noteVersions.noteId, noteId),
+          eq(noteVersions.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1);
+
+    const found = rows[0];
+    if (!found) throw new PublicApiError("NOTE_NOT_FOUND", 404);
+    return {
+      ...toNoteVersionSummary(found),
+      contentMarkdown: found.contentMarkdown,
+      schemaVersion: found.schemaVersion,
+    };
+  }
 
   async list(actorId: string, input: ListNotesInput): Promise<NotePage> {
     const cursor = input.cursor ? decodeCursor(input.cursor) : undefined;

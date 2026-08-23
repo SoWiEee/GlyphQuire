@@ -2,11 +2,22 @@ import type { WorkspaceRole } from "@glyphquire/database";
 import { PublicApiError } from "../../middleware/error-handler.js";
 
 /**
- * Every note lifecycle action a caller can request. "get" and "list" are
- * read-only; the rest mutate note state and are restricted to owners and
- * editors.
+ * Every note lifecycle action a caller can request. "get", "list",
+ * "listVersions", and "getVersion" are read-only; the rest mutate note or
+ * version state and are restricted to owners and editors.
  */
-export type NoteAction = "list" | "create" | "get" | "rename" | "softDelete" | "restore";
+export type NoteAction =
+  | "list"
+  | "create"
+  | "get"
+  | "rename"
+  | "softDelete"
+  | "restore"
+  | "save"
+  | "checkpoint"
+  | "restoreVersion"
+  | "listVersions"
+  | "getVersion";
 
 export interface NoteAuthorizationResource {
   readonly role: WorkspaceRole;
@@ -17,6 +28,9 @@ const MUTATING_ACTIONS: ReadonlySet<NoteAction> = new Set([
   "rename",
   "softDelete",
   "restore",
+  "save",
+  "checkpoint",
+  "restoreVersion",
 ]);
 
 /**
