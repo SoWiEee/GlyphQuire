@@ -424,7 +424,7 @@ export class NoteWriter {
           schemaVersion: current.schemaVersion,
           contentMarkdown: current.contentMarkdown,
           contentHash: current.contentHash,
-          force: false,
+          force: true,
         });
 
         // The restore itself always advances the revision counter; it never
@@ -530,13 +530,13 @@ export class NoteWriter {
   }
 
   /**
-   * Inserts a version row unless a caller-forced check determines one isn't
-   * needed. `force: true` (the default, used by save/checkpoint/restore's
-   * own resulting content) always runs the snapshot-policy decision against
-   * the latest existing snapshot. `force: false` (used only for restore's
-   * pre-overwrite safety snapshot) still applies the same policy — the
-   * "autosave" reason is never in `FORCED_SNAPSHOT_REASONS`, so this call is
-   * a plain policy-gated attempt at the *current* (pre-overwrite) revision.
+   * Inserts a version row when the snapshot policy triggers or when `force`
+   * is true. `force: true` bypasses the size/time policy entirely and always
+   * creates a snapshot — used by restoreVersion's pre-overwrite safety
+   * snapshot so current content is never silently discarded. When `force` is
+   * omitted or false, the normal policy applies: reasons in
+   * `FORCED_SNAPSHOT_REASONS` (checkpoint, restore) always snapshot; autosave
+   * snapshots only when the size or time trigger fires.
    */
   private async maybeSnapshot(
     tx: DbTransaction,
@@ -557,15 +557,17 @@ export class NoteWriter {
       orderBy: (table, { desc: whereDesc }) => [whereDesc(table.revision)],
     });
 
-    const decision = decideSnapshot({
-      reason: params.reason,
-      currentBytes: utf8ByteLength(params.contentMarkdown),
-      snapshotBytes: latest ? utf8ByteLength(latest.contentMarkdown) : 0,
-      lastSnapshotAt: latest ? latest.createdAt : null,
-      now: new Date(),
-    });
+    if (!params.force) {
+      const decision = decideSnapshot({
+        reason: params.reason,
+        currentBytes: utf8ByteLength(params.contentMarkdown),
+        snapshotBytes: latest ? utf8ByteLength(latest.contentMarkdown) : 0,
+        lastSnapshotAt: latest ? latest.createdAt : null,
+        now: new Date(),
+      });
 
-    if (!decision.shouldSnapshot) return undefined;
+      if (!decision.shouldSnapshot) return undefined;
+    }
 
     await this.hooks.beforeSnapshotInsert?.();
     const [version] = await tx
