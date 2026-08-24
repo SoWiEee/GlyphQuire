@@ -19,6 +19,7 @@ import {
 
 const engine = createDocumentEngine();
 const fixturesRoot = resolve(process.cwd(), "../../packages/document-engine/tests/fixtures");
+const UTF8_ENCODER = new TextEncoder();
 
 function fixture(group: string, name: string): string {
   return readFileSync(resolve(fixturesRoot, group, name, "input.md"), "utf8");
@@ -63,14 +64,40 @@ function warningNodeCount(adapter: MilkdownVisualAdapter): number {
   return count;
 }
 
-function warningMarkerHtml(kind: "inline" | "block", source: string): string {
+function warningMarkerHtml(kind: "inline" | "block", source: string, marker = "escaped"): string {
   const element = document.createElement(kind === "inline" ? "span" : "section");
   element.setAttribute(
     kind === "inline" ? "data-glyphquire-inline-warning" : "data-glyphquire-warning",
-    "escaped",
+    marker,
   );
   element.textContent = source;
   return element.outerHTML;
+}
+
+function utf8Length(value: string): number {
+  return UTF8_ENCODER.encode(value).byteLength;
+}
+
+function exactLimitWarningMarkdown(
+  kind: "inline" | "block",
+  filler: string,
+  targetBytes = MAX_MARKDOWN_BYTES,
+): string {
+  const bodyPrefix = kind === "inline" ? ":future[" : ":::future\n";
+  const bodySuffix = kind === "inline" ? "]\n" : "\n:::\n";
+  const fixedBytes = utf8Length(`${GLYPHQUIRE_FRONTMATTER}${bodyPrefix}${bodySuffix}`);
+  const fillerBytes = utf8Length(filler);
+  const availableBytes = targetBytes - fixedBytes;
+  const repetitions = Math.floor(availableBytes / fillerBytes);
+  const asciiRemainder = availableBytes - repetitions * fillerBytes;
+  const markdown = `${GLYPHQUIRE_FRONTMATTER}${bodyPrefix}${filler.repeat(repetitions)}${"a".repeat(asciiRemainder)}${bodySuffix}`;
+  if (utf8Length(markdown) !== targetBytes) throw new Error("failed to build exact-size Markdown");
+  return markdown;
+}
+
+function warningSource(markdown: string, kind: "inline" | "block"): string {
+  const body = markdown.slice(GLYPHQUIRE_FRONTMATTER.length);
+  return kind === "inline" ? body.replace(/\n$/, "") : body;
 }
 
 describe("MilkdownVisualAdapter", () => {
@@ -310,6 +337,7 @@ describe("MilkdownVisualAdapter", () => {
       '<section data-glyphquire-warning="escaped"><script>globalThis.__glyphquireRuntimeSentinel = 1</script></section>',
       warningMarkerHtml("inline", "é".repeat(MAX_MARKDOWN_BYTES / 2 + 1)),
       warningMarkerHtml("block", "x".repeat(MAX_MARKDOWN_BYTES + 1)),
+      warningMarkerHtml("inline", "x".repeat(MAX_MARKDOWN_BYTES + 1), "forged"),
     ];
 
     for (const marker of malformedMarkers) {
@@ -442,6 +470,113 @@ describe("MilkdownVisualAdapter", () => {
     view.dispatch(view.state.tr.replaceSelectionWith(mismatchedBlock));
     expect(view.state.doc.toJSON()).toEqual(before);
   });
+
+  it.each(["inline", "block"] as const)(
+    "projects an exact 2 MiB control-character %s warning without a JSON multiplier cap",
+    async (kind) => {
+      const markdown = exactLimitWarningMarkdown(kind, "\u0001");
+      const expected = engine.parse(markdown);
+      expect(utf8Length(markdown)).toBe(MAX_MARKDOWN_BYTES);
+      expect(expected.ok).toBe(true);
+      if (!expected.ok) throw new Error("expected exact-limit warning Markdown");
+      expect(engine.serialize(expected.document)).toBe(markdown);
+
+      const { adapter } = await mountedAdapter();
+      cleanups.push(() => adapter.destroy());
+      expect(() => adapter.setMarkdown(markdown)).not.toThrow();
+      const projected = adapter.getMarkdown();
+      const actual = engine.parse(projected);
+      expect(utf8Length(projected)).toBe(MAX_MARKDOWN_BYTES);
+      expect(actual.ok).toBe(true);
+      if (!actual.ok) throw new Error("expected exact-limit projected Markdown");
+      expect(semanticNormalize(actual.document)).toEqual(semanticNormalize(expected.document));
+    },
+    120_000,
+  );
+
+  it.each([
+    { kind: "inline" as const, filler: "a" },
+    { kind: "block" as const, filler: "é" },
+  ])(
+    "accepts exact-limit $kind warning source with $filler filler",
+    ({ kind, filler }) => {
+      const markdown = exactLimitWarningMarkdown(kind, filler);
+      const source = warningSource(markdown, kind);
+      const attrs =
+        kind === "inline"
+          ? inlineWarningAttrsFromSource(source)
+          : blockWarningAttrsFromSource(source);
+      expect(utf8Length(markdown)).toBe(MAX_MARKDOWN_BYTES);
+      expect(attrs).not.toBeNull();
+    },
+    60_000,
+  );
+
+  it("derives token-dense structural JSON from source instead of guessing an expansion cap", () => {
+    const markdown = exactLimitWarningMarkdown("block", ":future[x]", 64 * 1024);
+    const source = warningSource(markdown, "block");
+    const attrs = blockWarningAttrsFromSource(source);
+    expect(attrs).not.toBeNull();
+    expect(attrs?.semanticJson.length).toBeGreaterThan(source.length * 20);
+  }, 60_000);
+
+  it("rejects 2 MiB plus one byte without corrupting the prior projection", async () => {
+    const accepted = fixture("sticky", "valid-minimal");
+    const overLimit = exactLimitWarningMarkdown("inline", "a", MAX_MARKDOWN_BYTES + 1);
+    const overLimitBlock = exactLimitWarningMarkdown("block", "a", MAX_MARKDOWN_BYTES + 1);
+    const canonicalExpansion = overLimit.slice(0, -1);
+    const { adapter } = await mountedAdapter(accepted);
+    cleanups.push(() => adapter.destroy());
+    const before = adapter.getMarkdown();
+
+    expect(utf8Length(overLimit)).toBe(MAX_MARKDOWN_BYTES + 1);
+    expect(inlineWarningAttrsFromSource(warningSource(overLimit, "inline"))).toBeNull();
+    expect(blockWarningAttrsFromSource(warningSource(overLimitBlock, "block"))).toBeNull();
+    expect(() => adapter.setMarkdown(overLimit)).toThrow();
+    expect(utf8Length(canonicalExpansion)).toBe(MAX_MARKDOWN_BYTES);
+    const expanded = engine.parse(canonicalExpansion);
+    expect(expanded.ok).toBe(true);
+    if (!expanded.ok) throw new Error("expected canonical-expansion control Markdown");
+    expect(utf8Length(engine.serialize(expanded.document))).toBe(MAX_MARKDOWN_BYTES + 1);
+    expect(() => adapter.setMarkdown(canonicalExpansion)).toThrow();
+    expect(adapter.getMarkdown()).toBe(before);
+  }, 60_000);
+
+  it("rejects huge or mismatched warning JSON before parsing attacker-controlled JSON", async () => {
+    const { adapter } = await mountedAdapter();
+    cleanups.push(() => adapter.destroy());
+    const view = proseMirrorView(adapter);
+    const inlineType = view.state.schema.nodes.gq_inline_warning;
+    const blockType = view.state.schema.nodes.gq_warning;
+    const inline = inlineWarningAttrsFromSource(":future[x]");
+    const block = blockWarningAttrsFromSource(":::future\nx\n:::\n");
+    if (!inlineType || !blockType || !inline || !block) {
+      throw new Error("expected canonical warning schemas and attrs");
+    }
+    const sameLengthMalformedInline = `[${inline.directiveJson.slice(1)}`;
+    const hugeBlockJson = "x".repeat(MAX_MARKDOWN_BYTES * 8);
+    const malformedInline = inlineType.create({
+      directiveJson: sameLengthMalformedInline,
+      source: inline.source,
+    });
+    const hugeBlock = blockType.create({
+      semanticJson: hugeBlockJson,
+      source: block.source,
+      label: block.label,
+    });
+    const parseSpy = vi.spyOn(JSON, "parse");
+    const before = view.state.doc.toJSON();
+
+    expect(() =>
+      view.serializeForClipboard(new Slice(Fragment.from(malformedInline), 0, 0)),
+    ).toThrow();
+    expect(() => view.serializeForClipboard(new Slice(Fragment.from(hugeBlock), 0, 0))).toThrow();
+    view.dispatch(view.state.tr.replaceSelectionWith(malformedInline));
+    view.dispatch(view.state.tr.replaceSelectionWith(hugeBlock));
+    expect(parseSpy).not.toHaveBeenCalled();
+    expect(view.state.doc.toJSON()).toEqual(before);
+    expect(() => adapter.getMarkdown()).not.toThrow();
+  }, 60_000);
 
   it("removes hostile rendered URL sinks and hardens safe external links", async () => {
     const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);

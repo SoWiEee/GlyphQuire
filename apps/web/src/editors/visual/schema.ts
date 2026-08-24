@@ -32,8 +32,6 @@ const VISUAL_KIND_DATA_KEY = "glyphquireVisualKind";
 const MAX_ENCODED_URL_PASSES = 3;
 const MAX_VISUAL_FRAGMENT_BYTES =
   MAX_MARKDOWN_BYTES - UTF8_ENCODER.encode(GLYPHQUIRE_FRONTMATTER).byteLength;
-const MAX_VISUAL_JSON_CHARACTERS = MAX_MARKDOWN_BYTES * 6;
-const MAX_VISUAL_LABEL_CHARACTERS = MAX_MARKDOWN_BYTES + 64;
 
 export type VisualUrlKind = "link" | "image";
 
@@ -287,6 +285,7 @@ interface CanonicalInlineDirective {
   readonly node: MarkdownNode;
   readonly normalized: string;
   readonly source: string;
+  readonly canonicalMarkdown: string;
 }
 
 function canonicalInlineDirective(value: unknown): CanonicalInlineDirective {
@@ -325,6 +324,7 @@ function canonicalInlineDirective(value: unknown): CanonicalInlineDirective {
     node: inline,
     normalized: JSON.stringify(semanticNormalize(reparsed.document)),
     source: serialized.slice(GLYPHQUIRE_FRONTMATTER.length).replace(/\n+$/, ""),
+    canonicalMarkdown: serialized,
   };
 }
 
@@ -347,6 +347,10 @@ export interface VisualBlockWarningAttrs {
   readonly semanticJson: string;
   readonly source: string;
   readonly label: string;
+}
+
+interface CanonicalVisualBlockWarningAttrs extends VisualBlockWarningAttrs {
+  readonly semantic: BlockNode;
 }
 
 function hasBoundedVisualSource(source: string): boolean {
@@ -389,8 +393,37 @@ export function inlineWarningAttrsFromSource(source: unknown): VisualInlineWarni
       return null;
     }
     const canonical = canonicalInlineDirective(inline);
-    if (canonical.source !== source) return null;
+    if (
+      canonical.source !== source ||
+      UTF8_ENCODER.encode(canonical.canonicalMarkdown).byteLength > MAX_MARKDOWN_BYTES
+    ) {
+      return null;
+    }
     return { directiveJson: JSON.stringify(canonical.node), source: canonical.source };
+  } catch {
+    return null;
+  }
+}
+
+function canonicalBlockWarningAttrsFromSource(
+  source: unknown,
+): CanonicalVisualBlockWarningAttrs | null {
+  if (typeof source !== "string" || !hasBoundedVisualSource(source)) return null;
+  try {
+    const parsed = engine.parse(`${GLYPHQUIRE_FRONTMATTER}${source}`);
+    if (!parsed.ok || parsed.document.children.length !== 1) return null;
+    const semantic = canonicalSemanticBlock(parsed.document.children[0]);
+    const label = visualWarningLabel(semantic);
+    const canonicalSource = semanticNodeSource(semantic);
+    if (
+      label === null ||
+      canonicalSource !== source ||
+      UTF8_ENCODER.encode(`${GLYPHQUIRE_FRONTMATTER}${canonicalSource}`).byteLength >
+        MAX_MARKDOWN_BYTES
+    ) {
+      return null;
+    }
+    return { semanticJson: JSON.stringify(semantic), source: canonicalSource, label, semantic };
   } catch {
     return null;
   }
@@ -398,27 +431,13 @@ export function inlineWarningAttrsFromSource(source: unknown): VisualInlineWarni
 
 /** Reconstructs an opaque block warning from one exact canonical block boundary. */
 export function blockWarningAttrsFromSource(source: unknown): VisualBlockWarningAttrs | null {
-  if (typeof source !== "string" || !hasBoundedVisualSource(source)) return null;
-  try {
-    const parsed = engine.parse(`${GLYPHQUIRE_FRONTMATTER}${source}`);
-    if (!parsed.ok || parsed.document.children.length !== 1) return null;
-    const semantic = canonicalSemanticBlock(parsed.document.children[0]);
-    const label = visualWarningLabel(semantic);
-    if (label === null || semanticNodeSource(semantic) !== source) return null;
-    return { semanticJson: JSON.stringify(semantic), source, label };
-  } catch {
-    return null;
-  }
-}
-
-export function validateVisualInlineWarningJson(value: unknown): void {
-  if (typeof value !== "string" || value.length > MAX_VISUAL_JSON_CHARACTERS) {
-    throw new RangeError("Escaped inline directive JSON is invalid");
-  }
-  const canonical = inlineDirectiveFromJson(value);
-  if (JSON.stringify(canonical.node) !== value) {
-    throw new RangeError("Escaped inline directive JSON is not canonical");
-  }
+  const canonical = canonicalBlockWarningAttrsFromSource(source);
+  if (canonical === null) return null;
+  return {
+    semanticJson: canonical.semanticJson,
+    source: canonical.source,
+    label: canonical.label,
+  };
 }
 
 export function validateVisualInlineWarningSource(value: unknown): void {
@@ -427,25 +446,9 @@ export function validateVisualInlineWarningSource(value: unknown): void {
   }
 }
 
-export function validateVisualBlockWarningJson(value: unknown): void {
-  if (typeof value !== "string" || value.length > MAX_VISUAL_JSON_CHARACTERS) {
-    throw new RangeError("Escaped visual block JSON is invalid");
-  }
-  const semantic = semanticBlockFromJson(value);
-  if (visualWarningLabel(semantic) === null || JSON.stringify(semantic) !== value) {
-    throw new RangeError("Escaped visual block JSON is not canonical");
-  }
-}
-
 export function validateVisualBlockWarningSource(value: unknown): void {
   if (blockWarningAttrsFromSource(value) === null) {
     throw new RangeError("Escaped visual block source is invalid");
-  }
-}
-
-export function validateVisualWarningLabel(value: unknown): void {
-  if (typeof value !== "string" || value.length > MAX_VISUAL_LABEL_CHARACTERS) {
-    throw new RangeError("Escaped visual block label is invalid");
   }
 }
 
@@ -456,18 +459,15 @@ export function assertVisualInlineWarningAttrs(
   if (typeof attrs.directiveJson !== "string" || typeof attrs.source !== "string") {
     throw new Error("Escaped inline directive has invalid attributes");
   }
+  const expected = inlineWarningAttrsFromSource(attrs.source);
   if (
-    attrs.directiveJson.length > MAX_VISUAL_JSON_CHARACTERS ||
-    !hasBoundedVisualSource(attrs.source)
+    expected === null ||
+    attrs.directiveJson.length !== expected.directiveJson.length ||
+    attrs.directiveJson !== expected.directiveJson
   ) {
-    throw new Error("Escaped inline directive attributes exceed the safe limit");
-  }
-  const canonical = inlineDirectiveFromJson(attrs.directiveJson);
-  const canonicalJson = JSON.stringify(canonical.node);
-  if (attrs.directiveJson !== canonicalJson || attrs.source !== canonical.source) {
     throw new Error("Escaped inline directive attributes are not canonical");
   }
-  return { directiveJson: canonicalJson, source: canonical.source };
+  return expected;
 }
 
 /** Validates all related block attrs together before insertion or export. */
@@ -481,26 +481,17 @@ export function assertVisualBlockWarningAttrs(
   ) {
     throw new Error("Escaped visual block has invalid attributes");
   }
+  const expected = canonicalBlockWarningAttrsFromSource(attrs.source);
   if (
-    attrs.semanticJson.length > MAX_VISUAL_JSON_CHARACTERS ||
-    attrs.label.length > MAX_VISUAL_LABEL_CHARACTERS ||
-    !hasBoundedVisualSource(attrs.source)
-  ) {
-    throw new Error("Escaped visual block attributes exceed the safe limit");
-  }
-  const semantic = semanticBlockFromJson(attrs.semanticJson);
-  const label = visualWarningLabel(semantic);
-  const canonicalJson = JSON.stringify(semantic);
-  const canonicalSource = semanticNodeSource(semantic);
-  if (
-    label === null ||
-    attrs.semanticJson !== canonicalJson ||
-    attrs.source !== canonicalSource ||
-    attrs.label !== label
+    expected === null ||
+    attrs.semanticJson.length !== expected.semanticJson.length ||
+    attrs.semanticJson !== expected.semanticJson ||
+    attrs.label.length !== expected.label.length ||
+    attrs.label !== expected.label
   ) {
     throw new Error("Escaped visual block attributes are not canonical");
   }
-  return { semanticJson: canonicalJson, source: canonicalSource, label, semantic };
+  return expected;
 }
 
 export function readAnnotatedInlineDirective(node: MarkdownNode): CanonicalInlineDirective {

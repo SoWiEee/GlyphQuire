@@ -14,11 +14,8 @@ import {
   readAnnotatedInlineDirective,
   readAnnotatedSemantic,
   semanticNodeSource,
-  validateVisualBlockWarningJson,
   validateVisualBlockWarningSource,
-  validateVisualInlineWarningJson,
   validateVisualInlineWarningSource,
-  validateVisualWarningLabel,
 } from "../schema.js";
 
 function markerSource(
@@ -47,7 +44,7 @@ export const visualInlineWarningSchema = $nodeSchema("gq_inline_warning", () => 
   isolating: true,
   selectable: true,
   attrs: {
-    directiveJson: { validate: validateVisualInlineWarningJson },
+    directiveJson: { validate: "string" },
     source: { validate: validateVisualInlineWarningSource },
   },
   leafText: (node) => assertVisualInlineWarningAttrs(node.attrs).source,
@@ -59,6 +56,7 @@ export const visualInlineWarningSchema = $nodeSchema("gq_inline_warning", () => 
         return source === null ? false : (inlineWarningAttrsFromSource(source) ?? false);
       },
     },
+    { tag: "span[data-glyphquire-inline-warning]", ignore: true },
   ],
   toDOM: (node) => {
     const attrs = assertVisualInlineWarningAttrs(node.attrs);
@@ -90,9 +88,9 @@ export const visualWarningSchema = $nodeSchema("gq_warning", () => ({
   isolating: true,
   selectable: true,
   attrs: {
-    semanticJson: { validate: validateVisualBlockWarningJson },
+    semanticJson: { validate: "string" },
     source: { validate: validateVisualBlockWarningSource },
-    label: { validate: validateVisualWarningLabel },
+    label: { validate: "string" },
   },
   leafText: (node) => assertVisualBlockWarningAttrs(node.attrs).source,
   parseDOM: [
@@ -103,6 +101,7 @@ export const visualWarningSchema = $nodeSchema("gq_warning", () => ({
         return source === null ? false : (blockWarningAttrsFromSource(source) ?? false);
       },
     },
+    { tag: "section[data-glyphquire-warning]", ignore: true },
   ],
   toDOM: (node) => {
     const attrs = assertVisualBlockWarningAttrs(node.attrs);

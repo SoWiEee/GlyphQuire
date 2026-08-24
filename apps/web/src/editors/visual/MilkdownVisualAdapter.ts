@@ -1,4 +1,5 @@
 import { createDocumentEngine, type NotebookDocument } from "@glyphquire/document-engine";
+import { MAX_MARKDOWN_BYTES } from "@glyphquire/api-contract";
 import {
   Editor,
   defaultValueCtx,
@@ -33,6 +34,7 @@ import {
 
 const engine = createDocumentEngine();
 const EMPTY_MARKDOWN = `${GLYPHQUIRE_FRONTMATTER}`;
+const UTF8_ENCODER = new TextEncoder();
 
 interface AcceptedProjection {
   readonly canonicalMarkdown: string;
@@ -40,11 +42,24 @@ interface AcceptedProjection {
 }
 
 function acceptedProjection(markdown: string): AcceptedProjection {
+  if (
+    markdown.length > MAX_MARKDOWN_BYTES ||
+    UTF8_ENCODER.encode(markdown).byteLength > MAX_MARKDOWN_BYTES
+  ) {
+    throw new Error("Visual projection exceeds the Markdown size limit");
+  }
   const parsed = engine.parse(markdown);
   if (!parsed.ok) {
     throw new Error("Visual projection requires accepted GlyphQuire Markdown");
   }
-  return { canonicalMarkdown: engine.serialize(parsed.document), document: parsed.document };
+  const canonicalMarkdown = engine.serialize(parsed.document);
+  if (
+    canonicalMarkdown.length > MAX_MARKDOWN_BYTES ||
+    UTF8_ENCODER.encode(canonicalMarkdown).byteLength > MAX_MARKDOWN_BYTES
+  ) {
+    throw new Error("Visual projection canonical form exceeds the Markdown size limit");
+  }
+  return { canonicalMarkdown, document: parsed.document };
 }
 
 function bodyMarkdown(canonicalMarkdown: string): string {
