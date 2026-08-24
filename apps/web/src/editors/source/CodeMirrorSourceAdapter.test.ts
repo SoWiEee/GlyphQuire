@@ -46,20 +46,53 @@ describe("CodeMirrorSourceAdapter", () => {
     expect(adapter.getMarkdown()).toBe("abcdef");
   });
 
-  it("notifies onChange listeners with the updated markdown and returns an unsubscribe", () => {
+  it("notifies onChange only for user transactions and returns an unsubscribe", () => {
     const { adapter } = mountedAdapter();
     cleanup = () => adapter.destroy();
 
     const listener = vi.fn();
     const unsubscribe = adapter.onChange(listener);
 
-    adapter.setMarkdown("first change");
-    expect(listener).toHaveBeenCalledWith("first change");
+    adapter.setMarkdown("authoritative");
+    expect(listener).not.toHaveBeenCalled();
+
+    adapter.getView().dispatch({ changes: { from: 13, insert: "+user" } });
+    expect(listener).toHaveBeenCalledWith("authoritative+user");
 
     unsubscribe();
     listener.mockClear();
-    adapter.setMarkdown("second change");
+    adapter.getView().dispatch({ changes: { from: 18, insert: "+ignored" } });
     expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("projects authoritative Markdown while read-only without admitting user transactions", () => {
+    const { adapter } = mountedAdapter();
+    cleanup = () => adapter.destroy();
+    const listener = vi.fn();
+    adapter.onChange(listener);
+    adapter.setReadOnly(true);
+
+    adapter.setMarkdown("SERVER-AUTHORITATIVE");
+
+    expect(adapter.getMarkdown()).toBe("SERVER-AUTHORITATIVE");
+    expect(listener).not.toHaveBeenCalled();
+    adapter.getView().dispatch({ changes: { from: 20, insert: "+FORGED" } });
+    expect(adapter.getMarkdown()).toBe("SERVER-AUTHORITATIVE");
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("does not leave replaced seed content reachable through user undo history", () => {
+    const { adapter } = mountedAdapter();
+    cleanup = () => adapter.destroy();
+    adapter.setMarkdown("UNTRUSTED-SEED");
+    adapter.getView().dispatch({ changes: { from: 14, insert: "+OLD-USER" } });
+
+    adapter.setReadOnly(true);
+    adapter.setMarkdown("SERVER-AUTHORITATIVE");
+    adapter.setReadOnly(false);
+
+    expect(adapter.undo()).toBe(false);
+    expect(adapter.getMarkdown()).toBe("SERVER-AUTHORITATIVE");
   });
 
   it("blocks edits once read-only is enabled and restores editing when disabled", () => {

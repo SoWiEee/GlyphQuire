@@ -26,38 +26,59 @@ const hostRef = ref<HTMLElement | null>(null);
 // and never imported anywhere else in the shell.
 let adapter: EditorAdapter | undefined;
 let unsubscribe: (() => void) | undefined;
+let projectedReadOnly = false;
+
+function failClosed(instance: EditorAdapter): void {
+  try {
+    instance.setReadOnly(true);
+    projectedReadOnly = true;
+  } catch {
+    unsubscribe?.();
+    unsubscribe = undefined;
+    instance.destroy();
+    if (adapter === instance) adapter = undefined;
+  }
+}
+
+/** Locks first, projects canonical Markdown, verifies it, then grants writes. */
+function projectEditorState(instance: EditorAdapter, markdown: string, readOnly: boolean): void {
+  try {
+    if (projectedReadOnly === readOnly && instance.getMarkdown() === markdown) return;
+    instance.setReadOnly(true);
+    projectedReadOnly = true;
+    if (instance.getMarkdown() !== markdown) instance.setMarkdown(markdown);
+    if (instance.getMarkdown() !== markdown) throw new Error("Editor projection failed");
+    if (!readOnly) {
+      instance.setReadOnly(false);
+      projectedReadOnly = false;
+    }
+  } catch {
+    failClosed(instance);
+  }
+}
 
 onMounted(() => {
   if (!hostRef.value) return;
 
   const instance = new CodeMirrorSourceAdapter();
   instance.mount(hostRef.value);
-  instance.setMarkdown(props.markdown);
-  instance.setReadOnly(props.readOnly);
-  unsubscribe = instance.onChange((markdown) => emit("update:markdown", markdown));
   adapter = instance;
+  projectEditorState(instance, props.markdown, props.readOnly);
+  if (adapter === instance) {
+    unsubscribe = instance.onChange((markdown) => emit("update:markdown", markdown));
+  }
 });
 
-watch(
-  () => props.markdown,
-  (next) => {
-    if (adapter && adapter.getMarkdown() !== next) {
-      adapter.setMarkdown(next);
-    }
-  },
-);
-
-watch(
-  () => props.readOnly,
-  (next) => {
-    adapter?.setReadOnly(next);
-  },
-);
+watch([() => props.markdown, () => props.readOnly], ([markdown, readOnly]) => {
+  const instance = adapter;
+  if (instance) projectEditorState(instance, markdown, readOnly);
+});
 
 onBeforeUnmount(() => {
   unsubscribe?.();
   adapter?.destroy();
   adapter = undefined;
+  projectedReadOnly = false;
 });
 
 defineExpose({

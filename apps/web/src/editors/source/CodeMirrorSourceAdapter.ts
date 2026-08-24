@@ -11,7 +11,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { bracketMatching, syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
 import { lintGutter, linter, forceLinting, type Diagnostic } from "@codemirror/lint";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
-import { Compartment, EditorState } from "@codemirror/state";
+import { Annotation, Compartment, EditorState } from "@codemirror/state";
 import { EditorView, keymap, placeholder } from "@codemirror/view";
 import type { EditorAdapter } from "../types.js";
 
@@ -21,6 +21,7 @@ import type { EditorAdapter } from "../types.js";
  * in @glyphquire/document-engine, not here.
  */
 const UNCLOSED_LINK_PATTERN = /\[[^\]]*\]\([^)]*$/;
+const authoritativeProjection = Annotation.define<boolean>();
 
 function lintUnclosedLinks(view: EditorView): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
@@ -45,6 +46,7 @@ function lintUnclosedLinks(view: EditorView): Diagnostic[] {
 export class CodeMirrorSourceAdapter implements EditorAdapter {
   private view: EditorView | undefined;
   private readOnlyCompartment = new Compartment();
+  private historyCompartment = new Compartment();
   private changeListeners = new Set<(markdown: string) => void>();
   /** Boxed so the static transactionFilter extension can read live state. */
   private readOnlyBox = { readOnly: false };
@@ -57,7 +59,7 @@ export class CodeMirrorSourceAdapter implements EditorAdapter {
     const state = EditorState.create({
       doc: "",
       extensions: [
-        history(),
+        this.historyCompartment.of(history()),
         closeBrackets(),
         bracketMatching(),
         highlightSelectionMatches(),
@@ -69,10 +71,14 @@ export class CodeMirrorSourceAdapter implements EditorAdapter {
         this.readOnlyCompartment.of([EditorView.editable.of(true), EditorState.readOnly.of(false)]),
         // Belt-and-suspenders: the readOnly facet above governs the built-in
         // commands, but a caller can still dispatch a raw transaction
-        // directly against the view. Filter those out too so setReadOnly is
-        // an absolute guarantee, not just a UI affordance.
+        // directly against the view. Filter those out too; only this module's
+        // annotated authoritative projection may change a locked document.
         EditorState.transactionFilter.of((tr) =>
-          this.readOnlyBox.readOnly && tr.docChanged ? [] : tr,
+          this.readOnlyBox.readOnly &&
+          tr.docChanged &&
+          tr.annotation(authoritativeProjection) !== true
+            ? []
+            : tr,
         ),
         keymap.of([
           ...closeBracketsKeymap,
@@ -83,7 +89,10 @@ export class CodeMirrorSourceAdapter implements EditorAdapter {
           indentWithTab,
         ]),
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) {
+          const includesUserChange = update.transactions.some(
+            (transaction) => transaction.annotation(authoritativeProjection) !== true,
+          );
+          if (update.docChanged && includesUserChange) {
             const markdownText = update.state.doc.toString();
             for (const listener of this.changeListeners) {
               listener(markdownText);
@@ -100,6 +109,12 @@ export class CodeMirrorSourceAdapter implements EditorAdapter {
     const view = this.requireView();
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: markdown },
+      effects: this.historyCompartment.reconfigure([]),
+      annotations: authoritativeProjection.of(true),
+    });
+    view.dispatch({
+      effects: this.historyCompartment.reconfigure(history()),
+      annotations: authoritativeProjection.of(true),
     });
   }
 
