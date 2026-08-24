@@ -10,11 +10,7 @@ function isPositiveInteger(n: number): boolean {
   return Number.isInteger(n) && n > 0;
 }
 
-export function migrateDocument(
-  markdown: string,
-  from: number,
-  to: number,
-): MigrationResult {
+export function migrateDocument(markdown: string, from: number, to: number): MigrationResult {
   const base: Omit<MigrationResult, "ok" | "diagnostics"> = {
     markdown,
     fromVersion: from,

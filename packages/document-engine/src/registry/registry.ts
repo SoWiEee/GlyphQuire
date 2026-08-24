@@ -72,10 +72,7 @@ export class BlockRegistry {
   }
 }
 
-export function registerBuiltin(
-  registry: BlockRegistry,
-  definition: BlockDefinition,
-): void {
+export function registerBuiltin(registry: BlockRegistry, definition: BlockDefinition): void {
   insertDefinition(definitionsFor(registry), definition, true);
 }
 
@@ -84,9 +81,7 @@ export function isReservedName(name: string): boolean {
 }
 
 /** Coerce a directive node's attributes to a plain string record. */
-export function readAttributes(
-  node: DirectiveMdastNode,
-): Record<string, string> {
+export function readAttributes(node: DirectiveMdastNode): Record<string, string> {
   const result: Record<string, string> = {};
   const attrs = node.attributes ?? {};
   for (const [key, value] of Object.entries(attrs)) {
@@ -95,9 +90,7 @@ export function readAttributes(
   return result;
 }
 
-export function directiveTypeOf(
-  node: DirectiveMdastNode,
-): "container" | "leaf" | "text" {
+export function directiveTypeOf(node: DirectiveMdastNode): "container" | "leaf" | "text" {
   if (node.type === "containerDirective") return "container";
   if (node.type === "leafDirective") return "leaf";
   return "text";

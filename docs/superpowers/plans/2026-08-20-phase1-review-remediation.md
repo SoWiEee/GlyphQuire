@@ -24,6 +24,7 @@
 ### Task 1: Lossless parse-result and rejection boundary
 
 **Files:**
+
 - Modify: `packages/document-engine/src/parser/index.ts`
 - Modify: `packages/document-engine/src/parser/mdast.ts`
 - Modify: `packages/document-engine/src/parser/frontmatter.test.ts`
@@ -40,6 +41,7 @@
 - Delete: `packages/document-engine/tests/fixtures/version/{missing-version-marker,invalid-version-non-positive,invalid-version-non-integer,unsupported-future-version}/expected.md`
 
 **Interfaces:**
+
 - Produces `ParseResult = AcceptedParseResult | RejectedParseResult`.
 - Both variants expose `source`, `diagnostics`, and `specVersion`.
 - Accepted: `ok: true; document: NotebookDocument`.
@@ -105,6 +107,7 @@ Commit: `fix: preserve source across parse rejection`
 ### Task 2: Preserve directive kind and invalid children
 
 **Files:**
+
 - Modify: `packages/document-engine/src/ast/nodes.ts`
 - Modify: `packages/document-engine/src/registry/types.ts`
 - Modify: `packages/document-engine/src/parser/transform.ts`
@@ -119,6 +122,7 @@ Commit: `fix: preserve source across parse rejection`
 - Modify: invalid-child fixture expectations under `packages/document-engine/tests/fixtures/{tabs,columns}/invalid-child/`
 
 **Interfaces:**
+
 - `InvalidBlockNode` records `directiveType` for directive-origin failures.
 - A typed domain validation error carries diagnostic issues and already transformed children from a block definition to the generic transformer.
 
@@ -163,12 +167,14 @@ Commit: `fix: preserve invalid directive structure`
 ### Task 3: Enforce built-in registry reservation
 
 **Files:**
+
 - Modify: `packages/document-engine/src/registry/registry.ts`
 - Modify: `packages/document-engine/src/registry/builtins.ts`
 - Modify: `packages/document-engine/src/registry/registry.test.ts`
 - Modify: `docs/superpowers/specs/2026-08-20-phase1-document-engine-design.md`
 
 **Interfaces:**
+
 - Public `register(definition)` rejects reserved names.
 - Default built-in installation uses a module-internal token that is not re-exported by `src/registry/index.ts` or `src/index.ts`.
 
@@ -208,12 +214,14 @@ Commit: `fix: prevent built-in block shadowing`
 ### Task 4: Make golden fixtures assert recovery behavior
 
 **Files:**
+
 - Modify: `packages/document-engine/src/__tests__/fixtures.test.ts`
 - Create: selected `expected.diagnostics.json` files under `packages/document-engine/tests/fixtures/`
 - Modify: `docs/MARKDOWN_SPEC.md`
 - Modify: `docs/superpowers/specs/2026-08-20-phase1-document-engine-design.md`
 
 **Interfaces:**
+
 - Fixture harness optionally reads `expected.diagnostics.json` as an ordered list of diagnostic codes.
 - Rejected fixtures assert `document: null` and never assert a synthesized canonical Markdown output.
 

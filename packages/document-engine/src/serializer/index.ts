@@ -7,6 +7,9 @@ import { mdastToMarkdown } from "./to-markdown.js";
 export { documentToMdast } from "./to-mdast.js";
 export { mdastToMarkdown } from "./to-markdown.js";
 
-export function serialize(document: NotebookDocument, registry: BlockRegistry = createRegistry()): string {
+export function serialize(
+  document: NotebookDocument,
+  registry: BlockRegistry = createRegistry(),
+): string {
   return mdastToMarkdown(documentToMdast(document, registry));
 }

@@ -9,8 +9,17 @@ import type { TransformContext, SerializeContext } from "../types.js";
 const tx: TransformContext = { transformChildren: () => [], addDiagnostic: () => {} };
 const sx: SerializeContext = { serializeChildren: (): RootContent[] => [] };
 
-function container(name: string, attributes: Record<string, string>, children: RootContent[] = []): ContainerDirective {
-  return { type: "containerDirective", name, attributes, children: children as ContainerDirective["children"] };
+function container(
+  name: string,
+  attributes: Record<string, string>,
+  children: RootContent[] = [],
+): ContainerDirective {
+  return {
+    type: "containerDirective",
+    name,
+    attributes,
+    children: children as ContainerDirective["children"],
+  };
 }
 
 describe("callout block", () => {
@@ -19,7 +28,9 @@ describe("callout block", () => {
     expect(node.props.type).toBe("info");
   });
   it("throws (schema-invalid) on bad enum", () => {
-    expect(() => calloutBlock.fromDirective(container("callout", { type: "rainbow" }), tx)).toThrow();
+    expect(() =>
+      calloutBlock.fromDirective(container("callout", { type: "rainbow" }), tx),
+    ).toThrow();
   });
   it("serializes type attribute", () => {
     const dir = calloutBlock.toDirective(

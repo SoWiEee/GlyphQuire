@@ -18,7 +18,12 @@ export const stickyBlock: BlockDefinition<StickyNode> = {
   fromDirective(node, context): StickyNode {
     const props = stickySchema.parse(readAttributes(node));
     const container = node as ContainerDirective;
-    return { type: "sticky", version: 1, props, children: context.transformChildren(container.children) };
+    return {
+      type: "sticky",
+      version: 1,
+      props,
+      children: context.transformChildren(container.children),
+    };
   },
   toDirective(node, context): DirectiveMdastNode {
     const attributes: Record<string, string> = { tone: node.props.tone };

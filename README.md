@@ -18,9 +18,11 @@
 > **目前狀態：開發中。**  
 > GlyphQuire 目前以本地部署與 self-hosted 為主要開發目標，後續預計支援 Cloudflare Workers、R2、Queues 與 PostgreSQL + Hyperdrive 部署架構。
 
+> 工程規格文件 [SPEC.md](docs/SPEC.md)，Markdown 與 Custom Block 語法 [MARKDOWN_SPEC.md](docs/MARKDOWN_SPEC.md)。若兩份規格與實作發生衝突，前者負責 Application / System Architecture，後者負責  Markdown grammar / AST / serialization。
+
 ---
 
-## GlyphQuire 是什麼？
+## What is GlyphQuire
 
 GlyphQuire 是一套以 **Markdown 作為唯一文件來源格式（canonical format）** 的可擴充網頁筆記工具。
 
@@ -28,6 +30,7 @@ GlyphQuire 是一套以 **Markdown 作為唯一文件來源格式（canonical fo
 
 例如：
 
+<!-- prettier-ignore -->
 ```md
 # GPU Scheduling
 
@@ -48,7 +51,7 @@ MPS 不應被視為完整的 GPU memory isolation 機制。
 
 ---
 
-## 核心理念
+## Core Concept
 
 ### Markdown 永遠是文件本體
 
@@ -114,7 +117,8 @@ Milkdown、CodeMirror、HTML Preview、搜尋索引以及其他格式都只是 M
 
 需要圖像或互動時才使用：
 
-```md
+<!-- prettier-ignore -->
+````md
 :::p5{height="400"}
 ```js
 function setup() {
@@ -122,21 +126,21 @@ function setup() {
 }
 ```
 :::
-```
+````
 
 不需要為了漂亮的筆記直接接觸 Vue、DOM 或底層應用程式程式碼。
 
 ---
 
-# 特色
+# ⭐ Features
 
 ## 雙模式 Markdown 編輯
 
-GlyphQuire 提供兩種編輯方式。
+GlyphQuire 提供兩種編輯方式，包含 Visual 及 Source 模式。
 
 ### Visual Mode
 
-由 **Milkdown** 提供視覺化 Markdown 編輯體驗。
+由 Milkdown 提供視覺化 Markdown 編輯體驗。
 
 適合：
 
@@ -148,7 +152,7 @@ GlyphQuire 提供兩種編輯方式。
 
 ### Source Mode
 
-由 **CodeMirror 6** 提供完整 Markdown source editing。
+由 CodeMirror 6 提供完整 Markdown source editing。
 
 包含：
 
@@ -163,9 +167,9 @@ GlyphQuire 提供兩種編輯方式。
 
 ---
 
-## GlyphQuire Markdown
+## Markdown Syntax
 
-GlyphQuire 以 GitHub Flavored Markdown 為基礎，並使用 Generic Directive 語法提供額外功能。
+以 GitHub Flavored Markdown 為基礎，並使用 Generic Directive 語法提供額外功能。
 
 ### Callout
 
@@ -196,6 +200,7 @@ success
 
 ### Toggle
 
+<!-- prettier-ignore -->
 ```md
 :::toggle{title="查看更多"}
 這裡可以包含完整的 Markdown。
@@ -238,64 +243,30 @@ Svelte 內容
 ::::
 ```
 
-完整語法規格請參閱：
-
-```text
-MARKDOWN_SPEC.md
-```
+完整語法規格請參閱 [MARKDOWN_SPEC.md](docs/MARKDOWN_SPEC.md)。
 
 ---
 
 ## Theme Engine
 
-Theme 不會修改你的 Markdown。
-
-同一篇：
-
-```md
-# Deep Reinforcement Learning
-
-:::callout{type="info"}
-SAC is an off-policy algorithm.
-:::
-```
-
-可以套用不同 Theme：
-
-```text
-Academic
-Notebook
-Paper
-Minimal
-Glass
-Dark
-```
-
-Theme 可以控制：
-
-- Color Palette
-- Typography
-- Heading Decoration
-- Spacing
-- Border Radius
-- Quote Style
-- Callout Style
-- Toggle Style
-- Shadow
-- Hover Effect
-- Animation
+- Theme 不會修改你的 Markdown。
+- 相同文章 (markdown) 可以套用不同 Theme，例如 Academic, Minimal, Glass, Dark。
+- Theme 可以控制的樣式包含：
+  - Color Palette
+  - Typography
+  - Heading Decoration
+  - Spacing
+  - Border Radius
+  - Quote Style
+  - Callout Style
+  - Toggle Style
+  - Shadow
+  - Hover Effect
+  - Animation
 
 ### 使用者自訂 Theme
 
-GlyphQuire v1 採用：
-
-```text
-Design Tokens
-+
-Approved Component Variants
-```
-
-例如：
+GlyphQuire v1 採用 **Design Tokens + Approved Component Variants**。例如：
 
 ```json
 {
@@ -371,13 +342,14 @@ Custom Block 可以定義：
 
 ---
 
-# Interactive Runtime
+# 🕹️ Interactive Runtime
 
 需要程式能力時，可以使用獨立的 Sandbox Runtime。
 
 ## p5.js
 
-```md
+<!-- prettier-ignore -->
+````md
 :::p5{height="400"}
 ```js
 function setup() {
@@ -390,11 +362,12 @@ function draw() {
 }
 ```
 :::
-```
+````
 
 ## Canvas
 
-```md
+<!-- prettier-ignore -->
+````md
 :::canvas{height="320"}
 ```js
 const ctx = canvas.getContext("2d");
@@ -402,7 +375,7 @@ const ctx = canvas.getContext("2d");
 ctx.fillRect(10, 10, 100, 100);
 ```
 :::
-```
+````
 
 互動程式碼會在不同 origin 的 sandboxed iframe 執行：
 
@@ -431,35 +404,21 @@ Sandbox 預設無法存取：
 
 ---
 
-# Assets
+# 📦 Assets
 
 GlyphQuire 不會把特定 Object Storage URL 寫死在 Markdown。
 
-圖片使用：
+匯入圖片使用以下語法，`asset://` 會在顯示時解析到目前的 Storage Provider。
+
+因此從 MinIO 遷移到 Cloudflare R2 時，不需要修改既有筆記內容。
 
 ```md
 ![Architecture](asset://01JABCDEF1234567890)
 ```
 
-`asset://` 會在顯示時解析到目前的 Storage Provider。
-
-因此從：
-
-```text
-MinIO
-```
-
-遷移到：
-
-```text
-Cloudflare R2
-```
-
-時，不需要修改既有筆記內容。
-
 ---
 
-# 版本與復原
+# ♻️ Version & Recovery
 
 GlyphQuire 規劃提供：
 
@@ -474,7 +433,7 @@ GlyphQuire 規劃提供：
 
 ---
 
-# 搜尋
+# 🔎 Search
 
 搜尋採用 PostgreSQL Hybrid Search：
 
@@ -499,22 +458,19 @@ GlyphQuire 規劃提供：
 
 ---
 
-# 技術架構
+# Tech Stack
 
 ## Frontend
 
-```text
 TypeScript
 Vue 3
 Vite
 Tailwind CSS
 Milkdown
 CodeMirror 6
-```
 
 ## Document Engine
 
-```text
 GFM Markdown
 remark-directive
 MDAST
@@ -522,22 +478,18 @@ GlyphQuire Semantic AST
 Schema Validator
 Serializer
 Document Migration
-```
 
 ## Backend
 
-```text
 Hono
 Hono RPC
 Better Auth
 Zod
 Drizzle ORM
 PostgreSQL
-```
 
 ## Infrastructure
 
-```text
 Graphile Worker
 MinIO
 Docker Compose
@@ -545,73 +497,41 @@ Structured Logging
 Metrics
 Backup
 Rate Limiting
-```
 
 ## Interactive Runtime
 
-```text
 Cross-origin iframe
 postMessage RPC
 p5.js
 Canvas
 Web Worker
-```
 
 ---
 
-# 快速開始
+# 🚀 Getting Started
 
 > GlyphQuire 目前仍在開發階段，以下為專案預定的本地開發流程。
 
 ## 環境需求
 
-建議安裝：
-
-```text
-Node.js 22+
-pnpm
-Docker
-Docker Compose
-```
-
-## 1. Clone
+建議安裝 Node.js 22+、pnpm、Docker、Docker Compose
 
 ```bash
-git clone <YOUR_GLYPHQUIRE_REPOSITORY_URL>
-cd glyphquire
-```
+git clone https://github.com/SoWiEee/GlyphQuire.git
+cd GlyphQuire
 
-## 2. 安裝依賴
-
-```bash
 pnpm install
-```
-
-## 3. 啟動基礎服務
-
-```bash
-docker compose up -d postgres minio
-```
-
-本地服務預計包含：
-
-```text
-PostgreSQL
-MinIO
-```
-
-## 4. 設定環境變數
-
-建立：
-
-```bash
+docker compose up -d postgres minio     # 本地服務預計包含 PostgreSQL、MinIO
 cp .env.example .env
+pnpm db:migrate
+pnpm dev
 ```
 
-至少需要設定：
+於 `.env` 至少需要設定：
 
 ```env
-DATABASE_URL=postgresql://glyphquire:glyphquire@localhost:5432/glyphquire
+DATABASE_URL=postgresql://glyphquire_app:glyphquire_app_dev@localhost:5432/glyphquire_dev
+MIGRATION_DATABASE_URL=postgresql://glyphquire_migration:glyphquire_migration_dev@localhost:5432/glyphquire_dev
 
 BETTER_AUTH_SECRET=change-me
 
@@ -623,26 +543,11 @@ S3_BUCKET=glyphquire
 
 請勿將正式環境 Secret commit 至 Git。
 
-## 5. 執行資料庫 Migration
+既有 Phase 0 PostgreSQL volume 必須先依照
+[Phase 0 to Phase 2 maintenance upgrade](docs/deployment/phase2-maintenance-upgrade.md)
+停機、備份並建立分離的 migration/runtime roles；不可直接讓新舊 API 同時連線。
 
-```bash
-pnpm db:migrate
-```
-
-## 6. 啟動開發環境
-
-```bash
-pnpm dev
-```
-
-預計的本地域名：
-
-```text
-http://app.localhost
-http://sandbox.localhost
-```
-
-Sandbox 使用獨立 origin，這是 GlyphQuire 的安全邊界之一。
+預計的本地域名 `http://app.localhost`、`http://sandbox.localhost`，Sandbox 使用獨立 origin，這是 GlyphQuire 的安全邊界之一。
 
 ---
 
@@ -701,39 +606,31 @@ GlyphQuire 的自訂能力分成三個層級。
 
 ## Level 1：Theme
 
-適合只想修改外觀的使用者。
+適合只想修改外觀的使用者。可調整的部分包含：
 
-可調整：
+- 顏色
+- 字型
+- 圓角
+- 間距
+- Heading Decoration
+- Quote Style
+- Callout Style
+- Animation
 
-```text
-顏色
-字型
-圓角
-間距
-Heading Decoration
-Quote Style
-Callout Style
-Animation
-```
-
-不需要修改 Markdown grammar。
+> 不需要修改 Markdown grammar。
 
 ---
 
 ## Level 2：Custom Block
 
-適合希望加入新內容類型的使用者。
+適合希望加入新內容類型的使用者。例如：
 
-例如：
-
-```text
-Rating
-Timeline
-Comparison
-Experiment Result
-Paper Summary
-Vocabulary Card
-```
+- Rating
+- Timeline
+- Comparison
+- Experiment Result
+- Paper Summary
+- Vocabulary Card
 
 Custom Block 採 declarative schema，不需要操作 Vue 內部實作。
 
@@ -743,19 +640,15 @@ Custom Block 採 declarative schema，不需要操作 Vue 內部實作。
 
 真正需要程式能力時才使用：
 
-```text
-p5.js
-Canvas
-Web Worker
-```
-
-程式執行環境與 GlyphQuire 主應用程式隔離。
+- p5.js
+- Canvas
+- Web Worker
 
 這個設計讓普通筆記維持簡單，同時保留進階使用者需要的程式化能力。
 
 ---
 
-# 專案結構
+# Repo Layout
 
 預計 monorepo：
 
@@ -783,8 +676,10 @@ glyphquire/
 │
 ├── infra/
 ├── tests/
-├── SPEC.md
-├── MARKDOWN_SPEC.md
+├── docs/
+│   ├── SPEC.md
+│   └── MARKDOWN_SPEC.md
+│
 └── README.md
 ```
 
@@ -812,7 +707,7 @@ Document Engine 與核心 Domain Logic 不應直接依賴 Cloudflare-specific AP
 
 ---
 
-# 後續規劃
+# Future Work
 
 目前規劃中的後期功能：
 
@@ -841,32 +736,6 @@ Document Engine 與核心 Domain Logic 不應直接依賴 Cloudflare-specific AP
 - Cloudflare Deployment Profile
 - Public Renderer / SEO Pre-rendering
 - Custom Domain
-
----
-
-# 規格文件
-
-系統工程架構：
-
-```text
-SPEC.md
-```
-
-Markdown 與 Custom Block 語法：
-
-```text
-MARKDOWN_SPEC.md
-```
-
-若兩份規格與實作發生衝突：
-
-```text
-MARKDOWN_SPEC.md
-→ Markdown grammar / AST / serialization
-
-SPEC.md
-→ Application / System Architecture
-```
 
 ---
 

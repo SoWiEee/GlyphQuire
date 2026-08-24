@@ -43,9 +43,7 @@ export function extractSpecVersion(tree: Root): {
   }
 
   const raw =
-    data && typeof data === "object"
-      ? (data as Record<string, unknown>)[SPEC_FIELD]
-      : undefined;
+    data && typeof data === "object" ? (data as Record<string, unknown>)[SPEC_FIELD] : undefined;
 
   if (raw === undefined) {
     return {

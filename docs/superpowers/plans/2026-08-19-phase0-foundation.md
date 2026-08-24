@@ -40,6 +40,7 @@ Each executor agent uses `isolation: "worktree"`. Main session merges each workt
 ### Task 1: Root Monorepo Configuration (W1)
 
 **Files:**
+
 - Create: `pnpm-workspace.yaml`
 - Create: `package.json` (root)
 - Create: `tsconfig.base.json`
@@ -48,6 +49,7 @@ Each executor agent uses `isolation: "worktree"`. Main session merges each workt
 - Modify: `.gitignore` (add dist, .env patterns if missing)
 
 **Interfaces:**
+
 - Consumes: nothing
 - Produces: root workspace config that all other tasks depend on; `tsconfig.base.json` that all packages/apps extend; lint/format config
 
@@ -204,6 +206,7 @@ git commit -m "feat: scaffold root monorepo configuration"
 ### Task 2: Packages — shared, api-contract, storage, queue (W2)
 
 **Files:**
+
 - Create: `packages/shared/package.json`
 - Create: `packages/shared/tsconfig.json`
 - Create: `packages/shared/src/index.ts`
@@ -220,6 +223,7 @@ git commit -m "feat: scaffold root monorepo configuration"
 - Create: `packages/queue/src/index.ts`
 
 **Interfaces:**
+
 - Consumes: `tsconfig.base.json` from Task 1
 - Produces:
   - `@glyphquire/shared`: `Result<T, E>`, `AppError`, `createEnvSchema()`, `type Env`
@@ -271,9 +275,7 @@ git commit -m "feat: scaffold root monorepo configuration"
 - [ ] **Step 3: Create `packages/shared/src/result.ts`**
 
 ```typescript
-export type Result<T, E = AppError> =
-  | { ok: true; value: T }
-  | { ok: false; error: E };
+export type Result<T, E = AppError> = { ok: true; value: T } | { ok: false; error: E };
 
 export interface AppError {
   code: string;
@@ -323,12 +325,7 @@ export const appEnvSchema = z.object({
 
 ```typescript
 export { type Result, type AppError, ok, err } from "./result.js";
-export {
-  databaseEnvSchema,
-  s3EnvSchema,
-  authEnvSchema,
-  appEnvSchema,
-} from "./env.js";
+export { databaseEnvSchema, s3EnvSchema, authEnvSchema, appEnvSchema } from "./env.js";
 ```
 
 - [ ] **Step 6: Create `packages/storage/package.json`**
@@ -373,11 +370,7 @@ export {
 
 ```typescript
 export interface StoragePort {
-  upload(
-    key: string,
-    data: Buffer | ReadableStream,
-    contentType: string,
-  ): Promise<StorageResult>;
+  upload(key: string, data: Buffer | ReadableStream, contentType: string): Promise<StorageResult>;
   download(key: string): Promise<StorageObject>;
   delete(key: string): Promise<void>;
   getSignedUrl(key: string, expiresIn: number): Promise<string>;
@@ -438,11 +431,7 @@ export interface StorageObject {
 
 ```typescript
 export interface QueuePort {
-  enqueue<T>(
-    taskName: string,
-    payload: T,
-    options?: EnqueueOptions,
-  ): Promise<string>;
+  enqueue<T>(taskName: string, payload: T, options?: EnqueueOptions): Promise<string>;
 }
 
 export interface EnqueueOptions {
@@ -537,6 +526,7 @@ git commit -m "feat: add shared, storage, queue, and api-contract packages"
 ### Task 3: Package — database (W3)
 
 **Files:**
+
 - Create: `packages/database/package.json`
 - Create: `packages/database/tsconfig.json`
 - Create: `packages/database/drizzle.config.ts`
@@ -547,6 +537,7 @@ git commit -m "feat: add shared, storage, queue, and api-contract packages"
 - Create: `packages/database/src/migrate.ts`
 
 **Interfaces:**
+
 - Consumes: `tsconfig.base.json` from Task 1; `@glyphquire/shared` for env schema from Task 2
 - Produces:
   - `@glyphquire/database`: `createDb(url: string)` returning Drizzle instance; `user`, `session`, `account`, `verification` table definitions and inferred types (`User`, `Session`, `Account`, `Verification`); `runMigrations(url: string)` function; re-exported schema
@@ -620,14 +611,7 @@ This schema matches Better Auth's expected table structure for PostgreSQL with D
 
 ```typescript
 import { relations } from "drizzle-orm";
-import {
-  pgTable,
-  text,
-  timestamp,
-  boolean,
-  index,
-  uniqueIndex,
-} from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, index, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -810,6 +794,7 @@ git commit -m "feat: add database package with Drizzle schema and migrations"
 ### Task 4: Package — auth (W4)
 
 **Files:**
+
 - Create: `packages/auth/package.json`
 - Create: `packages/auth/tsconfig.json`
 - Create: `packages/auth/src/index.ts`
@@ -817,6 +802,7 @@ git commit -m "feat: add database package with Drizzle schema and migrations"
 - Create: `packages/auth/src/client.ts`
 
 **Interfaces:**
+
 - Consumes: `@glyphquire/database` — `createDb()` and Drizzle instance type from Task 3
 - Produces:
   - `@glyphquire/auth`: `createAuth(db: Database)` returning Better Auth server instance; `createAuthClient(baseUrl: string)` returning Better Auth client
@@ -936,6 +922,7 @@ git commit -m "feat: add auth package with Better Auth server and client config"
 ### Task 5: App — api (W5)
 
 **Files:**
+
 - Create: `apps/api/package.json`
 - Create: `apps/api/tsconfig.json`
 - Create: `apps/api/src/env.ts`
@@ -948,6 +935,7 @@ git commit -m "feat: add auth package with Better Auth server and client config"
 - Modify: `packages/api-contract/src/index.ts` — wire up real AppType
 
 **Interfaces:**
+
 - Consumes: `@glyphquire/database` — `createDb()` from Task 3; `@glyphquire/auth` — `createAuth()` from Task 4; `@glyphquire/shared` — env schemas from Task 2
 - Produces:
   - Hono API server listening on `API_PORT`
@@ -1170,6 +1158,7 @@ git commit -m "feat: add Hono API server with health check and auth routes"
 ### Task 6: App — web (W6)
 
 **Files:**
+
 - Create: `apps/web/package.json`
 - Create: `apps/web/tsconfig.json`
 - Create: `apps/web/tsconfig.app.json`
@@ -1190,6 +1179,7 @@ git commit -m "feat: add Hono API server with health check and auth routes"
 - Create: `apps/web/env.d.ts`
 
 **Interfaces:**
+
 - Consumes: `tsconfig.base.json` from Task 1
 - Produces: Vue 3 SPA with routing, Tailwind CSS, placeholder pages, Pinia store setup
 
@@ -1231,9 +1221,7 @@ Note: This task runs in Wave 1, parallel with Tasks 2 and 7. It does NOT depend 
 ```json
 {
   "files": [],
-  "references": [
-    { "path": "./tsconfig.app.json" }
-  ]
+  "references": [{ "path": "./tsconfig.app.json" }]
 }
 ```
 
@@ -1263,11 +1251,7 @@ Note: This task runs in Wave 1, parallel with Tasks 2 and 7. It does NOT depend 
 
 declare module "*.vue" {
   import type { DefineComponent } from "vue";
-  const component: DefineComponent<
-    Record<string, unknown>,
-    Record<string, unknown>,
-    unknown
-  >;
+  const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>;
   export default component;
 }
 ```
@@ -1540,9 +1524,7 @@ import { RouterLink } from "vue-router";
 <template>
   <div class="max-w-2xl mx-auto py-12 text-center">
     <h2 class="text-2xl font-bold mb-4">歡迎使用 GlyphQuire</h2>
-    <p class="text-gray-600">
-      以 Markdown 為核心的可擴充筆記工作空間。
-    </p>
+    <p class="text-gray-600">以 Markdown 為核心的可擴充筆記工作空間。</p>
   </div>
 </template>
 ```
@@ -1588,6 +1570,7 @@ git commit -m "feat: add Vue 3 + Vite frontend shell with routing and placeholde
 ### Task 7: Docker Compose + CI + Environment Config (W7)
 
 **Files:**
+
 - Create: `docker-compose.yml`
 - Create: `.github/workflows/ci.yml`
 - Create: `.env.example`
@@ -1595,6 +1578,7 @@ git commit -m "feat: add Vue 3 + Vite frontend shell with routing and placeholde
 - Create: `tests/.gitkeep`
 
 **Interfaces:**
+
 - Consumes: root `package.json` scripts from Task 1
 - Produces: dev Docker services (postgres:5432, minio:9000/9001); CI workflow; env template
 

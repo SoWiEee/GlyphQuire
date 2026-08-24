@@ -11,8 +11,13 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "build": "tsc",
     "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@glyphquire/database": "workspace:*",
+    "drizzle-orm": "^0.44.0"
   },
   "devDependencies": {
     "typescript": "^5.8.0"

@@ -5,16 +5,21 @@
   "type": "module",
   "exports": {
     ".": {
-      "import": "./src/index.ts",
-      "types": "./src/index.ts"
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "build": "tsc",
     "clean": "rm -rf dist",
     "generate": "drizzle-kit generate",
     "migrate": "tsx src/migrate.ts",
+    "db:verify-baseline": "tsx src/migrations/verify-baseline.ts",
+    "db:migrate:test": "tsx src/migrate.ts",
     "studio": "drizzle-kit studio"
   },
   "dependencies": {

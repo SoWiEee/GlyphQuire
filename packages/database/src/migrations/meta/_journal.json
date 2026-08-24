@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1787283567498,
+      "tag": "0000_phase0_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787285441041,
+      "tag": "0001_phase2_workspaces",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787290738023,
+      "tag": "0002_phase2_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787371147882,
+      "tag": "0003_phase2_rate_limits",
+      "breakpoints": true
+    }
+  ]
+}

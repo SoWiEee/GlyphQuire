@@ -33,28 +33,29 @@
 
 Each P0 group has one primary detailed authority. Other touched chapters contain only their local interface fields plus an explicit `Detailed requirement: see §N` cross-reference; they must not restate the full invariant. Every primary authority contains the exact sentence `Production release priority and evidence: see §49 Production Readiness Contract`.
 
-| ID | Primary detailed authority | Cross-reference-only surfaces |
-|---|---|---|
-| P0-01 | `SPEC.md` §1 Purpose | header, §§2, 33–35, 43–45 |
-| P0-02 | `SPEC.md` §18 Autosave | §§17.3, 27.3 |
-| P0-03 | `SPEC.md` §16 Authorization | §§17, 20–21, 27 |
-| P0-04 | `SPEC.md` §19 Version History | §§7–8, 17.3, 22, 39; format grammar remains exclusively `MARKDOWN_SPEC.md` §§47–49 |
-| P0-05 | `SPEC.md` §32 Security Requirements | §15 |
-| P0-06 | `SPEC.md` §33 Backups and Data Lifecycle | §§21–22, 28 |
-| P0-07 | `SPEC.md` §37 Release and Migration Contract | §§34, 38–39, 44 |
-| P0-08 | `SPEC.md` §40 Performance Targets | §36 testing evidence |
-| P0-09 | `SPEC.md` §30 Operational Monitoring | §§28–29 |
-| P0-10 | `SPEC.md` §20 Full-text Search | §§27, 30 |
-| P0-11 | `SPEC.md` §24 API Design | §§25–26 |
-| P0-12 | `MARKDOWN_SPEC.md` §29 Declarative Custom Blocks | `SPEC.md` §11.3; `MARKDOWN_SPEC.md` §§30, 49 |
-| P0-13 | `SPEC.md` §10.3 Dirty State and Conflict Recovery | §17.3 |
-| P0-14 | `SPEC.md` §41 Accessibility and Browser Support | §§10, 36.5, 43 |
+| ID    | Primary detailed authority                        | Cross-reference-only surfaces                                                      |
+| ----- | ------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| P0-01 | `SPEC.md` §1 Purpose                              | header, §§2, 33–35, 43–45                                                          |
+| P0-02 | `SPEC.md` §18 Autosave                            | §§17.3, 27.3                                                                       |
+| P0-03 | `SPEC.md` §16 Authorization                       | §§17, 20–21, 27                                                                    |
+| P0-04 | `SPEC.md` §19 Version History                     | §§7–8, 17.3, 22, 39; format grammar remains exclusively `MARKDOWN_SPEC.md` §§47–49 |
+| P0-05 | `SPEC.md` §32 Security Requirements               | §15                                                                                |
+| P0-06 | `SPEC.md` §33 Backups and Data Lifecycle          | §§21–22, 28                                                                        |
+| P0-07 | `SPEC.md` §37 Release and Migration Contract      | §§34, 38–39, 44                                                                    |
+| P0-08 | `SPEC.md` §40 Performance Targets                 | §36 testing evidence                                                               |
+| P0-09 | `SPEC.md` §30 Operational Monitoring              | §§28–29                                                                            |
+| P0-10 | `SPEC.md` §20 Full-text Search                    | §§27, 30                                                                           |
+| P0-11 | `SPEC.md` §24 API Design                          | §§25–26                                                                            |
+| P0-12 | `MARKDOWN_SPEC.md` §29 Declarative Custom Blocks  | `SPEC.md` §11.3; `MARKDOWN_SPEC.md` §§30, 49                                       |
+| P0-13 | `SPEC.md` §10.3 Dirty State and Conflict Recovery | §17.3                                                                              |
+| P0-14 | `SPEC.md` §41 Accessibility and Browser Support   | §§10, 36.5, 43                                                                     |
 
 ---
 
 ### Task 1: Make Markdown Versions and Custom Blocks Self-Describing
 
 **Files:**
+
 - Modify: `docs/MARKDOWN_SPEC.md:1032`
 - Modify: `docs/MARKDOWN_SPEC.md:1482`
 - Modify: `docs/MARKDOWN_SPEC.md:1599`
@@ -62,6 +63,7 @@ Each P0 group has one primary detailed authority. Other touched chapters contain
 - Modify: `docs/MARKDOWN_SPEC.md:1748`
 
 **Interfaces:**
+
 - Consumes: the approved `glyphquire-spec` frontmatter and workspace-scoped immutable Custom Block decisions.
 - Produces: the normative persisted-format contract that `docs/SPEC.md` references during import, export, parsing, and migration.
 
@@ -123,7 +125,7 @@ Serializer conformance in §56 MUST state that canonical serialization emits or 
 
 Run:
 
-```bash
+`````bash
 rg -n "glyphquire-spec|legacy input|MUST NOT guess|published definition version|unsupported placeholder|Cross-workspace|outside P0|unsupported future|version mismatch" docs/MARKDOWN_SPEC.md
 ! rg -n "Markdown itself does not require visible frontmatter|Version comes from note metadata/database/import context" docs/MARKDOWN_SPEC.md
 rg -n -U '^## 53\. Example Document\n\n````md\n---\nglyphquire-spec: 1\n---' docs/MARKDOWN_SPEC.md
@@ -131,7 +133,7 @@ rg -n -U '^## 55\. Parser Conformance[\s\S]{0,3000}canonical valid documents[\s\
 rg -n -U '^## 56\. Serializer Conformance[\s\S]{0,3000}canonical serialization[\s\S]{0,300}glyphquire-spec' docs/MARKDOWN_SPEC.md
 rg -n -U '^## 59\. Required Fixture Categories[\s\S]{0,3000}missing-version-marker[\s\S]{0,300}invalid-version-non-positive[\s\S]{0,300}invalid-version-non-integer[\s\S]{0,300}unsupported-future-version[\s\S]{0,300}metadata-version-mismatch' docs/MARKDOWN_SPEC.md
 git diff --check -- docs/MARKDOWN_SPEC.md
-```
+`````
 
 Expected: the positive and four section-scoped searches succeed; the superseded-rule search succeeds because it finds no matches; `git diff --check` exits 0.
 
@@ -147,6 +149,7 @@ git commit -m "docs: define versioned markdown lifecycle"
 ### Task 2: Close Data, Tenant, Search, and API Invariants
 
 **Files:**
+
 - Modify: `docs/SPEC.md:308`
 - Modify: `docs/SPEC.md:479`
 - Modify: `docs/SPEC.md:582`
@@ -159,6 +162,7 @@ git commit -m "docs: define versioned markdown lifecycle"
 - Modify: `docs/SPEC.md:1739`
 
 **Interfaces:**
+
 - Consumes: Task 1’s `glyphquire-spec` and Custom Block format contract.
 - Produces: authoritative application invariants later summarized by the Production Readiness Contract.
 
@@ -257,6 +261,7 @@ git commit -m "docs: close production data invariants"
 ### Task 3: Define Security, Recovery, Release, and Operational Evidence
 
 **Files:**
+
 - Modify: `docs/SPEC.md:809`
 - Modify: `docs/SPEC.md:1329`
 - Modify: `docs/SPEC.md:1426`
@@ -267,6 +272,7 @@ git commit -m "docs: close production data invariants"
 - Modify: `docs/SPEC.md:1784`
 
 **Interfaces:**
+
 - Consumes: the approved external security baseline and P0 acceptance decisions.
 - Produces: subject-level operational requirements and named release evidence for Task 4’s checklist.
 
@@ -413,6 +419,7 @@ git commit -m "docs: define production release evidence"
 ### Task 4: Add the Central Production Readiness Contract
 
 **Files:**
+
 - Modify: `docs/SPEC.md:3`
 - Modify: `docs/SPEC.md:8`
 - Modify: `docs/SPEC.md:16`
@@ -423,6 +430,7 @@ git commit -m "docs: define production release evidence"
 - Modify: `docs/SPEC.md:2086`
 
 **Interfaces:**
+
 - Consumes: the authoritative subject requirements from Tasks 1–3.
 - Produces: one release checklist that classifies P0/P1 without duplicating subject-level prose.
 
@@ -493,11 +501,13 @@ git commit -m "docs: add production readiness contract"
 ### Task 5: Cross-Spec Consistency Verification
 
 **Files:**
+
 - Verify: `docs/SPEC.md`
 - Verify: `docs/MARKDOWN_SPEC.md`
 - Reference: `docs/superpowers/specs/2026-08-19-production-readiness-contract-design.md`
 
 **Interfaces:**
+
 - Consumes: the integrated specification changes from Tasks 1–4.
 - Produces: evidence that the completed specifications match every approved decision without contradictory authority.
 

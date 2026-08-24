@@ -8,9 +8,7 @@
       "runtime": "p5",
       "props": {
         "height": 400,
-        "network": [
-          "https://example.com"
-        ],
+        "network": ["https://example.com"],
         "autoplay": true
       },
       "source": "function setup() {\n  createCanvas(600, 400);\n}\n\nfunction draw() {\n  background(245);\n  circle(mouseX, mouseY, 30);\n}"

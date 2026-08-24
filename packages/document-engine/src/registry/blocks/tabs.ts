@@ -16,7 +16,12 @@ export const tabBlock: BlockDefinition<TabNode> = {
   fromDirective(node, context): TabNode {
     const props = tabSchema.parse(readAttributes(node));
     const container = node as ContainerDirective;
-    return { type: "tab", version: 1, props, children: context.transformChildren(container.children) };
+    return {
+      type: "tab",
+      version: 1,
+      props,
+      children: context.transformChildren(container.children),
+    };
   },
   toDirective(node, context): DirectiveMdastNode {
     return {
@@ -38,7 +43,8 @@ export const tabsBlock: BlockDefinition<TabsNode> = {
     const container = node as ContainerDirective;
     const transformed: BlockNode[] = context.transformChildren(container.children);
     const invalidChildren = transformed.filter(
-      (child) => child.type !== "tab" && !(child.type === "invalid-block" && child.originalType === "tab"),
+      (child) =>
+        child.type !== "tab" && !(child.type === "invalid-block" && child.originalType === "tab"),
     );
     const nominalInvalidChildren = transformed.filter(
       (child) => child.type === "invalid-block" && child.originalType === "tab",

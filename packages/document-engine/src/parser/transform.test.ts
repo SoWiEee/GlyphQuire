@@ -3,7 +3,8 @@ import { importLegacy, parse, parseWithMdastParser } from "./index.js";
 
 describe("parse", () => {
   it("transforms a callout directive to a semantic callout node", () => {
-    const source = '---\nglyphquire-spec: 1\n---\n\n:::callout{type="warning" title="T"}\nHi\n:::\n';
+    const source =
+      '---\nglyphquire-spec: 1\n---\n\n:::callout{type="warning" title="T"}\nHi\n:::\n';
     const r = parse(source);
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error("expected a valid v1 document");
@@ -41,21 +42,27 @@ describe("parse", () => {
   });
 
   it("distinguishes a missing required attribute from a present invalid value", () => {
-    const missing = parse('---\nglyphquire-spec: 1\n---\n\n:::toggle\nHidden\n:::\n');
+    const missing = parse("---\nglyphquire-spec: 1\n---\n\n:::toggle\nHidden\n:::\n");
     expect(missing.ok).toBe(true);
     if (!missing.ok) throw new Error("expected a recoverable v1 document");
-    expect(missing.diagnostics).toContainEqual(expect.objectContaining({
-      code: "ATTRIBUTE_REQUIRED",
-      attribute: "title",
-    }));
+    expect(missing.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "ATTRIBUTE_REQUIRED",
+        attribute: "title",
+      }),
+    );
 
-    const invalid = parse('---\nglyphquire-spec: 1\n---\n\n:::toggle{title="Details" open="yes"}\nHidden\n:::\n');
+    const invalid = parse(
+      '---\nglyphquire-spec: 1\n---\n\n:::toggle{title="Details" open="yes"}\nHidden\n:::\n',
+    );
     expect(invalid.ok).toBe(true);
     if (!invalid.ok) throw new Error("expected a recoverable v1 document");
-    expect(invalid.diagnostics).toContainEqual(expect.objectContaining({
-      code: "ATTRIBUTE_INVALID_VALUE",
-      attribute: "open",
-    }));
+    expect(invalid.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "ATTRIBUTE_INVALID_VALUE",
+        attribute: "open",
+      }),
+    );
     expect(invalid.diagnostics.some((item) => item.code === "ATTRIBUTE_REQUIRED")).toBe(false);
   });
 
@@ -78,12 +85,15 @@ describe("parse", () => {
     if (tabs.type !== "invalid-block") throw new Error("expected invalid tabs block");
     expect(tabs.originalType).toBe("tabs");
     expect(tabs.children.map((child) => child.type)).toEqual(["paragraph", "tab"]);
-    expect(tabs.children[0]).toMatchObject({ type: "paragraph", children: [{ type: "text", value: "Stray paragraph." }] });
+    expect(tabs.children[0]).toMatchObject({
+      type: "paragraph",
+      children: [{ type: "text", value: "Stray paragraph." }],
+    });
   });
 
   it("records an INVALID_CHILD diagnostic for a foreign child of columns and keeps the valid column", () => {
     const r = parse(
-      '---\nglyphquire-spec: 1\n---\n\n:::columns\nStray paragraph.\n\n:::column\nHi\n:::\n:::\n',
+      "---\nglyphquire-spec: 1\n---\n\n:::columns\nStray paragraph.\n\n:::column\nHi\n:::\n:::\n",
     );
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error("expected a recoverable v1 document");
@@ -96,20 +106,25 @@ describe("parse", () => {
     if (columns.type !== "invalid-block") throw new Error("expected invalid columns block");
     expect(columns.originalType).toBe("columns");
     expect(columns.children.map((child) => child.type)).toEqual(["paragraph", "column"]);
-    expect(columns.children[0]).toMatchObject({ type: "paragraph", children: [{ type: "text", value: "Stray paragraph." }] });
+    expect(columns.children[0]).toMatchObject({
+      type: "paragraph",
+      children: [{ type: "text", value: "Stray paragraph." }],
+    });
   });
 
   it("retains a schema-invalid nominal tab and its content without a second structural diagnostic", () => {
     const r = parse(
-      '---\nglyphquire-spec: 1\n---\n\n:::tabs\n:::tab\nSentinel tab content.\n:::\n:::\n',
+      "---\nglyphquire-spec: 1\n---\n\n:::tabs\n:::tab\nSentinel tab content.\n:::\n:::\n",
     );
 
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error("expected a recoverable v1 document");
-    expect(r.diagnostics).toContainEqual(expect.objectContaining({
-      code: "ATTRIBUTE_REQUIRED",
-      attribute: "title",
-    }));
+    expect(r.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "ATTRIBUTE_REQUIRED",
+        attribute: "title",
+      }),
+    );
     expect(r.diagnostics.filter((d) => d.code === "INVALID_CHILD")).toHaveLength(0);
     expect(r.diagnostics.filter((d) => d.code === "INVALID_PARENT")).toHaveLength(0);
     const tabs = r.document.children[0];
@@ -120,21 +135,23 @@ describe("parse", () => {
       type: "invalid-block",
       originalType: "tab",
       directiveType: "container",
-      children: [{ type: "paragraph", children: [{ type: "text", value: "Sentinel tab content." }] }],
+      children: [
+        { type: "paragraph", children: [{ type: "text", value: "Sentinel tab content." }] },
+      ],
     });
   });
 
   it("retains a leaf-form nominal column without adding structural diagnostics", () => {
-    const r = parse(
-      '---\nglyphquire-spec: 1\n---\n\n::::columns{count="2"}\n::column\n::::\n',
-    );
+    const r = parse('---\nglyphquire-spec: 1\n---\n\n::::columns{count="2"}\n::column\n::::\n');
 
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error("expected a recoverable v1 document");
-    expect(r.diagnostics).toContainEqual(expect.objectContaining({
-      code: "DIRECTIVE_KIND_MISMATCH",
-      severity: "error",
-    }));
+    expect(r.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "DIRECTIVE_KIND_MISMATCH",
+        severity: "error",
+      }),
+    );
     expect(r.diagnostics.filter((d) => d.code === "INVALID_CHILD")).toHaveLength(0);
     expect(r.diagnostics.filter((d) => d.code === "INVALID_PARENT")).toHaveLength(0);
     const columns = r.document.children[0];
@@ -162,11 +179,15 @@ describe("parse", () => {
     if (invalid.type !== "invalid-block") throw new Error("expected invalid directive");
     expect(invalid.directiveType).toBe("leaf");
     expect(invalid.originalType).toBe("callout");
-    expect(invalid.errors).toContainEqual(expect.objectContaining({ code: "DIRECTIVE_KIND_MISMATCH" }));
-    expect(r.diagnostics).toContainEqual(expect.objectContaining({
-      code: "DIRECTIVE_KIND_MISMATCH",
-      severity: "error",
-    }));
+    expect(invalid.errors).toContainEqual(
+      expect.objectContaining({ code: "DIRECTIVE_KIND_MISMATCH" }),
+    );
+    expect(r.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "DIRECTIVE_KIND_MISMATCH",
+        severity: "error",
+      }),
+    );
   });
 
   it("emits DIRECTIVE_UNKNOWN exactly once for an unknown directive nested in a known block", () => {
@@ -237,7 +258,16 @@ describe("parse", () => {
   });
 
   it("rejects a malformed opener on a bare-CR continuation line", () => {
-    const source = ["---", "glyphquire-spec: 1", "---", "", "plain", ':::callout{type="warning"', "body", ""].join("\r");
+    const source = [
+      "---",
+      "glyphquire-spec: 1",
+      "---",
+      "",
+      "plain",
+      ':::callout{type="warning"',
+      "body",
+      "",
+    ].join("\r");
     const result = parse(source);
 
     expect(result.ok).toBe(false);

@@ -97,9 +97,7 @@ describe("fixture contract", () => {
       );
 
       writeFileSync(join(caseDir, "expected.ast.json"), JSON.stringify(result.document));
-      expect(() => assertFixtureResult(caseDir, input, result)).toThrow(
-        "missing expected.md",
-      );
+      expect(() => assertFixtureResult(caseDir, input, result)).toThrow("missing expected.md");
     } finally {
       rmSync(caseDir, { recursive: true, force: true });
     }

@@ -1,10 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createRegistry } from "./builtins.js";
-import {
-  BlockRegistry,
-  registerBuiltin,
-  RESERVED_NAMES,
-} from "./registry.js";
+import { BlockRegistry, registerBuiltin, RESERVED_NAMES } from "./registry.js";
 import { calloutBlock } from "./blocks/callout.js";
 
 describe("registry", () => {
@@ -93,19 +89,13 @@ describe("registry", () => {
     }
 
     expect(() =>
-      Reflect.apply(registry.register, registry, [
-        { ...calloutBlock },
-        Symbol("fake-capability"),
-      ]),
+      Reflect.apply(registry.register, registry, [{ ...calloutBlock }, Symbol("fake-capability")]),
     ).toThrow(/reserved/);
 
     const leakedCapability = observedArguments.find((args) => args.length > 1)?.[1];
     if (leakedCapability !== undefined) {
       expect(() =>
-        Reflect.apply(registry.register, registry, [
-          { ...calloutBlock },
-          leakedCapability,
-        ]),
+        Reflect.apply(registry.register, registry, [{ ...calloutBlock }, leakedCapability]),
       ).toThrow(/reserved/);
     }
   });

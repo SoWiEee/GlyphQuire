@@ -1,4 +1,10 @@
-// API client — will be wired to @glyphquire/api-contract after Task 5.
-// For now, export a placeholder base URL config.
+import {
+  noteApiContract as sharedNoteApiContract,
+  saveNoteInputSchema as sharedSaveNoteInputSchema,
+} from "@glyphquire/api-contract";
+
+export type { SaveNoteInput } from "@glyphquire/api-contract";
 
 export const API_BASE_URL = "/api";
+export const noteApiContract = sharedNoteApiContract;
+export const saveNoteInputSchema = sharedSaveNoteInputSchema;

@@ -160,10 +160,15 @@ Canonical syntax：
 
 ```md
 # H1
+
 ## H2
+
 ### H3
+
 #### H4
+
 ##### H5
+
 ###### H6
 ```
 
@@ -379,7 +384,7 @@ String 中 double quote 與 backslash MUST escaping。
 Conceptually：
 
 ```text
-\" 
+\"
 \\
 ```
 
@@ -599,25 +604,16 @@ Mapping MUST 經 Component Registry。
 Conceptual interface：
 
 ```ts
-interface BlockDefinition<
-  TProps,
-  TNode extends BlockNode
-> {
+interface BlockDefinition<TProps, TNode extends BlockNode> {
   name: string;
   version: number;
   kind: "container" | "leaf" | "text";
 
   schema: Schema<TProps>;
 
-  fromDirective(
-    node: DirectiveMdastNode,
-    context: TransformContext
-  ): TNode;
+  fromDirective(node: DirectiveMdastNode, context: TransformContext): TNode;
 
-  toDirective(
-    node: TNode,
-    context: SerializeContext
-  ): DirectiveMdastNode;
+  toDirective(node: TNode, context: SerializeContext): DirectiveMdastNode;
 
   capabilities: BlockCapability[];
 }
@@ -759,7 +755,7 @@ Hidden **Markdown** content.
 
 - Item A
 - Item B
-:::
+  :::
 ```
 
 Properties：
@@ -879,20 +875,24 @@ Rules：
 
 Canonical syntax SHOULD use directive form：
 
-```md
+````md
 :::p5{height="400"}
+
 ```js
 function setup() {
-  createCanvas(600, 400)
+  createCanvas(600, 400);
 }
 
 function draw() {
-  background(245)
-  circle(mouseX, mouseY, 30)
+  background(245);
+  circle(mouseX, mouseY, 30);
 }
 ```
+````
+
 :::
-```
+
+`````
 
 This explicit wrapper is preferred over assigning special behavior to every fenced code block because runtime metadata belongs to the semantic block.
 
@@ -901,8 +901,9 @@ A shorthand MAY be supported by editor import:
 ````md
 ```p5
 ...
-```
-````
+`````
+
+`````
 
 Serializer SHOULD normalize shorthand to the canonical directive form if runtime metadata is required.
 
@@ -1695,7 +1696,7 @@ function draw() {
 }
 ```
 :::
-````
+`````
 
 ---
 

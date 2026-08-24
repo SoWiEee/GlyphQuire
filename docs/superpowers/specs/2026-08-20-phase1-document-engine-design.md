@@ -50,7 +50,7 @@ Copied from the governing specs; every task inherits these.
 - **Serialize via the directive serializer**, never string concatenation of
   directive/attribute text. (§12, §34)
 - **Round-trip invariant** (§36): `semanticNormalize(parse(M)) ===
-  semanticNormalize(parse(serialize(parse(M))))`. Byte-identical output is not
+semanticNormalize(parse(serialize(parse(M))))`. Byte-identical output is not
   required.
 - **Spec version marker** `glyphquire-spec` (positive integer) lives in YAML
   frontmatter; `parse` reads it, serialize retains it, unsupported future
@@ -61,16 +61,16 @@ Copied from the governing specs; every task inherits these.
 
 Chosen: the **unified/remark ecosystem** (ADR-01/02, refined 2026-08-20).
 
-| Concern | Library |
-|---------|---------|
-| Markdown → MDAST | `unified` + `remark-parse` |
-| GFM (tables, strikethrough, task lists, autolinks, footnotes) | `remark-gfm` |
-| Generic directives (`:::name{attrs}`) | `remark-directive` (+ `mdast-util-directive`) |
-| Frontmatter (`glyphquire-spec` YAML) | `remark-frontmatter` |
-| YAML value parsing | `yaml` |
-| MDAST → Markdown | `mdast-util-to-markdown` with GFM/directive/frontmatter extensions |
-| Prop schema validation | `zod` (existing project dependency) |
-| Tests | `vitest` |
+| Concern                                                       | Library                                                            |
+| ------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Markdown → MDAST                                              | `unified` + `remark-parse`                                         |
+| GFM (tables, strikethrough, task lists, autolinks, footnotes) | `remark-gfm`                                                       |
+| Generic directives (`:::name{attrs}`)                         | `remark-directive` (+ `mdast-util-directive`)                      |
+| Frontmatter (`glyphquire-spec` YAML)                          | `remark-frontmatter`                                               |
+| YAML value parsing                                            | `yaml`                                                             |
+| MDAST → Markdown                                              | `mdast-util-to-markdown` with GFM/directive/frontmatter extensions |
+| Prop schema validation                                        | `zod` (existing project dependency)                                |
+| Tests                                                         | `vitest`                                                           |
 
 Rejected alternative: hand-writing micromark extensions. Higher cost, reinvents
 the directive/attribute tokenizer the spec already assumes, and forfeits the
@@ -164,12 +164,12 @@ interface ValidationResult {
 }
 
 interface MigrationResult {
-  markdown: string;             // migrated output, or original on failure
+  markdown: string; // migrated output, or original on failure
   ok: boolean;
   fromVersion: number;
   toVersion: number;
   diagnostics: DocumentDiagnostic[];
-  snapshot?: string;            // pre-migration source when destructive
+  snapshot?: string; // pre-migration source when destructive
 }
 
 interface DocumentEngine {
@@ -182,7 +182,7 @@ interface DocumentEngine {
 }
 
 function createDocumentEngine(registry?: BlockRegistry): DocumentEngine;
-function createRegistry(): BlockRegistry;   // default registry with all built-ins
+function createRegistry(): BlockRegistry; // default registry with all built-ins
 ```
 
 `parse` reads `glyphquire-spec` from canonical frontmatter. Missing, malformed,
@@ -207,11 +207,24 @@ interface NotebookDocument {
 }
 
 type BlockNode =
-  | ParagraphNode | HeadingNode | QuoteNode | ListNode | CodeNode
-  | TableNode | ImageNode | ThematicBreakNode
-  | CalloutNode | StickyNode | ToggleNode | TabsNode | TabNode
-  | ColumnsNode | ColumnNode | RuntimeNode
-  | UnknownDirectiveNode | InvalidBlockNode;
+  | ParagraphNode
+  | HeadingNode
+  | QuoteNode
+  | ListNode
+  | CodeNode
+  | TableNode
+  | ImageNode
+  | ThematicBreakNode
+  | CalloutNode
+  | StickyNode
+  | ToggleNode
+  | TabsNode
+  | TabNode
+  | ColumnsNode
+  | ColumnNode
+  | RuntimeNode
+  | UnknownDirectiveNode
+  | InvalidBlockNode;
 ```
 
 The AST MUST NOT contain Tailwind classes, Vue instances, DOM nodes,
@@ -228,8 +241,8 @@ interface BlockDefinition<TNode extends BlockNode = BlockNode> {
   name: string;
   version: number;
   kind: "container" | "leaf" | "text";
-  schema: ZodType;                                  // prop schema (§11.5 coercion)
-  capabilities: BlockCapability[];                  // §44
+  schema: ZodType; // prop schema (§11.5 coercion)
+  capabilities: BlockCapability[]; // §44
   fromDirective(node: DirectiveMdastNode, ctx: TransformContext): TNode;
   toDirective(node: TNode, ctx: SerializeContext): DirectiveMdastNode;
 }
@@ -237,14 +250,14 @@ interface BlockDefinition<TNode extends BlockNode = BlockNode> {
 
 Built-in definitions and their capabilities:
 
-| Block | Directive | Capability | Notes |
-|-------|-----------|-----------|-------|
-| Callout | `callout` | `static` | type enum, optional title/icon (§20) |
-| Sticky | `sticky` | `static` | tone enum, optional title (§21) |
-| Toggle | `toggle` | `interactive-ui` | title required non-empty, open default false (§22) |
-| Tabs/Tab | `tabs`/`tab` | `interactive-ui` | tab is direct child of tabs; ≥1 tab (§23) |
-| Columns/Column | `columns`/`column` | `static` | count 2–4, gap enum (§24) |
-| Runtime | `p5`/`canvas` | `sandbox-runtime` | preserves source string; no execution (§25–26) |
+| Block          | Directive          | Capability        | Notes                                              |
+| -------------- | ------------------ | ----------------- | -------------------------------------------------- |
+| Callout        | `callout`          | `static`          | type enum, optional title/icon (§20)               |
+| Sticky         | `sticky`           | `static`          | tone enum, optional title (§21)                    |
+| Toggle         | `toggle`           | `interactive-ui`  | title required non-empty, open default false (§22) |
+| Tabs/Tab       | `tabs`/`tab`       | `interactive-ui`  | tab is direct child of tabs; ≥1 tab (§23)          |
+| Columns/Column | `columns`/`column` | `static`          | count 2–4, gap enum (§24)                          |
+| Runtime        | `p5`/`canvas`      | `sandbox-runtime` | preserves source string; no execution (§25–26)     |
 
 Reserved names (§19): `callout, sticky, toggle, tabs, tab, columns, column, p5,
 canvas`. Public registry registration rejects these reserved names; non-reserved
@@ -340,7 +353,7 @@ theme tokens, runtime source, opaque asset IDs.
   canonical `expected.md`; accepted fixtures retain normalized AST and
   canonical Markdown assertions.
 - **Round-trip** (§36): `semanticNormalize(parse(M)) ===
-  semanticNormalize(parse(serialize(parse(M))))` across all fixtures.
+semanticNormalize(parse(serialize(parse(M))))` across all fixtures.
 - **Property tests** (§60): parse never crashes on arbitrary UTF-8;
   `serialize(parse(valid))` preserves semantics; `migrate(v1→v1)` is identity;
   migrate output is parseable; unknown directives survive parse/serialize.
