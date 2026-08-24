@@ -2,10 +2,20 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
+import { MAX_MARKDOWN_BYTES } from "@glyphquire/api-contract";
 import { createDocumentEngine, semanticNormalize } from "@glyphquire/document-engine";
+import { editorViewCtx, type Editor } from "@milkdown/kit/core";
+import { Fragment, Slice } from "@milkdown/kit/prose/model";
+import { AllSelection } from "@milkdown/kit/prose/state";
+import type { EditorView } from "@milkdown/kit/prose/view";
 import VisualEditor from "../../components/visual/VisualEditor.vue";
 import { MilkdownVisualAdapter } from "./MilkdownVisualAdapter.js";
-import { resolveVisualUrl } from "./schema.js";
+import {
+  blockWarningAttrsFromSource,
+  GLYPHQUIRE_FRONTMATTER,
+  inlineWarningAttrsFromSource,
+  resolveVisualUrl,
+} from "./schema.js";
 
 const engine = createDocumentEngine();
 const fixturesRoot = resolve(process.cwd(), "../../packages/document-engine/tests/fixtures");
@@ -27,6 +37,40 @@ async function mountedAdapter(markdown?: string) {
 
 async function nextListenerFlush(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 250));
+}
+
+function proseMirrorView(adapter: MilkdownVisualAdapter): EditorView {
+  const editor = (adapter as unknown as { editor: Editor | undefined }).editor;
+  if (!editor) throw new Error("expected a ready Milkdown editor");
+  return editor.action((ctx) => ctx.get(editorViewCtx));
+}
+
+function serializeAllForClipboard(adapter: MilkdownVisualAdapter): {
+  readonly html: string;
+  readonly text: string;
+} {
+  const view = proseMirrorView(adapter);
+  view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)));
+  const serialized = view.serializeForClipboard(view.state.selection.content());
+  return { html: serialized.dom.innerHTML, text: serialized.text };
+}
+
+function warningNodeCount(adapter: MilkdownVisualAdapter): number {
+  let count = 0;
+  proseMirrorView(adapter).state.doc.descendants((node) => {
+    if (node.type.name === "gq_inline_warning" || node.type.name === "gq_warning") count += 1;
+  });
+  return count;
+}
+
+function warningMarkerHtml(kind: "inline" | "block", source: string): string {
+  const element = document.createElement(kind === "inline" ? "span" : "section");
+  element.setAttribute(
+    kind === "inline" ? "data-glyphquire-inline-warning" : "data-glyphquire-warning",
+    "escaped",
+  );
+  element.textContent = source;
+  return element.outerHTML;
 }
 
 describe("MilkdownVisualAdapter", () => {
@@ -210,6 +254,193 @@ describe("MilkdownVisualAdapter", () => {
     expect(after.ok).toBe(true);
     if (!after.ok) throw new Error("expected accepted visual inline directive output");
     expect(semanticNormalize(after.document)).toEqual(semanticNormalize(before.document));
+  });
+
+  it("round-trips escaped inline and block warnings through the real clipboard DOM", async () => {
+    const markdown = [
+      "---",
+      "glyphquire-spec: 1",
+      "---",
+      "",
+      'A :future[child]{a="1"} B',
+      "",
+      ':::future{x="1"}',
+      "Keep **every** child.",
+      ":::",
+      "",
+    ].join("\n");
+    const source = await mountedAdapter(markdown);
+    const target = await mountedAdapter();
+    cleanups.push(
+      () => source.adapter.destroy(),
+      () => target.adapter.destroy(),
+    );
+
+    const clipboard = serializeAllForClipboard(source.adapter);
+    expect(clipboard.html).toContain("data-glyphquire-inline-warning");
+    expect(clipboard.html).toContain("data-glyphquire-warning");
+    expect(clipboard.text).toContain(':future[child]{a="1"}');
+    expect(clipboard.text).toContain(':::future{x="1"}');
+    expect(proseMirrorView(target.adapter).pasteHTML(clipboard.html)).toBe(true);
+
+    const before = engine.parse(markdown);
+    const after = engine.parse(target.adapter.getMarkdown());
+    expect(before.ok).toBe(true);
+    expect(after.ok).toBe(true);
+    if (!before.ok || !after.ok) throw new Error("expected accepted clipboard documents");
+    expect(semanticNormalize(after.document)).toEqual(semanticNormalize(before.document));
+  });
+
+  it("rejects forged warning markers without creating serializer-poisoning nodes", async () => {
+    (globalThis as Record<string, unknown>).__glyphquireRuntimeSentinel = 0;
+    const malformedMarkers = [
+      '<span data-glyphquire-inline-warning="escaped"></span>',
+      '<section data-glyphquire-warning="escaped"></section>',
+      '<span data-glyphquire-inline-warning>:future[child]{a="1"}</span>',
+      "<section data-glyphquire-warning>:::future\nchild\n:::\n</section>",
+      '<span data-glyphquire-inline-warning="forged">:future[child]{a="1"}</span>',
+      '<section data-glyphquire-warning="forged">:::future\nchild\n:::\n</section>',
+      '<span data-glyphquire-inline-warning="escaped" data-directive-json="{]">not a directive</span>',
+      '<section data-glyphquire-warning="escaped" data-semantic-json="{]">not a block</section>',
+      warningMarkerHtml("inline", ':::future{x="1"}\nchild\n:::\n'),
+      warningMarkerHtml("block", ':future[child]{a="1"}'),
+      warningMarkerHtml("inline", ':future[child]{a="1"}\n'),
+      warningMarkerHtml("block", ":::future\nchild\n:::"),
+      '<span data-glyphquire-inline-warning="escaped"><b>:future[child]{a="1"}</b></span>',
+      '<section data-glyphquire-warning="escaped"><script>globalThis.__glyphquireRuntimeSentinel = 1</script></section>',
+      warningMarkerHtml("inline", "é".repeat(MAX_MARKDOWN_BYTES / 2 + 1)),
+      warningMarkerHtml("block", "x".repeat(MAX_MARKDOWN_BYTES + 1)),
+    ];
+
+    for (const marker of malformedMarkers) {
+      const { adapter } = await mountedAdapter();
+      cleanups.push(() => adapter.destroy());
+      expect(() => proseMirrorView(adapter).pasteHTML(marker)).not.toThrow();
+      expect(warningNodeCount(adapter)).toBe(0);
+      expect(() => adapter.getMarkdown()).not.toThrow();
+      expect((globalThis as Record<string, unknown>).__glyphquireRuntimeSentinel).toBe(0);
+      adapter.destroy();
+    }
+  });
+
+  it("reconstructs canonical pasted warning source without trusting DOM JSON attributes", async () => {
+    const sentinel = vi.fn();
+    (globalThis as Record<string, unknown>).__glyphquireRuntimeSentinel = sentinel;
+    const cases = [
+      {
+        kind: "inline" as const,
+        source: ':future[child]{a="1" handler="<img src=x onerror=boom()>"}',
+      },
+      {
+        kind: "block" as const,
+        source: [
+          ':::future{x="1" handler="<script>boom()</script>"}',
+          "Keep **every** child.",
+          "<script>globalThis.__glyphquireRuntimeSentinel()</script>",
+          ":::",
+          "",
+        ].join("\n"),
+      },
+    ];
+
+    for (const item of cases) {
+      const expected = engine.parse(`${GLYPHQUIRE_FRONTMATTER}${item.source}`);
+      expect(expected.ok).toBe(true);
+      if (!expected.ok) throw new Error("expected accepted canonical attacker source");
+      const canonicalBody = engine
+        .serialize(expected.document)
+        .slice(GLYPHQUIRE_FRONTMATTER.length);
+      const canonicalSource =
+        item.kind === "inline" ? canonicalBody.replace(/\n+$/, "") : canonicalBody;
+      const container = document.createElement(item.kind === "inline" ? "span" : "section");
+      container.setAttribute(
+        item.kind === "inline" ? "data-glyphquire-inline-warning" : "data-glyphquire-warning",
+        "escaped",
+      );
+      container.setAttribute("data-semantic-json", '{"type":"script","value":"forged"}');
+      container.setAttribute("data-source", "forged");
+      container.setAttribute("onmouseover", "globalThis.__glyphquireRuntimeSentinel()");
+      container.textContent = canonicalSource;
+
+      const { adapter, host } = await mountedAdapter();
+      cleanups.push(() => adapter.destroy());
+      expect(proseMirrorView(adapter).pasteHTML(container.outerHTML)).toBe(true);
+      expect(warningNodeCount(adapter)).toBe(1);
+      expect(
+        host.querySelector("script, svg, iframe, [onerror], [onload], [onmouseover]"),
+      ).toBeNull();
+      expect(sentinel).not.toHaveBeenCalled();
+
+      const actual = engine.parse(adapter.getMarkdown());
+      expect(actual.ok).toBe(true);
+      if (!actual.ok) throw new Error("expected accepted pasted warning source");
+      expect(semanticNormalize(actual.document)).toEqual(semanticNormalize(expected.document));
+      adapter.destroy();
+    }
+  });
+
+  it("fails closed when invalid warning attrs are inserted or exported programmatically", async () => {
+    const { adapter } = await mountedAdapter();
+    cleanups.push(() => adapter.destroy());
+    const view = proseMirrorView(adapter);
+    const inlineType = view.state.schema.nodes.gq_inline_warning;
+    const blockType = view.state.schema.nodes.gq_warning;
+    if (!inlineType || !blockType) throw new Error("expected warning node schemas");
+
+    const missingInline = inlineType.create();
+    const missingBlock = blockType.create();
+    expect(() => missingInline.check()).toThrow();
+    expect(() => missingBlock.check()).toThrow();
+
+    const invalidInline = inlineType.create({ directiveJson: "", source: "" });
+    const invalidBlock = blockType.create({
+      semanticJson: "{}",
+      source: "",
+      label: "Unsupported block",
+    });
+    expect(() => invalidInline.check()).toThrow();
+    expect(() => invalidBlock.check()).toThrow();
+    expect(() =>
+      view.serializeForClipboard(new Slice(Fragment.from(invalidInline), 0, 0)),
+    ).toThrow();
+    expect(() =>
+      view.serializeForClipboard(new Slice(Fragment.from(invalidBlock), 0, 0)),
+    ).toThrow();
+
+    const before = view.state.doc.toJSON();
+    view.dispatch(view.state.tr.replaceSelectionWith(invalidInline));
+    expect(view.state.doc.toJSON()).toEqual(before);
+    view.dispatch(view.state.tr.replaceSelectionWith(invalidBlock));
+    expect(view.state.doc.toJSON()).toEqual(before);
+    expect(() => adapter.getMarkdown()).not.toThrow();
+
+    const inlineOne = inlineWarningAttrsFromSource(":future[one]");
+    const inlineTwo = inlineWarningAttrsFromSource(":future[two]");
+    const blockOne = blockWarningAttrsFromSource(":::future\none\n:::\n");
+    const blockTwo = blockWarningAttrsFromSource(":::other\ntwo\n:::\n");
+    if (!inlineOne || !inlineTwo || !blockOne || !blockTwo) {
+      throw new Error("expected canonical warning attrs");
+    }
+    const mismatchedInline = inlineType.create({
+      directiveJson: inlineOne.directiveJson,
+      source: inlineTwo.source,
+    });
+    const mismatchedBlock = blockType.create({
+      semanticJson: blockOne.semanticJson,
+      source: blockTwo.source,
+      label: blockOne.label,
+    });
+    expect(() => mismatchedInline.check()).not.toThrow();
+    expect(() => mismatchedBlock.check()).not.toThrow();
+    expect(() =>
+      view.serializeForClipboard(new Slice(Fragment.from(mismatchedInline), 0, 0)),
+    ).toThrow();
+    expect(() =>
+      view.serializeForClipboard(new Slice(Fragment.from(mismatchedBlock), 0, 0)),
+    ).toThrow();
+    view.dispatch(view.state.tr.replaceSelectionWith(mismatchedInline));
+    view.dispatch(view.state.tr.replaceSelectionWith(mismatchedBlock));
+    expect(view.state.doc.toJSON()).toEqual(before);
   });
 
   it("removes hostile rendered URL sinks and hardens safe external links", async () => {
