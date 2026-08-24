@@ -5,6 +5,7 @@ import {
   NoteConflictError,
   NoteOfflineError,
   NoteRequestValidationError,
+  NoteClientConfigurationError,
 } from "./NoteClient.js";
 
 const NOTE_ID = "44444444-4444-4444-8444-444444444444";
@@ -69,6 +70,41 @@ function noteVersionSummaryFixture(overrides: Partial<Record<string, unknown>> =
 }
 
 describe("NoteClient", () => {
+  it("allows an empty or canonical root-relative deployment prefix", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, noteResultFixture()));
+    const client = new NoteClient({ baseUrl: "/glyphquire", fetchImpl });
+
+    await client.getNote(NOTE_ID);
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      `/glyphquire/api/v1/notes/${NOTE_ID}`,
+      expect.objectContaining({ credentials: "same-origin" }),
+    );
+  });
+
+  it.each([
+    "https://attacker.example",
+    "https://glyphquire.example@attacker.example",
+    "//attacker.example",
+    "http:attacker.example",
+    "@attacker.example",
+    "\\\\attacker.example",
+    "/\\attacker.example",
+    "/%5c%5cattacker.example",
+    "/%2f%2fattacker.example",
+    "/api//attacker.example",
+    "/api/../attacker.example",
+    "/api?next=//attacker.example",
+    "/api#@attacker.example",
+    "/api/",
+    "/api\n/attacker.example",
+  ])("rejects unsafe API base %j before any Markdown reaches transport", (baseUrl) => {
+    const fetchImpl = vi.fn();
+
+    expect(() => new NoteClient({ baseUrl, fetchImpl })).toThrow(NoteClientConfigurationError);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("saves content via PUT to the note's content endpoint and returns the parsed result", async () => {
     const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
       expect(url).toBe(`/api/v1/notes/${NOTE_ID}/content`);

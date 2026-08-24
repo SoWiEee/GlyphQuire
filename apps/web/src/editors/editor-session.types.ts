@@ -10,6 +10,12 @@ import type { DraftKey, DraftRecord, DraftStore } from "../persistence/DraftStor
 import type { EditorLifecycleAdapter } from "./EditorLifecycleController.js";
 
 export type EditorSessionMode = "visual" | "source" | "split";
+export type DraftDurability = "persisted" | "pending" | "memory-only-error";
+
+export interface DraftDurabilityError {
+  readonly code: "DRAFT_PERSISTENCE_FAILED";
+  readonly message: string;
+}
 
 /**
  * Everything a UI layer needs to render the current editing surface: which
@@ -29,6 +35,9 @@ export interface EditorSessionState {
   readonly readOnly: boolean;
   /** Compatibility alias for the Task 8 workbench while it adopts readOnly. */
   readonly isReadOnly: boolean;
+  /** Whether recoverable editor material is safely reflected in local storage. */
+  readonly draftDurability: DraftDurability;
+  readonly draftDurabilityError: DraftDurabilityError | null;
   readonly autosave: AutosaveState;
 }
 

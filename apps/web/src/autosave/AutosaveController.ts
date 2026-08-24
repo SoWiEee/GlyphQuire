@@ -186,13 +186,16 @@ export class AutosaveController {
   recoverPendingAttempt(
     recovered: AutosavePendingAttempt,
     recoveredConflict: NoteConflict | null = null,
+    mintFreshOperationId = false,
   ): void {
     if (this.disposed || this.status !== "clean") return;
     const attempt = {
-      operationId: canonicalUuidSchema.parse(recovered.operationId),
+      operationId: mintFreshOperationId
+        ? canonicalUuidSchema.parse(this.generateOperationId())
+        : canonicalUuidSchema.parse(recovered.operationId),
       baseRevision: revisionSchema.parse(recovered.baseRevision),
       markdown: markdownSchema.parse(recovered.markdown),
-      sent: true,
+      sent: !mintFreshOperationId,
     };
     if (recoveredConflict) {
       const conflict = noteConflictSchema.parse(recoveredConflict);

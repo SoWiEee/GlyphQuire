@@ -4,15 +4,15 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { CodeMirrorSourceAdapter } from "@/editors/source/CodeMirrorSourceAdapter.js";
-import type { EditorAdapter } from "@/editors/types.js";
+import { CodeMirrorSourceAdapter } from "../../editors/source/CodeMirrorSourceAdapter.js";
+import type { EditorAdapter } from "../../editors/types.js";
 
 const props = withDefaults(
   defineProps<{
     markdown: string;
     readOnly?: boolean;
   }>(),
-  { readOnly: false },
+  { readOnly: true },
 );
 
 const emit = defineEmits<{

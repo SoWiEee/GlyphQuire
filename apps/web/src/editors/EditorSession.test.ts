@@ -31,12 +31,15 @@ class FakeDraftStore implements DraftStore {
   private readonly records = new Map<string, DraftRecord>();
   getCalls = 0;
   clearCalls: string[] = [];
+  putFailure: unknown;
+  deleteFailure: unknown;
 
   private keyOf(key: DraftKey): string {
     return `${key.userId}::${key.workspaceId}::${key.noteId}`;
   }
 
   async put(record: DraftRecord): Promise<void> {
+    if (this.putFailure !== undefined) throw this.putFailure;
     this.records.set(this.keyOf(record), record);
   }
 
@@ -46,6 +49,7 @@ class FakeDraftStore implements DraftStore {
   }
 
   async delete(key: DraftKey): Promise<void> {
+    if (this.deleteFailure !== undefined) throw this.deleteFailure;
     this.records.delete(this.keyOf(key));
   }
 
@@ -76,6 +80,7 @@ class FakeNoteLock implements NoteLockLike {
   private readonly listeners = new Set<(owned: boolean) => void>();
   releaseCalls = 0;
   acquireCalls = 0;
+  takeoverCalls = 0;
 
   constructor(
     private readonly acquireResult: boolean,
@@ -101,6 +106,7 @@ class FakeNoteLock implements NoteLockLike {
   }
 
   async requestTakeover(): Promise<boolean> {
+    this.takeoverCalls += 1;
     if (this.takeoverResult) this.owned = true;
     if (this.takeoverResult) this.notify(true);
     return this.takeoverResult;
@@ -127,6 +133,8 @@ class FakeSessionLifecycle implements EditorSessionLifecycle {
 
   async authorizeEditor(): Promise<void> {}
 
+  assertEditorAuthorized(): void {}
+
   registerEditor(_scope: NoteScope, lockAndClear: () => Promise<void>): () => void {
     this.lockAndClear = lockAndClear;
     return () => {
@@ -136,6 +144,32 @@ class FakeSessionLifecycle implements EditorSessionLifecycle {
 
   async endSession(): Promise<void> {
     await this.lockAndClear?.();
+  }
+}
+
+class RevocableRaceLifecycle implements EditorSessionLifecycle {
+  private authorized = true;
+  private lockAndClear: (() => Promise<void>) | undefined;
+
+  async authorizeEditor(): Promise<void> {
+    this.assertEditorAuthorized();
+  }
+
+  assertEditorAuthorized(): void {
+    if (!this.authorized) throw new SessionAuthorizationError();
+  }
+
+  registerEditor(_scope: NoteScope, lockAndClear: () => Promise<void>): () => void {
+    this.assertEditorAuthorized();
+    this.lockAndClear = lockAndClear;
+    return () => {
+      this.lockAndClear = undefined;
+    };
+  }
+
+  /** Simulates expiry after the timer fires but before its async scrub callback runs. */
+  revokeBeforeCallback(): void {
+    this.authorized = false;
   }
 }
 
@@ -322,7 +356,11 @@ describe("EditorSession", () => {
     });
     expect(draftStore.has(baseKey)).toBe(false); // acknowledged content is no longer a "recoverable" draft
 
-    expect(statuses).toEqual(["dirty", "saving", "saved"]);
+    expect(statuses.filter((status, index) => status !== statuses[index - 1])).toEqual([
+      "dirty",
+      "saving",
+      "saved",
+    ]);
   });
 
   it("debounces edits for exactly 1.5 seconds", async () => {
@@ -449,6 +487,137 @@ describe("EditorSession", () => {
     remote.rejectNext(new NoteOfflineError());
     await vi.waitFor(() => expect(session.snapshot().saveStatus).toBe("offline"));
     expect(draftStore.peek(baseKey)?.updatedAt).toBe(1_000);
+  });
+
+  it("warns when a quota failure leaves dirty Markdown only in memory and retries on online", async () => {
+    const remote = deferredNoteRemote();
+    const draftStore = new FakeDraftStore();
+    const lifecycleAdapter = new FakeEditorLifecycleAdapter();
+    draftStore.putFailure = new DOMException(
+      "raw quota path must stay private",
+      "QuotaExceededError",
+    );
+    const session = await openEditorSession({
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      noteId: NOTE_ID,
+      initialRevision: 1,
+      initialMarkdown: "",
+      noteClient: remote.remote,
+      draftStore,
+      noteLock: new FakeNoteLock(true),
+      lifecycleAdapter,
+      generateOperationId: operationIdSequence(),
+    });
+    const durabilityStates: Array<string | undefined> = [];
+    session.subscribe((next) => durabilityStates.push(next.draftDurability));
+
+    session.edit("not yet durable offline Markdown");
+
+    await vi.waitFor(() => expect(session.snapshot().draftDurability).toBe("memory-only-error"));
+    expect(session.snapshot()).toMatchObject({
+      markdown: "not yet durable offline Markdown",
+      dirty: true,
+      draftDurabilityError: {
+        code: "DRAFT_PERSISTENCE_FAILED",
+        message:
+          "Local draft recovery is unavailable; changes may be lost if this tab closes before saving completes",
+      },
+    });
+    expect(JSON.stringify(session.snapshot())).not.toContain("raw quota path");
+    expect(draftStore.has(baseKey)).toBe(false); // a reload would lose the memory-only draft
+
+    draftStore.putFailure = undefined;
+    lifecycleAdapter.emitOnline();
+
+    await vi.waitFor(() => expect(session.snapshot().draftDurability).toBe("persisted"));
+    expect(draftStore.peek(baseKey)?.markdown).toBe("not yet durable offline Markdown");
+    expect(durabilityStates).toEqual(
+      expect.arrayContaining(["pending", "memory-only-error", "persisted"]),
+    );
+  });
+
+  it("surfaces a sanitized durability failure while retaining an in-memory conflict", async () => {
+    const remote = deferredNoteRemote();
+    const draftStore = new FakeDraftStore();
+    draftStore.putFailure = new DOMException(
+      "raw conflict quota path must stay private",
+      "QuotaExceededError",
+    );
+    const session = await openEditorSession({
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      noteId: NOTE_ID,
+      initialRevision: 1,
+      initialMarkdown: "",
+      noteClient: remote.remote,
+      draftStore,
+      noteLock: new FakeNoteLock(true),
+      generateOperationId: operationIdSequence(),
+    });
+
+    session.edit("local conflict Markdown");
+    await session.saveNow();
+    remote.rejectNext(
+      new NoteConflictError({
+        code: "REVISION_CONFLICT",
+        noteId: NOTE_ID,
+        serverRevision: 9,
+        serverMarkdown: "server conflict Markdown",
+        serverUpdatedAt: "2026-01-01T00:10:00.000Z",
+        lastEditedBy: null,
+        requestId: "req-durability-conflict",
+      }),
+    );
+
+    await vi.waitFor(() => expect(session.snapshot().saveStatus).toBe("conflict"));
+    await vi.waitFor(() => expect(session.snapshot().draftDurability).toBe("memory-only-error"));
+    expect(session.snapshot()).toMatchObject({
+      markdown: "local conflict Markdown",
+      dirty: true,
+      conflict: {
+        serverRevision: 9,
+        serverMarkdown: "server conflict Markdown",
+      },
+      draftDurabilityError: { code: "DRAFT_PERSISTENCE_FAILED" },
+    });
+    expect(JSON.stringify(session.snapshot())).not.toContain("raw conflict quota path");
+    expect(draftStore.has(baseKey)).toBe(false);
+  });
+
+  it("reports and retries a failed stale-draft deletion after the server save succeeds", async () => {
+    const remote = deferredNoteRemote();
+    const draftStore = new FakeDraftStore();
+    const lifecycleAdapter = new FakeEditorLifecycleAdapter();
+    const session = await openEditorSession({
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      noteId: NOTE_ID,
+      initialRevision: 1,
+      initialMarkdown: "",
+      noteClient: remote.remote,
+      draftStore,
+      noteLock: new FakeNoteLock(true),
+      lifecycleAdapter,
+      generateOperationId: operationIdSequence(),
+    });
+
+    session.edit("saved remotely");
+    await vi.waitFor(() => expect(draftStore.has(baseKey)).toBe(true));
+    draftStore.deleteFailure = new Error("raw IndexedDB deletion detail");
+    await session.saveNow();
+    remote.resolveNext(2);
+
+    await vi.waitFor(() => expect(session.snapshot().saveStatus).toBe("saved"));
+    await vi.waitFor(() => expect(session.snapshot().draftDurability).toBe("memory-only-error"));
+    expect(session.snapshot()).toMatchObject({ markdown: "saved remotely", dirty: false });
+    expect(JSON.stringify(session.snapshot())).not.toContain("raw IndexedDB deletion detail");
+    expect(draftStore.has(baseKey)).toBe(true);
+
+    draftStore.deleteFailure = undefined;
+    lifecycleAdapter.emitOnline();
+    await vi.waitFor(() => expect(session.snapshot().draftDurability).toBe("persisted"));
+    expect(draftStore.has(baseKey)).toBe(false);
   });
 
   it("moves to conflict on a 409 and surfaces the server's state without retrying", async () => {
@@ -583,6 +752,7 @@ describe("EditorSession", () => {
     });
     const transitionedLifecycle: EditorSessionLifecycle = {
       async authorizeEditor() {},
+      assertEditorAuthorized() {},
       registerEditor() {
         throw new SessionAuthorizationError();
       },
@@ -652,14 +822,14 @@ describe("EditorSession", () => {
     expect(remote.calls).toHaveLength(0);
   });
 
-  it("ignores a recovered draft whose base revision no longer matches the server", async () => {
+  it("surfaces a queued post-ack draft as a durable recovery conflict", async () => {
     const remote = deferredNoteRemote();
     const draftStore = new FakeDraftStore();
     await draftStore.put({
       ...baseKey,
       operationId: "88888888-8888-4888-8888-888888888888",
-      baseRevision: 2,
-      markdown: "stale draft",
+      baseRevision: 1,
+      markdown: "v3 queued locally",
       updatedAt: 1000,
     });
 
@@ -667,16 +837,108 @@ describe("EditorSession", () => {
       userId: USER_ID,
       workspaceId: WORKSPACE_ID,
       noteId: NOTE_ID,
-      initialRevision: 5, // server has moved on
-      initialMarkdown: "current server content",
+      initialRevision: 2, // the in-flight v2 save was acknowledged before the crash
+      initialMarkdown: "v2 acknowledged by server",
       noteClient: remote.remote,
       draftStore,
       noteLock: new FakeNoteLock(true),
       generateOperationId: operationIdSequence(),
     });
 
-    expect(session.snapshot().autosave.status).toBe("clean");
+    expect(session.snapshot()).toMatchObject({
+      markdown: "v3 queued locally",
+      baseRevision: 2,
+      dirty: true,
+      saveStatus: "conflict",
+      readOnly: false,
+      conflict: {
+        code: "REVISION_CONFLICT",
+        noteId: NOTE_ID,
+        serverRevision: 2,
+        serverMarkdown: "v2 acknowledged by server",
+        lastEditedBy: null,
+      },
+    });
     expect(remote.calls).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(remote.calls).toHaveLength(0);
+    await vi.waitFor(() =>
+      expect(draftStore.peek(baseKey)).toMatchObject({
+        operationId: "00000000-0000-4000-8000-000000000001",
+        markdown: "v3 queued locally",
+        baseRevision: 2,
+        conflict: {
+          serverRevision: 2,
+          serverMarkdown: "v2 acknowledged by server",
+        },
+      }),
+    );
+  });
+
+  it("clears a stale-base draft only when the server content proves it was persisted", async () => {
+    const remote = deferredNoteRemote();
+    const draftStore = new FakeDraftStore();
+    await draftStore.put({
+      ...baseKey,
+      operationId: "88888888-8888-4888-8888-888888888888",
+      baseRevision: 1,
+      markdown: "v2 acknowledged by server",
+      updatedAt: 1000,
+    });
+
+    const session = await openEditorSession({
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      noteId: NOTE_ID,
+      initialRevision: 2,
+      initialMarkdown: "v2 acknowledged by server",
+      noteClient: remote.remote,
+      draftStore,
+      noteLock: new FakeNoteLock(true),
+      generateOperationId: operationIdSequence(),
+    });
+
+    expect(session.snapshot()).toMatchObject({
+      markdown: "v2 acknowledged by server",
+      baseRevision: 2,
+      dirty: false,
+      saveStatus: "clean",
+    });
+    expect(remote.calls).toHaveLength(0);
+    expect(draftStore.has(baseKey)).toBe(false);
+  });
+
+  it("deletes a future-revision draft instead of exposing untrusted content", async () => {
+    const remote = deferredNoteRemote();
+    const draftStore = new FakeDraftStore();
+    await draftStore.put({
+      ...baseKey,
+      operationId: "88888888-8888-4888-8888-888888888888",
+      baseRevision: 3,
+      markdown: "forged future draft",
+      updatedAt: 1000,
+    });
+
+    const session = await openEditorSession({
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      noteId: NOTE_ID,
+      initialRevision: 2,
+      initialMarkdown: "trusted server content",
+      noteClient: remote.remote,
+      draftStore,
+      noteLock: new FakeNoteLock(true),
+      generateOperationId: operationIdSequence(),
+    });
+
+    expect(session.snapshot()).toMatchObject({
+      markdown: "trusted server content",
+      baseRevision: 2,
+      dirty: false,
+      saveStatus: "clean",
+    });
+    expect(remote.calls).toHaveLength(0);
+    expect(draftStore.has(baseKey)).toBe(false);
   });
 
   it("never recovers a draft into a read-only session (another tab already owns the note)", async () => {
@@ -859,6 +1121,125 @@ describe("EditorSession", () => {
     });
     expect(session.snapshot().autosave.pending).toBeNull();
     expect(lock.releaseCalls).toBe(1);
+
+    // A later session refresh cannot silently unlock an already-ended instance.
+    session.edit("must explicitly reopen instead");
+    expect(session.snapshot().markdown).toBe("");
+  });
+
+  it("synchronously blocks edit and save in the expiry timer callback race", async () => {
+    const lifecycle = new RevocableRaceLifecycle();
+    const remote = deferredNoteRemote();
+    const session = await openEditorSession({
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      noteId: NOTE_ID,
+      initialRevision: 1,
+      initialMarkdown: "server markdown",
+      noteClient: remote.remote,
+      draftStore: new FakeDraftStore(),
+      noteLock: new FakeNoteLock(true),
+      sessionLifecycle: lifecycle,
+      generateOperationId: operationIdSequence(),
+    });
+
+    lifecycle.revokeBeforeCallback();
+    session.edit("write in expiry race");
+    await session.saveNow();
+
+    expect(session.snapshot()).toMatchObject({ markdown: "", readOnly: true, dirty: false });
+    expect(remote.calls).toHaveLength(0);
+  });
+
+  it("revalidates authorization again when a debounced save reaches transport", async () => {
+    const lifecycle = new RevocableRaceLifecycle();
+    const remote = deferredNoteRemote();
+    const session = await openEditorSession({
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      noteId: NOTE_ID,
+      initialRevision: 1,
+      initialMarkdown: "server markdown",
+      noteClient: remote.remote,
+      draftStore: new FakeDraftStore(),
+      noteLock: new FakeNoteLock(true),
+      sessionLifecycle: lifecycle,
+      generateOperationId: operationIdSequence(),
+    });
+
+    session.edit("queued before expiry");
+    lifecycle.revokeBeforeCallback();
+    await vi.advanceTimersByTimeAsync(1_500);
+
+    expect(remote.calls).toHaveLength(0);
+    expect(session.snapshot()).toMatchObject({ markdown: "", readOnly: true, dirty: false });
+  });
+
+  it("does not ask the lock adapter for takeover after synchronous authorization revocation", async () => {
+    const lifecycle = new RevocableRaceLifecycle();
+    const lock = new FakeNoteLock(false);
+    const session = await openEditorSession({
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      noteId: NOTE_ID,
+      initialRevision: 1,
+      initialMarkdown: "server markdown",
+      noteClient: deferredNoteRemote().remote,
+      draftStore: new FakeDraftStore(),
+      noteLock: lock,
+      sessionLifecycle: lifecycle,
+      generateOperationId: operationIdSequence(),
+    });
+
+    lifecycle.revokeBeforeCallback();
+
+    await expect(session.requestTakeover()).resolves.toBe(false);
+    expect(lock.takeoverCalls).toBe(0);
+    expect(session.snapshot()).toMatchObject({ markdown: "", readOnly: true });
+  });
+
+  it("requires an explicit reopen after same-user workspace authorization is restored", async () => {
+    const remote = deferredNoteRemote();
+    const draftStore = new FakeDraftStore();
+    const lifecycle = new BrowserSessionLifecycleCoordinator({
+      initialSession: {
+        userId: USER_ID,
+        expiresAt: 10_000,
+        workspaceIds: [WORKSPACE_ID],
+      },
+      draftStore,
+      clock: { now: () => 1_000 },
+      channelFactory: (channelScope) => new NoopTabChannel(channelScope),
+    });
+    const session = await openEditorSession({
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      noteId: NOTE_ID,
+      initialRevision: 1,
+      initialMarkdown: "server markdown",
+      noteClient: remote.remote,
+      draftStore,
+      noteLock: new FakeNoteLock(true),
+      sessionLifecycle: lifecycle,
+      generateOperationId: operationIdSequence(),
+    });
+
+    await lifecycle.switchAccount({
+      userId: USER_ID,
+      expiresAt: 10_000,
+      workspaceIds: ["99999999-9999-4999-8999-999999999999"],
+    });
+    await lifecycle.switchAccount({
+      userId: USER_ID,
+      expiresAt: 10_000,
+      workspaceIds: [WORKSPACE_ID],
+    });
+    session.edit("must not silently unlock");
+    await session.saveNow();
+
+    expect(session.snapshot()).toMatchObject({ markdown: "", readOnly: true, dirty: false });
+    expect(remote.calls).toHaveLength(0);
+    lifecycle.dispose();
   });
 
   it("becomes read-only and stops writes when a targeted takeover releases its lock", async () => {

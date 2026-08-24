@@ -41,6 +41,41 @@ function isolatedChannelFactory() {
     });
 }
 
+class ManualSessionClock {
+  private current: number;
+  private nextId = 1;
+  private readonly timers = new Map<number, { at: number; handler: () => void }>();
+
+  constructor(start: number) {
+    this.current = start;
+  }
+
+  now(): number {
+    return this.current;
+  }
+
+  setTimeout(handler: () => void, delay: number): number {
+    const id = this.nextId++;
+    this.timers.set(id, { at: this.current + delay, handler });
+    return id;
+  }
+
+  clearTimeout(id: number): void {
+    this.timers.delete(id);
+  }
+
+  advanceTo(target: number): void {
+    this.current = target;
+    const due = [...this.timers.entries()]
+      .filter(([, timer]) => timer.at <= target)
+      .sort((left, right) => left[1].at - right[1].at);
+    for (const [id, timer] of due) {
+      this.timers.delete(id);
+      timer.handler();
+    }
+  }
+}
+
 describe("BrowserSessionLifecycleCoordinator", () => {
   it("accepts only a live matching user with explicit authorization for the target workspace", async () => {
     const clearForUser = vi.fn(async () => undefined);
@@ -175,6 +210,51 @@ describe("BrowserSessionLifecycleCoordinator", () => {
     await switched;
     await authorization;
     expect(newAccountExposed).toBe(true);
+    await expect(coordinator.authorizeEditor(scope())).rejects.toBeInstanceOf(
+      SessionAuthorizationError,
+    );
+    coordinator.dispose();
+  });
+
+  it("revokes registered editors removed by a same-user workspace authorization change", async () => {
+    const coordinator = new BrowserSessionLifecycleCoordinator({
+      initialSession: liveSession(),
+      draftStore: { clearForUser: async () => undefined },
+      clock: { now: () => 1_000 },
+      channelFactory: isolatedChannelFactory(),
+    });
+    const lockRevokedWorkspace = vi.fn(async () => undefined);
+    coordinator.registerEditor(scope(), lockRevokedWorkspace);
+
+    await coordinator.switchAccount(liveSession({ workspaceIds: [WORKSPACE_B] }));
+
+    expect(lockRevokedWorkspace).toHaveBeenCalledOnce();
+    await expect(coordinator.authorizeEditor(scope())).rejects.toBeInstanceOf(
+      SessionAuthorizationError,
+    );
+    await expect(
+      coordinator.authorizeEditor(scope({ workspaceId: WORKSPACE_B })),
+    ).resolves.toBeUndefined();
+    coordinator.dispose();
+  });
+
+  it("locks registered editors at the exact expiresAt boundary", async () => {
+    const clock = new ManualSessionClock(1_000);
+    const coordinator = new BrowserSessionLifecycleCoordinator({
+      initialSession: liveSession({ expiresAt: 2_000 }),
+      draftStore: { clearForUser: async () => undefined },
+      clock,
+      channelFactory: isolatedChannelFactory(),
+    });
+    const lockExpiredEditor = vi.fn(async () => undefined);
+    coordinator.registerEditor(scope(), lockExpiredEditor);
+
+    clock.advanceTo(1_999);
+    await Promise.resolve();
+    expect(lockExpiredEditor).not.toHaveBeenCalled();
+
+    clock.advanceTo(2_000);
+    await vi.waitFor(() => expect(lockExpiredEditor).toHaveBeenCalledOnce());
     await expect(coordinator.authorizeEditor(scope())).rejects.toBeInstanceOf(
       SessionAuthorizationError,
     );

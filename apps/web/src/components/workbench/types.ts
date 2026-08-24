@@ -1,3 +1,5 @@
+import type { EditorSession } from "../../editors/editor-session.types.js";
+
 /** A single in-memory note the workbench can open into a tab. */
 export interface WorkbenchNote {
   id: string;
@@ -15,3 +17,6 @@ export interface WorkbenchCommand {
   hint?: string;
   run: () => void;
 }
+
+/** Opens the one authoritative browser session for a selected note. */
+export type WorkbenchSessionFactory = (note: Readonly<WorkbenchNote>) => Promise<EditorSession>;

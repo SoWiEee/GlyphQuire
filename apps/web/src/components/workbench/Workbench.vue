@@ -4,7 +4,7 @@
       ref="topBarRef"
       :note-title="activeNote?.title ?? null"
       :mode="mode"
-      @update:mode="mode = $event"
+      @update:mode="onModeChange"
       @open-palette="openPalette"
     />
 
@@ -27,7 +27,8 @@
           <SourceEditor
             v-if="mode === 'source' && activeNote"
             :key="activeNote.id"
-            :markdown="activeNote.markdown"
+            :markdown="activeMarkdown"
+            :read-only="sourceReadOnly"
             @update:markdown="onMarkdownChange"
           />
           <div
@@ -52,16 +53,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import CommandPalette from "./CommandPalette.vue";
 import EditorTabs from "./EditorTabs.vue";
 import ExplorerPane from "./ExplorerPane.vue";
 import StatusBar from "./StatusBar.vue";
 import TopBar from "./TopBar.vue";
-import SourceEditor from "@/components/source/SourceEditor.vue";
-import type { WorkbenchCommand, WorkbenchEditorMode, WorkbenchNote } from "./types.js";
+import SourceEditor from "../source/SourceEditor.vue";
+import type { EditorSession, EditorSessionState } from "../../editors/editor-session.types.js";
+import type {
+  WorkbenchCommand,
+  WorkbenchEditorMode,
+  WorkbenchNote,
+  WorkbenchSessionFactory,
+} from "./types.js";
 
-const notes = ref<WorkbenchNote[]>([
+const DEFAULT_NOTES: WorkbenchNote[] = [
   {
     id: "welcome",
     title: "Welcome",
@@ -77,14 +84,27 @@ const notes = ref<WorkbenchNote[]>([
     title: "Scratch",
     markdown: "",
   },
-]);
+];
+
+const props = defineProps<{
+  initialNotes?: readonly WorkbenchNote[];
+  sessionFactory?: WorkbenchSessionFactory;
+}>();
+
+const notes = ref<WorkbenchNote[]>(
+  (props.initialNotes ?? DEFAULT_NOTES).map((note) => ({ ...note })),
+);
 
 // Tab-shaped state: an ordered list of open note ids, plus which one is active.
-const openTabIds = ref<string[]>(["welcome"]);
-const activeNoteId = ref<string | null>("welcome");
-const mode = ref<WorkbenchEditorMode>("source");
+const initialNoteId = notes.value[0]?.id ?? null;
+const openTabIds = ref<string[]>(initialNoteId ? [initialNoteId] : []);
+const activeNoteId = ref<string | null>(initialNoteId);
 const paletteOpen = ref(false);
 const topBarRef = ref<InstanceType<typeof TopBar> | null>(null);
+const activeSession = shallowRef<EditorSession>();
+const sessionState = shallowRef<EditorSessionState>();
+let unsubscribeSession: (() => void) | undefined;
+let sessionGeneration = 0;
 
 const openTabs = computed<WorkbenchNote[]>(() =>
   openTabIds.value
@@ -96,8 +116,16 @@ const activeNote = computed<WorkbenchNote | null>(
   () => notes.value.find((note) => note.id === activeNoteId.value) ?? null,
 );
 
+const activeMarkdown = computed(
+  () => sessionState.value?.markdown ?? activeNote.value?.markdown ?? "",
+);
+const sourceReadOnly = computed(() => !sessionState.value || sessionState.value.readOnly);
+const mode = computed<WorkbenchEditorMode>(() =>
+  sessionState.value?.mode === "visual" ? "visual" : "source",
+);
+
 const wordCount = computed(() => {
-  const text = activeNote.value?.markdown.trim() ?? "";
+  const text = activeMarkdown.value.trim();
   return text.length === 0 ? 0 : text.split(/\s+/).length;
 });
 
@@ -121,15 +149,22 @@ function closeTab(noteId: string): void {
 }
 
 function onMarkdownChange(markdown: string): void {
-  const note = activeNote.value;
-  if (!note) return;
-  notes.value = notes.value.map((existing) =>
-    existing.id === note.id ? { ...existing, markdown } : existing,
-  );
+  const session = activeSession.value;
+  if (!session || sourceReadOnly.value) return;
+  session.edit(markdown);
+  sessionState.value = session.snapshot();
 }
 
 function toggleMode(): void {
-  mode.value = mode.value === "source" ? "visual" : "source";
+  onModeChange(mode.value === "source" ? "visual" : "source");
+}
+
+function onModeChange(nextMode: WorkbenchEditorMode): void {
+  const session = activeSession.value;
+  if (!session) return;
+  void session.switchMode(nextMode).then(() => {
+    if (activeSession.value === session) sessionState.value = session.snapshot();
+  });
 }
 
 function openPalette(): void {
@@ -177,6 +212,45 @@ function onGlobalKeydown(event: KeyboardEvent): void {
   }
 }
 
+async function activateSession(note: WorkbenchNote | null): Promise<void> {
+  const generation = ++sessionGeneration;
+  const previous = activeSession.value;
+  unsubscribeSession?.();
+  unsubscribeSession = undefined;
+  activeSession.value = undefined;
+  sessionState.value = undefined;
+  if (previous) await previous.dispose();
+  if (generation !== sessionGeneration || !note || !props.sessionFactory) return;
+
+  let next: EditorSession;
+  try {
+    next = await props.sessionFactory(note);
+  } catch {
+    return;
+  }
+  if (generation !== sessionGeneration) {
+    await next.dispose();
+    return;
+  }
+
+  activeSession.value = next;
+  sessionState.value = next.snapshot();
+  unsubscribeSession = next.subscribe((state) => {
+    if (activeSession.value === next) sessionState.value = state;
+  });
+}
+
+watch(activeNote, (note) => void activateSession(note), { immediate: true });
+
 onMounted(() => window.addEventListener("keydown", onGlobalKeydown, true));
-onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown, true));
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onGlobalKeydown, true);
+  sessionGeneration += 1;
+  unsubscribeSession?.();
+  unsubscribeSession = undefined;
+  const session = activeSession.value;
+  activeSession.value = undefined;
+  sessionState.value = undefined;
+  if (session) void session.dispose();
+});
 </script>

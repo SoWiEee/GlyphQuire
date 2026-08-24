@@ -67,12 +67,38 @@ export class NoteRequestValidationError extends Error {
   }
 }
 
+/** The configured transport prefix could escape the browser's same origin. */
+export class NoteClientConfigurationError extends Error {
+  constructor() {
+    super("Invalid same-origin Note API base");
+    this.name = "NoteClientConfigurationError";
+  }
+}
+
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 interface EndpointInputShape {
   params?: Record<string, string>;
   query?: Record<string, string | number>;
   body?: unknown;
+}
+
+const CANONICAL_RELATIVE_API_BASE = /^\/[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)*$/;
+
+/**
+ * Accept only an empty prefix or a canonical root-relative path. Rejecting
+ * URL syntax, escapes, dot segments, and backslashes up front keeps browser
+ * and intermediary URL parsers from disagreeing about the request origin.
+ */
+function parseRelativeApiBase(value: unknown): string {
+  if (value === "") return value;
+  if (typeof value !== "string" || !CANONICAL_RELATIVE_API_BASE.test(value)) {
+    throw new NoteClientConfigurationError();
+  }
+  if (value.split("/").some((segment) => segment === "." || segment === "..")) {
+    throw new NoteClientConfigurationError();
+  }
+  return value;
 }
 
 function buildUrl(baseUrl: string, path: string, params: Record<string, string>): string {
@@ -165,7 +191,7 @@ class FetchNoteTransport implements ApiClientTransport {
 }
 
 export interface NoteClientOptions {
-  /** Prefixed to every contract path, e.g. "" for same-origin `/api/v1/...` requests. */
+  /** Canonical root-relative prefix; empty means same-origin `/api/v1/...`. */
   baseUrl?: string;
   fetchImpl?: FetchLike;
 }
@@ -231,8 +257,9 @@ export class NoteClient {
   private readonly transport: ApiClientTransport;
 
   constructor(options: NoteClientOptions = {}) {
+    const baseUrl = parseRelativeApiBase(options.baseUrl ?? "");
     const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
-    this.transport = new FetchNoteTransport(fetchImpl, options.baseUrl ?? "");
+    this.transport = new FetchNoteTransport(fetchImpl, baseUrl);
   }
 
   /**
