@@ -4,6 +4,7 @@ import {
   documentToMdast,
   semanticNormalize,
   type BlockNode,
+  type InlineContent,
   type NotebookDocument,
 } from "@glyphquire/document-engine";
 import { htmlSchema, imageSchema, linkSchema } from "@milkdown/kit/preset/commonmark";
@@ -24,6 +25,7 @@ const registry = createRegistry();
 
 export const GLYPHQUIRE_FRONTMATTER = "---\nglyphquire-spec: 1\n---\n\n";
 const SEMANTIC_DATA_KEY = "glyphquireSemanticJson";
+const INLINE_DIRECTIVE_DATA_KEY = "glyphquireInlineDirectiveJson";
 const VISUAL_KIND_DATA_KEY = "glyphquireVisualKind";
 const MAX_ENCODED_URL_PASSES = 3;
 
@@ -275,15 +277,112 @@ function isMarkdownNode(value: unknown): value is MarkdownNode {
   return isRecord(value) && typeof value.type === "string";
 }
 
+interface CanonicalInlineDirective {
+  readonly node: MarkdownNode;
+  readonly normalized: string;
+  readonly source: string;
+}
+
+function canonicalInlineDirective(value: unknown): CanonicalInlineDirective {
+  if (!isMarkdownNode(value) || value.type !== "textDirective") {
+    throw new Error("Visual inline directive is malformed");
+  }
+
+  const candidate: NotebookDocument = {
+    type: "document",
+    specVersion: 1,
+    children: [{ type: "paragraph", children: [value as InlineContent] }],
+  };
+  let serialized: string;
+  try {
+    serialized = engine.serialize(candidate);
+  } catch {
+    throw new Error("Visual inline directive cannot be serialized safely");
+  }
+  const reparsed = engine.parse(serialized);
+  const paragraph = reparsed.ok ? reparsed.document.children[0] : undefined;
+  const inline = paragraph?.type === "paragraph" ? paragraph.children[0] : undefined;
+  if (
+    !reparsed.ok ||
+    reparsed.document.children.length !== 1 ||
+    paragraph?.type !== "paragraph" ||
+    paragraph.children.length !== 1 ||
+    !isMarkdownNode(inline) ||
+    inline.type !== "textDirective"
+  ) {
+    throw new Error("Visual inline directive cannot be reparsed safely");
+  }
+  if (!serialized.startsWith(GLYPHQUIRE_FRONTMATTER)) {
+    throw new Error("Document Engine returned a non-canonical inline directive");
+  }
+  return {
+    node: inline,
+    normalized: JSON.stringify(semanticNormalize(reparsed.document)),
+    source: serialized.slice(GLYPHQUIRE_FRONTMATTER.length).replace(/\n+$/, ""),
+  };
+}
+
+function inlineDirectiveFromJson(raw: string): CanonicalInlineDirective {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Milkdown inline directive annotation is not valid JSON");
+  }
+  return canonicalInlineDirective(parsed);
+}
+
+export function readAnnotatedInlineDirective(node: MarkdownNode): CanonicalInlineDirective {
+  const data = isRecord(node.data) ? node.data : null;
+  const raw = data?.[INLINE_DIRECTIVE_DATA_KEY];
+  if (typeof raw !== "string") {
+    throw new Error("Milkdown inline directive lacks a lossless annotation");
+  }
+  return inlineDirectiveFromJson(raw);
+}
+
+function semanticInlineDirectives(document: NotebookDocument): MarkdownNode[] {
+  const result: MarkdownNode[] = [];
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child);
+      return;
+    }
+    if (!isRecord(value)) return;
+    if (value.type === "textDirective") {
+      result.push(value as MarkdownNode);
+      return;
+    }
+    if (Array.isArray(value.children)) visit(value.children);
+  };
+  visit(document.children);
+  return result;
+}
+
 function annotateMarkdownTree(tree: MarkdownNode, document: NotebookDocument): void {
   const boundaries = semanticBoundaries(document);
+  const inlineDirectives = semanticInlineDirectives(document);
   let boundaryIndex = 0;
+  let inlineIndex = 0;
 
   const visit = (node: MarkdownNode): void => {
-    const isDirective =
-      node.type === "containerDirective" ||
-      node.type === "leafDirective" ||
-      node.type === "textDirective";
+    if (node.type === "textDirective") {
+      const semantic = inlineDirectives[inlineIndex];
+      if (!semantic) throw new Error("Milkdown found an unpaired inline directive");
+      const markdownInline = canonicalInlineDirective(node);
+      const semanticInline = canonicalInlineDirective(semantic);
+      if (markdownInline.normalized !== semanticInline.normalized) {
+        throw new Error("Milkdown inline directive order or fields do not match Markdown");
+      }
+      const data = isRecord(node.data) ? { ...node.data } : {};
+      data[INLINE_DIRECTIVE_DATA_KEY] = JSON.stringify(semanticInline.node);
+      data[VISUAL_KIND_DATA_KEY] = "inline-warning";
+      node.data = data;
+      inlineIndex += 1;
+      return;
+    }
+
+    const isDirective = node.type === "containerDirective" || node.type === "leafDirective";
     const isHtmlBoundary = node.type === "html";
 
     if (isDirective || isHtmlBoundary) {
@@ -325,6 +424,9 @@ function annotateMarkdownTree(tree: MarkdownNode, document: NotebookDocument): v
   visit(tree);
   if (boundaryIndex !== boundaries.length) {
     throw new Error("Milkdown did not retain every semantic boundary");
+  }
+  if (inlineIndex !== inlineDirectives.length) {
+    throw new Error("Milkdown did not retain every inline directive");
   }
 }
 
@@ -371,6 +473,17 @@ export function addSemanticNodeToMarkdown(state: SerializerState, node: BlockNod
     Array.isArray(markdownNode.children) ? markdownNode.children : undefined,
     typeof markdownNode.value === "string" ? markdownNode.value : undefined,
     markdownProps(markdownNode),
+  );
+}
+
+/** Restores an opaque phrasing directive without interpreting any of its children. */
+export function addInlineDirectiveToMarkdown(state: SerializerState, raw: string): void {
+  const { node } = inlineDirectiveFromJson(raw);
+  state.addNode(
+    node.type,
+    Array.isArray(node.children) ? node.children : undefined,
+    typeof node.value === "string" ? node.value : undefined,
+    markdownProps(node),
   );
 }
 

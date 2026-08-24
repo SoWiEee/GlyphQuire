@@ -6,7 +6,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createDocumentEngine,
   semanticNormalize,
-  type BlockNode,
   type NotebookDocument,
 } from "../../packages/document-engine/src/index.js";
 import { MilkdownVisualAdapter } from "../../apps/web/src/editors/visual/MilkdownVisualAdapter.js";
@@ -40,8 +39,12 @@ interface DirectiveShape {
 
 function directiveShapes(document: NotebookDocument): DirectiveShape[] {
   const shapes: DirectiveShape[] = [];
+  const normalized = semanticNormalize(document) as unknown;
 
-  const visit = (node: BlockNode): void => {
+  const visit = (value: unknown): void => {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) return;
+    const node = value as Record<string, unknown>;
+    const type = typeof node.type === "string" ? node.type : "";
     if (
       [
         "callout",
@@ -54,29 +57,88 @@ function directiveShapes(document: NotebookDocument): DirectiveShape[] {
         "runtime",
         "unknown-directive",
         "invalid-block",
-      ].includes(node.type)
+        "textDirective",
+      ].includes(type)
     ) {
-      const normalized = semanticNormalize({ type: "document", specVersion: 1, children: [node] });
-      const normalizedNode = normalized.children[0] as BlockNode;
-      const childTypes =
-        "children" in normalizedNode ? normalizedNode.children.map((child) => child.type) : [];
-      const fields = { ...normalizedNode } as Record<string, unknown>;
+      const children = Array.isArray(node.children) ? node.children : [];
+      const childTypes = children.flatMap((child) => {
+        if (child === null || typeof child !== "object" || Array.isArray(child)) return [];
+        const childType = (child as Record<string, unknown>).type;
+        return typeof childType === "string" ? [childType] : [];
+      });
+      const fields = { ...node };
       delete fields.children;
-      shapes.push({ type: node.type, fields, childTypes });
+      shapes.push({ type, fields, childTypes });
     }
 
-    if ("children" in node) {
-      for (const child of node.children) {
-        if ("type" in child && child.type !== "tableRow" && child.type !== "tableCell") {
-          visit(child as BlockNode);
-        }
-      }
+    if (Array.isArray(node.children)) {
+      for (const child of node.children) visit(child);
     }
   };
 
-  for (const child of document.children) visit(child);
+  visit(normalized);
   return shapes;
 }
+
+function markdownDocument(body: string): string {
+  return ["---", "glyphquire-spec: 1", "---", "", body, ""].join("\n");
+}
+
+const inlineDirectiveCases = [
+  {
+    label: "paragraph",
+    markdown: markdownDocument('A :future[child]{a="1"} B'),
+  },
+  {
+    label: "heading",
+    markdown: markdownDocument('# A :future[child]{a="1"} B'),
+  },
+  {
+    label: "list paragraph",
+    markdown: markdownDocument('- A :future[child]{a="1"} B'),
+  },
+  {
+    label: "table cell",
+    markdown: markdownDocument(["| Cell |", "| --- |", '| A :future[child]{a="1"} B |'].join("\n")),
+  },
+  {
+    label: "link-adjacent",
+    markdown: markdownDocument(
+      '[left](https://safe.example):future[child]{a="1"}[right](https://safe.example)',
+    ),
+  },
+  {
+    label: "multiple and nested",
+    markdown: markdownDocument(
+      ':one[first]{a="1"} :outer[before :inner[child]{b="2"} after]{extra="yes"}',
+    ),
+  },
+  {
+    label: "duplicate and unknown attributes",
+    markdown: markdownDocument(':future[child]{a="1" a="2" extra="yes"}'),
+  },
+  {
+    label: "accepted malformed attribute tail",
+    markdown: markdownDocument('A :future[child]{a="1" B'),
+  },
+  {
+    label: "accepted known directive used as hostile phrasing",
+    markdown: markdownDocument(
+      ':callout[**bold** <svg onload=boom()>]{type="critical" handler="javascript:boom"}',
+    ),
+  },
+] as const;
+
+const leafDirectiveCases = [
+  {
+    label: "top-level leaf",
+    markdown: markdownDocument('::future{a="1" extra="yes"}'),
+  },
+  {
+    label: "leaf nested in a list item",
+    markdown: markdownDocument(["- item", "", '  ::future{a="1" extra="yes"}'].join("\n")),
+  },
+] as const;
 
 describe("visual editor block conformance", () => {
   const adapter = new MilkdownVisualAdapter();
@@ -106,6 +168,76 @@ describe("visual editor block conformance", () => {
       expect(directiveShapes(after.document)).toEqual(directiveShapes(before.document));
     });
   }
+
+  it.each(inlineDirectiveCases)(
+    "preserves accepted inline directive kind, fields, and phrasing in $label",
+    ({ markdown }) => {
+      const before = engine.parse(markdown);
+      expect(before.ok).toBe(true);
+      if (!before.ok) throw new Error("expected accepted inline directive Markdown");
+
+      adapter.setMarkdown(markdown);
+      const after = engine.parse(adapter.getMarkdown());
+      expect(after.ok).toBe(true);
+      if (!after.ok) throw new Error("expected accepted visual inline directive output");
+
+      expect(semanticNormalize(after.document)).toEqual(semanticNormalize(before.document));
+      expect(directiveShapes(after.document)).toEqual(directiveShapes(before.document));
+      expect(host.querySelector("[data-glyphquire-inline-warning]")).not.toBeNull();
+      expect(host.querySelector("script, svg, iframe, [onerror], [onload]")).toBeNull();
+    },
+  );
+
+  it.each(leafDirectiveCases)(
+    "keeps unknown $label paired as a lossless block warning",
+    ({ markdown }) => {
+      const before = engine.parse(markdown);
+      expect(before.ok).toBe(true);
+      if (!before.ok) throw new Error("expected accepted leaf directive Markdown");
+
+      adapter.setMarkdown(markdown);
+      const after = engine.parse(adapter.getMarkdown());
+      expect(after.ok).toBe(true);
+      if (!after.ok) throw new Error("expected accepted visual leaf directive output");
+
+      expect(semanticNormalize(after.document)).toEqual(semanticNormalize(before.document));
+      expect(directiveShapes(after.document)).toEqual(directiveShapes(before.document));
+      expect(host.querySelector("[data-glyphquire-warning]")).not.toBeNull();
+    },
+  );
+
+  it("keeps inline annotations independent from unknown and invalid block pairing", () => {
+    const markdown = markdownDocument(
+      [
+        'Before :inline-one[first]{a="1"}.',
+        "",
+        ':::future-block{block="one"}',
+        "Unknown container child.",
+        ":::",
+        "",
+        'Between :inline-two[second]{b="2"}.',
+        "",
+        '::future-leaf{leaf="one"}',
+        "",
+        ':::callout{type="critical" extra="preserved"}',
+        "Invalid callout child.",
+        ":::",
+      ].join("\n"),
+    );
+    const before = engine.parse(markdown);
+    expect(before.ok).toBe(true);
+    if (!before.ok) throw new Error("expected accepted mixed directive Markdown");
+
+    adapter.setMarkdown(markdown);
+    const after = engine.parse(adapter.getMarkdown());
+    expect(after.ok).toBe(true);
+    if (!after.ok) throw new Error("expected accepted mixed visual directive output");
+
+    expect(semanticNormalize(after.document)).toEqual(semanticNormalize(before.document));
+    expect(directiveShapes(after.document)).toEqual(directiveShapes(before.document));
+    expect(host.querySelectorAll("[data-glyphquire-inline-warning]")).toHaveLength(2);
+    expect(host.querySelectorAll("[data-glyphquire-warning]")).toHaveLength(3);
+  });
 
   it.each([
     {

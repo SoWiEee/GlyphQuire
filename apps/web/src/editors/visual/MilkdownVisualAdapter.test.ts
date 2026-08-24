@@ -190,6 +190,28 @@ describe("MilkdownVisualAdapter", () => {
     expect(semanticNormalize(after.document)).toEqual(semanticNormalize(before.document));
   });
 
+  it("losslessly escapes an accepted inline text directive", async () => {
+    const markdown = ["---", "glyphquire-spec: 1", "---", "", 'A :future[child]{a="1"} B', ""].join(
+      "\n",
+    );
+    const before = engine.parse(markdown);
+    expect(before.ok).toBe(true);
+    if (!before.ok) throw new Error("expected accepted inline directive Markdown");
+
+    const { adapter, host } = await mountedAdapter();
+    cleanups.push(() => adapter.destroy());
+    expect(() => adapter.setMarkdown(markdown)).not.toThrow();
+
+    const warning = host.querySelector("[data-glyphquire-inline-warning]");
+    expect(warning?.textContent).toContain(':future[child]{a="1"}');
+    expect(host.querySelector("script, svg, iframe, [onerror], [onload]")).toBeNull();
+
+    const after = engine.parse(adapter.getMarkdown());
+    expect(after.ok).toBe(true);
+    if (!after.ok) throw new Error("expected accepted visual inline directive output");
+    expect(semanticNormalize(after.document)).toEqual(semanticNormalize(before.document));
+  });
+
   it("removes hostile rendered URL sinks and hardens safe external links", async () => {
     const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
     const fetchSpy = vi.fn();

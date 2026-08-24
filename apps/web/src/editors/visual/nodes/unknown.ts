@@ -3,12 +3,47 @@ import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import type { NodeViewConstructor } from "@milkdown/kit/prose/view";
 import { $nodeSchema, $view } from "@milkdown/kit/utils";
 import {
+  addInlineDirectiveToMarkdown,
   addSemanticNodeToMarkdown,
   annotatedVisualKind,
+  readAnnotatedInlineDirective,
   readAnnotatedSemantic,
   semanticBlockFromJson,
   semanticNodeSource,
 } from "../schema.js";
+
+export const visualInlineWarningSchema = $nodeSchema("gq_inline_warning", () => ({
+  inline: true,
+  atom: true,
+  group: "inline",
+  isolating: true,
+  selectable: true,
+  attrs: {
+    directiveJson: { default: "", validate: "string" },
+    source: { default: "", validate: "string" },
+  },
+  parseDOM: [{ tag: "span[data-glyphquire-inline-warning]" }],
+  toDOM: () => ["span", { "data-glyphquire-inline-warning": "escaped" }],
+  parseMarkdown: {
+    match: (node) => annotatedVisualKind(node) === "inline-warning",
+    runner: (state, markdownNode, type) => {
+      const inline = readAnnotatedInlineDirective(markdownNode);
+      state.addNode(type, {
+        directiveJson: JSON.stringify(inline.node),
+        source: inline.source,
+      });
+    },
+  },
+  toMarkdown: {
+    match: (node) => node.type.name === "gq_inline_warning",
+    runner: (state, node) => {
+      if (typeof node.attrs.directiveJson !== "string") {
+        throw new Error("Escaped inline directive lost its semantic payload");
+      }
+      addInlineDirectiveToMarkdown(state, node.attrs.directiveJson);
+    },
+  },
+}));
 
 export const visualWarningSchema = $nodeSchema("gq_warning", () => ({
   atom: true,
@@ -84,6 +119,42 @@ function warningNodeView(): NodeViewConstructor {
   };
 }
 
-const visualWarningView = $view(visualWarningSchema.node, () => warningNodeView());
+function inlineWarningNodeView(): NodeViewConstructor {
+  return (initialNode) => {
+    let currentNode = initialNode;
+    const dom = document.createElement("span");
+    dom.dataset.glyphquireInlineWarning = "escaped";
+    dom.contentEditable = "false";
+    dom.setAttribute("role", "note");
 
-export const visualWarningPlugins: MilkdownPlugin[] = [...visualWarningSchema, visualWarningView];
+    const sync = (): void => {
+      dom.textContent =
+        typeof currentNode.attrs.source === "string" ? currentNode.attrs.source : "";
+    };
+    sync();
+
+    return {
+      dom,
+      update(nextNode: ProseNode): boolean {
+        if (nextNode.type !== currentNode.type) return false;
+        currentNode = nextNode;
+        sync();
+        return true;
+      },
+      stopEvent: () => true,
+      ignoreMutation: () => true,
+    };
+  };
+}
+
+const visualWarningView = $view(visualWarningSchema.node, () => warningNodeView());
+const visualInlineWarningView = $view(visualInlineWarningSchema.node, () =>
+  inlineWarningNodeView(),
+);
+
+export const visualWarningPlugins: MilkdownPlugin[] = [
+  ...visualWarningSchema,
+  ...visualInlineWarningSchema,
+  visualWarningView,
+  visualInlineWarningView,
+];
