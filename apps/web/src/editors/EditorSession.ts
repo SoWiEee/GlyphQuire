@@ -1,17 +1,23 @@
 import { markdownSchema, revisionSchema } from "@glyphquire/api-contract";
+import type { DocumentDiagnostic } from "@glyphquire/document-engine";
 import { NoteApiError } from "../api/NoteClient.js";
 import { AutosaveController } from "../autosave/AutosaveController.js";
 import { noteScopeSchema, sameNoteScope } from "../coordination/TabChannel.js";
 import { EditorLifecycleController } from "./EditorLifecycleController.js";
+import { DocumentWorkerClient } from "./DocumentWorkerClient.js";
 import type { NoteConflict } from "@glyphquire/api-contract";
 import type { AutosaveState } from "../autosave/AutosaveController.js";
 import type { NoteScope } from "../coordination/TabChannel.js";
 import type {
   DraftKey,
+  DocumentAnalysisPort,
   EditorSession,
   EditorSessionDeps,
   EditorSessionMode,
   EditorSessionState,
+  EditorModeAdapters,
+  EditorPane,
+  EditorSelection,
   DraftDurability,
   DraftDurabilityError,
   SwitchResult,
@@ -38,6 +44,20 @@ interface RecoveredDraft {
   readonly mintFreshOperationId?: boolean;
 }
 
+interface AdapterBinding {
+  readonly version: number;
+  readonly adapters: EditorModeAdapters;
+  readonly unsubscribe: readonly [() => void, () => void];
+}
+
+interface ModeCapture {
+  readonly binding: AdapterBinding;
+  readonly markdown: string;
+  readonly selection: EditorSelection | null;
+}
+
+const EMPTY_GLYPHQUIRE_MARKDOWN = "---\nglyphquire-spec: 1\n---\n";
+
 /** The sole authoritative browser controller for one validated note scope. */
 class EditorSessionImpl implements EditorSession {
   private readonly autosave: AutosaveController;
@@ -48,6 +68,8 @@ class EditorSessionImpl implements EditorSession {
   private readonly draftKey: DraftKey;
   private unregisterSessionLifecycle: (() => void) | undefined;
   private mode: EditorSessionMode = "source";
+  private activePane: EditorPane = "source";
+  private diagnostics: readonly DocumentDiagnostic[] = [];
   private markdown: string;
   private isReadOnly: boolean;
   private draftUpdatedAt: number | null;
@@ -57,6 +79,12 @@ class EditorSessionImpl implements EditorSession {
   private draftSyncVersion = 0;
   private draftDurability: DraftDurability = "persisted";
   private draftDurabilityError: DraftDurabilityError | null = null;
+  private readonly documentAnalysis: DocumentAnalysisPort;
+  private adapterBinding: AdapterBinding | undefined;
+  private adapterBindingVersion = 0;
+  private modeRequestVersion = 0;
+  private adapterTransactions: Promise<void> = Promise.resolve();
+  private suppressNotifications = 0;
 
   constructor(
     private readonly deps: EditorSessionDeps,
@@ -70,6 +98,7 @@ class EditorSessionImpl implements EditorSession {
     this.markdown = recoveredDraft?.markdown ?? initialMarkdown;
     this.draftUpdatedAt = recoveredDraft?.updatedAt ?? null;
     this.draftKey = scope;
+    this.documentAnalysis = deps.documentAnalysis ?? new DocumentWorkerClient();
     this.autosave = new AutosaveController({
       initialRevision,
       save: async (input) => {
@@ -131,6 +160,8 @@ class EditorSessionImpl implements EditorSession {
       saveStatus: autosave.status,
       conflict: autosave.conflict,
       mode: this.mode,
+      activePane: this.activePane,
+      diagnostics: this.diagnostics,
       readOnly: this.isReadOnly,
       isReadOnly: this.isReadOnly,
       draftDurability: this.draftDurability,
@@ -144,13 +175,16 @@ class EditorSessionImpl implements EditorSession {
     if (!this.authorizationAllowsWrite() || this.isReadOnly) return;
     const previousMarkdown = this.markdown;
     const previousDraftUpdatedAt = this.draftUpdatedAt;
+    const previousDiagnostics = this.diagnostics;
     this.markdown = markdown;
+    this.diagnostics = [];
     this.draftUpdatedAt = this.deps.clock?.now() ?? Date.now();
     try {
       this.autosave.edit(markdown);
     } catch (error) {
       this.markdown = previousMarkdown;
       this.draftUpdatedAt = previousDraftUpdatedAt;
+      this.diagnostics = previousDiagnostics;
       throw error;
     }
   }
@@ -163,19 +197,377 @@ class EditorSessionImpl implements EditorSession {
   }
 
   async switchMode(mode: EditorSessionMode): Promise<SwitchResult> {
+    const requestVersion = ++this.modeRequestVersion;
+    this.documentAnalysis.cancel();
+    const unavailable = this.modeRequestFailure(requestVersion);
+    if (unavailable) return unavailable;
+
+    const requiresVisualProjection =
+      this.activePane === "source" && (mode === "visual" || mode === "split");
+    const requiresSourceProjection =
+      this.activePane === "visual" && (mode === "source" || mode === "split");
+    const needsAdapters =
+      mode !== "source" || this.mode !== "source" || this.adapterBinding !== undefined;
+    if (needsAdapters && !this.adapterBinding) {
+      return { success: false, mode: this.mode, reason: "unsupported" };
+    }
+
+    if (!requiresVisualProjection && !requiresSourceProjection) {
+      return this.commitModeWithoutProjection(mode, requestVersion);
+    }
+
+    // Capture is synchronous and deliberately does not go through the adapter
+    // transaction queue: it only reads current, already-settled adapter state
+    // (getMarkdown/getSelection are synchronous by contract), so a second
+    // rapid switchMode call can race a first one to the document worker
+    // without waiting on a still-in-flight projection commit.
+    let capture: ModeCapture;
+    try {
+      capture = this.captureModeSource();
+    } catch {
+      const binding = this.adapterBinding;
+      if (binding) await this.restoreCommittedAdapterPolicy(binding, requestVersion);
+      return { success: false, mode: this.mode, reason: "adapter-rejected" };
+    }
+
+    let markdownToValidate = capture.markdown;
+    let analyzed;
+    try {
+      analyzed = await this.documentAnalysis.parseAndValidate(markdownToValidate);
+    } catch {
+      const failure = this.modeRequestFailure(requestVersion);
+      if (failure) return failure;
+      await this.restoreCommittedAdapterPolicy(capture.binding, requestVersion);
+      return { success: false, mode: this.mode, reason: "document-worker-failed" };
+    }
+    let afterAnalysis = this.modeRequestFailure(requestVersion);
+    if (afterAnalysis) return afterAnalysis;
+    if (analyzed.result.source !== markdownToValidate) {
+      await this.restoreCommittedAdapterPolicy(capture.binding, requestVersion);
+      return { success: false, mode: this.mode, reason: "document-worker-failed" };
+    }
+
+    // Visual content did not originate from typed canonical Markdown, so its
+    // serialized (canonicalized) form is independently re-validated before
+    // Source is ever allowed to treat it as authoritative.
+    if (
+      requiresSourceProjection &&
+      analyzed.result.ok &&
+      analyzed.canonicalMarkdown !== null &&
+      analyzed.canonicalMarkdown !== markdownToValidate
+    ) {
+      markdownToValidate = analyzed.canonicalMarkdown;
+      try {
+        analyzed = await this.documentAnalysis.parseAndValidate(markdownToValidate);
+      } catch {
+        const failure = this.modeRequestFailure(requestVersion);
+        if (failure) return failure;
+        await this.restoreCommittedAdapterPolicy(capture.binding, requestVersion);
+        return { success: false, mode: this.mode, reason: "document-worker-failed" };
+      }
+      afterAnalysis = this.modeRequestFailure(requestVersion);
+      if (afterAnalysis) return afterAnalysis;
+      if (analyzed.result.source !== markdownToValidate) {
+        await this.restoreCommittedAdapterPolicy(capture.binding, requestVersion);
+        return { success: false, mode: this.mode, reason: "document-worker-failed" };
+      }
+    }
+
+    this.diagnostics = analyzed.result.diagnostics.map((item) => ({
+      ...item,
+      ...(item.range ? { range: { ...item.range } } : {}),
+    }));
+    if (!analyzed.result.ok || analyzed.canonicalMarkdown === null) {
+      if (!this.diagnostics.some((item) => item.severity === "error")) {
+        this.diagnostics = [
+          ...this.diagnostics,
+          {
+            code: "DOCUMENT_INVALID",
+            severity: "error",
+            message: "The document could not be validated as GlyphQuire Markdown.",
+          },
+        ];
+      }
+      await this.restoreCommittedAdapterPolicy(capture.binding, requestVersion);
+      this.notify();
+      return {
+        success: false,
+        mode: this.mode,
+        reason: "document-invalid",
+        diagnostics: this.diagnostics,
+      };
+    }
+
+    const canonicalMarkdown = analyzed.canonicalMarkdown;
+    try {
+      const committed = await this.enqueueAdapterTransaction(async () => {
+        const failure = this.modeRequestFailure(requestVersion);
+        if (failure || this.adapterBinding !== capture.binding) return false;
+        this.lockAdapters(capture.binding.adapters);
+        if (requiresVisualProjection) {
+          await capture.binding.adapters.visual.setMarkdown(markdownToValidate);
+          if (this.modeRequestFailure(requestVersion)) return false;
+          if (capture.binding.adapters.visual.getMarkdown() !== canonicalMarkdown) {
+            throw new Error("Visual adapter did not accept the validated projection");
+          }
+          this.restoreSelection(capture.binding.adapters.visual, capture.selection);
+        } else {
+          await capture.binding.adapters.source.setMarkdown(canonicalMarkdown);
+          if (this.modeRequestFailure(requestVersion)) return false;
+          if (capture.binding.adapters.source.getMarkdown() !== canonicalMarkdown) {
+            throw new Error("Source adapter did not accept canonical Markdown");
+          }
+          this.restoreSelection(capture.binding.adapters.source, capture.selection);
+        }
+        const finalFailure = this.modeRequestFailure(requestVersion);
+        if (finalFailure) return false;
+
+        this.suppressNotifications += 1;
+        try {
+          if (requiresSourceProjection && this.markdown !== canonicalMarkdown) {
+            this.edit(canonicalMarkdown);
+          }
+          this.mode = mode;
+          if (mode !== "split") this.activePane = mode;
+          this.applyAdapterPolicy(capture.binding);
+        } finally {
+          this.suppressNotifications -= 1;
+        }
+        this.notify();
+        return true;
+      });
+      if (!committed) {
+        await this.restoreCommittedAdapterPolicy(capture.binding, requestVersion);
+        return this.modeRequestFailure(requestVersion) ?? this.supersededResult();
+      }
+    } catch {
+      await this.restoreCommittedAdapterPolicy(capture.binding, requestVersion);
+      return { success: false, mode: this.mode, reason: "adapter-rejected" };
+    }
+
+    if (requiresSourceProjection && !this.isReadOnly) await this.saveNow();
+    const finalFailure = this.modeRequestFailure(requestVersion);
+    if (finalFailure) return finalFailure;
+    return { success: true, mode };
+  }
+
+  async attachModeAdapters(adapters: EditorModeAdapters): Promise<() => void> {
+    if (this.disposed) throw new Error("Cannot attach adapters to a disposed editor session");
+    if (this.sessionEnded) throw new Error("Cannot attach adapters to an ended editor session");
+    const version = ++this.adapterBindingVersion;
+    this.invalidateModeRequests();
+    const previous = this.adapterBinding;
+    if (previous) this.detachAdapterBinding(previous);
+    this.lockAdapters(adapters);
+    try {
+      await adapters.source.setMarkdown(this.markdown);
+      if (
+        this.disposed ||
+        this.sessionEnded ||
+        version !== this.adapterBindingVersion ||
+        adapters.source.getMarkdown() !== this.markdown
+      ) {
+        throw new Error("Source adapter did not accept authoritative Markdown");
+      }
+      let binding!: AdapterBinding;
+      binding = {
+        version,
+        adapters,
+        unsubscribe: [
+          adapters.source.onChange((markdown) => this.onAdapterChange(binding, "source", markdown)),
+          adapters.visual.onChange((markdown) => this.onAdapterChange(binding, "visual", markdown)),
+        ],
+      };
+      this.adapterBinding = binding;
+      this.applyAdapterPolicy(binding);
+      return () => {
+        if (this.adapterBinding !== binding) return;
+        this.invalidateModeRequests();
+        this.detachAdapterBinding(binding);
+        this.adapterBinding = undefined;
+      };
+    } catch {
+      this.lockAdapters(adapters);
+      throw new Error("Editor adapter attachment failed");
+    }
+  }
+
+  /**
+   * Reads the active pane's current Markdown and selection synchronously.
+   * Every operation here (getMarkdown/getSelection/setReadOnly) is
+   * synchronous by the {@link EditorModeAdapter} contract, so this
+   * deliberately does not go through the adapter transaction queue: a rapid
+   * second `switchMode` call must be able to reach the document worker in
+   * the same synchronous turn as the first, without waiting on a prior,
+   * still in-flight projection commit.
+   */
+  private captureModeSource(): ModeCapture {
+    const binding = this.adapterBinding;
+    if (!binding) throw new Error("Editor session has no attached mode adapters");
+    this.lockAdapters(binding.adapters);
+    const adapter = binding.adapters[this.activePane];
+    const markdown = adapter.getMarkdown();
+    markdownSchema.parse(markdown);
+    const selection = this.captureSelection(adapter);
+    if (this.activePane === "source" && markdown !== this.markdown) {
+      this.edit(markdown);
+    }
+    return { binding, markdown, selection };
+  }
+
+  private async commitModeWithoutProjection(
+    mode: EditorSessionMode,
+    requestVersion: number,
+  ): Promise<SwitchResult> {
+    if (!this.isReadOnly) await this.saveNow();
+    const afterSave = this.modeRequestFailure(requestVersion);
+    if (afterSave) return afterSave;
+
+    const binding = this.adapterBinding;
+    if (!binding) {
+      this.mode = "source";
+      this.activePane = "source";
+      this.notify();
+      return { success: true, mode: "source" };
+    }
+    try {
+      const committed = await this.enqueueAdapterTransaction(() => {
+        if (this.modeRequestFailure(requestVersion) || this.adapterBinding !== binding) {
+          return false;
+        }
+        this.mode = mode;
+        if (mode !== "split") this.activePane = mode;
+        this.applyAdapterPolicy(binding);
+        this.notify();
+        return true;
+      });
+      if (!committed) return this.modeRequestFailure(requestVersion) ?? this.supersededResult();
+      return { success: true, mode };
+    } catch {
+      await this.restoreCommittedAdapterPolicy(binding, requestVersion);
+      return { success: false, mode: this.mode, reason: "adapter-rejected" };
+    }
+  }
+
+  private modeRequestFailure(requestVersion: number): SwitchResult | null {
     if (this.disposed) return { success: false, mode: this.mode, reason: "disposed" };
     if (this.sessionEnded) {
       return { success: false, mode: this.mode, reason: "unauthorized" };
     }
-    if (!this.isReadOnly) await this.saveNow();
+    if (requestVersion !== this.modeRequestVersion) return this.supersededResult();
+    return null;
+  }
 
-    if (mode !== "source") {
-      return { success: false, mode: this.mode, reason: "unsupported" };
+  private supersededResult(): SwitchResult {
+    return { success: false, mode: this.mode, reason: "superseded" };
+  }
+
+  private invalidateModeRequests(): void {
+    this.modeRequestVersion += 1;
+    this.documentAnalysis.cancel();
+  }
+
+  private enqueueAdapterTransaction<T>(operation: () => T | Promise<T>): Promise<T> {
+    const current = this.adapterTransactions.then(operation, operation);
+    this.adapterTransactions = current.then(
+      () => undefined,
+      () => undefined,
+    );
+    return current;
+  }
+
+  private lockAdapters(adapters: EditorModeAdapters): void {
+    let failure: unknown;
+    try {
+      adapters.source.setReadOnly(true);
+    } catch (error) {
+      failure = error;
     }
+    try {
+      adapters.visual.setReadOnly(true);
+    } catch (error) {
+      failure ??= error;
+    }
+    if (failure !== undefined) throw failure;
+  }
 
-    this.mode = "source";
-    this.notify();
-    return { success: true, mode: "source" };
+  private applyAdapterPolicy(binding: AdapterBinding): void {
+    this.lockAdapters(binding.adapters);
+    if (this.disposed || this.sessionEnded || this.isReadOnly) return;
+    try {
+      binding.adapters[this.activePane].setReadOnly(false);
+    } catch (error) {
+      this.lockAdapters(binding.adapters);
+      throw error;
+    }
+  }
+
+  private async restoreCommittedAdapterPolicy(
+    binding: AdapterBinding,
+    requestVersion: number,
+  ): Promise<void> {
+    if (requestVersion !== this.modeRequestVersion || this.adapterBinding !== binding) return;
+    await this.enqueueAdapterTransaction(() => {
+      if (requestVersion !== this.modeRequestVersion || this.adapterBinding !== binding) return;
+      this.applyAdapterPolicy(binding);
+    }).catch(() => undefined);
+  }
+
+  private captureSelection(adapter: EditorModeAdapters[EditorPane]): EditorSelection | null {
+    try {
+      return adapter.getSelection?.() ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private restoreSelection(
+    adapter: EditorModeAdapters[EditorPane],
+    selection: EditorSelection | null,
+  ): void {
+    if (!selection) return;
+    try {
+      adapter.setSelection?.(selection);
+    } catch {
+      // Selection mapping is explicitly best effort and never authoritative.
+    }
+  }
+
+  private onAdapterChange(binding: AdapterBinding, pane: EditorPane, markdown: string): void {
+    if (
+      this.adapterBinding !== binding ||
+      this.disposed ||
+      this.sessionEnded ||
+      this.isReadOnly ||
+      pane !== this.activePane
+    ) {
+      return;
+    }
+    try {
+      this.edit(markdown);
+    } catch {
+      try {
+        this.lockAdapters(binding.adapters);
+      } catch {
+        // Both controls were attempted; no alternative pane is granted writes.
+      }
+      this.diagnostics = [
+        {
+          code: "EDITOR_PROJECTION_INVALID",
+          severity: "error",
+          message: "The editor produced an invalid Markdown projection.",
+        },
+      ];
+      this.notify();
+    }
+  }
+
+  private detachAdapterBinding(binding: AdapterBinding): void {
+    try {
+      this.lockAdapters(binding.adapters);
+    } finally {
+      for (const unsubscribe of binding.unsubscribe) unsubscribe();
+    }
   }
 
   async requestTakeover(): Promise<boolean> {
@@ -195,6 +587,18 @@ class EditorSessionImpl implements EditorSession {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
+    this.invalidateModeRequests();
+    this.documentAnalysis.dispose();
+    const binding = this.adapterBinding;
+    this.adapterBinding = undefined;
+    this.adapterBindingVersion += 1;
+    if (binding) {
+      try {
+        this.detachAdapterBinding(binding);
+      } catch {
+        // Locking was attempted for both adapters; disposal continues fail closed.
+      }
+    }
     this.lifecycleController?.dispose();
     this.unregisterSessionLifecycle?.();
     this.unregisterSessionLifecycle = undefined;
@@ -212,12 +616,30 @@ class EditorSessionImpl implements EditorSession {
       if (!this.authorizationAllowsWrite()) return;
       if (!this.isReadOnly) return;
       this.isReadOnly = false;
+      const binding = this.adapterBinding;
+      if (binding) {
+        try {
+          this.applyAdapterPolicy(binding);
+        } catch {
+          this.isReadOnly = true;
+          return;
+        }
+      }
       this.autosave.resume();
       this.notify();
       return;
     }
     if (this.isReadOnly) return;
+    this.invalidateModeRequests();
     this.isReadOnly = true;
+    const binding = this.adapterBinding;
+    if (binding) {
+      try {
+        this.lockAdapters(binding.adapters);
+      } catch {
+        // Both adapter locks were attempted before authority state is published.
+      }
+    }
     this.autosave.pause();
     this.notify();
   }
@@ -225,9 +647,30 @@ class EditorSessionImpl implements EditorSession {
   private async lockAndClearForSessionEnd(): Promise<void> {
     if (this.disposed || this.sessionEnded) return;
     this.sessionEnded = true;
+    this.invalidateModeRequests();
     this.isReadOnly = true;
     this.markdown = "";
+    this.diagnostics = [];
     this.draftUpdatedAt = null;
+    const binding = this.adapterBinding;
+    if (binding) {
+      try {
+        this.lockAdapters(binding.adapters);
+        await this.enqueueAdapterTransaction(async () => {
+          if (this.adapterBinding !== binding) return;
+          this.lockAdapters(binding.adapters);
+          await binding.adapters.source.setMarkdown("");
+          await binding.adapters.visual.setMarkdown(EMPTY_GLYPHQUIRE_MARKDOWN);
+          this.lockAdapters(binding.adapters);
+        });
+      } catch {
+        try {
+          this.lockAdapters(binding.adapters);
+        } catch {
+          // Both lock calls were attempted; session authority remains terminal.
+        }
+      }
+    }
     this.lifecycleController?.dispose();
     this.unsubscribeOwnership();
     this.autosave.clearSensitiveState();
@@ -310,6 +753,7 @@ class EditorSessionImpl implements EditorSession {
   }
 
   private notify(): void {
+    if (this.suppressNotifications > 0) return;
     const state = this.snapshot();
     for (const listener of this.listeners) listener(state);
   }

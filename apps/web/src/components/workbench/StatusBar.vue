@@ -8,18 +8,27 @@
       {{ noteTitle ?? "No note open" }}
     </span>
     <div class="flex items-center gap-4">
-      <span aria-label="Editor mode">{{ mode === "source" ? "Source" : "Visual" }}</span>
+      <span aria-label="Editor mode">{{ modeLabel }}</span>
       <span aria-label="Word count">{{ wordCount }} words</span>
     </div>
   </footer>
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import type { WorkbenchEditorMode } from "./types.js";
 
-defineProps<{
+const props = defineProps<{
   noteTitle: string | null;
   mode: WorkbenchEditorMode;
   wordCount: number;
 }>();
+
+const MODE_LABELS: Record<WorkbenchEditorMode, string> = {
+  source: "Source",
+  visual: "Visual",
+  split: "Split",
+};
+
+const modeLabel = computed(() => MODE_LABELS[props.mode]);
 </script>

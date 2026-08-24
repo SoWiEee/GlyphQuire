@@ -7,8 +7,8 @@ export interface WorkbenchNote {
   markdown: string;
 }
 
-/** The editor's source/visual mode control. Visual mode is a stub in this task. */
-export type WorkbenchEditorMode = "source" | "visual";
+/** The editor's source/visual/split mode control. */
+export type WorkbenchEditorMode = "source" | "visual" | "split";
 
 /** One entry the command palette can run. */
 export interface WorkbenchCommand {

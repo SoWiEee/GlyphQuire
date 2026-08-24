@@ -31,14 +31,23 @@
             :read-only="sourceReadOnly"
             @update:markdown="onMarkdownChange"
           />
-          <div
+          <VisualEditor
             v-else-if="mode === 'visual' && activeNote"
-            class="flex h-full items-center justify-center text-sm text-gray-400"
-          >
-            Visual mode is coming in a later task — switch to Source to edit "{{
-              activeNote.title
-            }}".
-          </div>
+            :key="activeNote.id"
+            :markdown="visualMarkdown"
+            :read-only="visualReadOnly"
+            @update:markdown="onVisualMarkdownChange"
+          />
+          <SplitEditor
+            v-else-if="mode === 'split' && activeNote"
+            :key="activeNote.id"
+            :source-markdown="activeMarkdown"
+            :source-read-only="sourceReadOnly"
+            :visual-markdown="visualMarkdown"
+            :visual-read-only="visualReadOnly"
+            @update:source-markdown="onMarkdownChange"
+            @update:visual-markdown="onVisualMarkdownChange"
+          />
           <div v-else class="flex h-full items-center justify-center text-sm text-gray-400">
             Open a note from the Explorer to start editing.
           </div>
@@ -60,6 +69,13 @@ import ExplorerPane from "./ExplorerPane.vue";
 import StatusBar from "./StatusBar.vue";
 import TopBar from "./TopBar.vue";
 import SourceEditor from "../source/SourceEditor.vue";
+import VisualEditor from "../visual/VisualEditor.vue";
+import SplitEditor from "../split/SplitEditor.vue";
+import {
+  createBookkeepingModeAdapter,
+  createLiveModeAdapter,
+  type WorkbenchModeAdapterShim,
+} from "../../editors/WorkbenchModeAdapterShim.js";
 import type { EditorSession, EditorSessionState } from "../../editors/editor-session.types.js";
 import type {
   WorkbenchCommand,
@@ -106,6 +122,16 @@ const sessionState = shallowRef<EditorSessionState>();
 let unsubscribeSession: (() => void) | undefined;
 let sessionGeneration = 0;
 
+// Visual's pane has no other display or edit-routing path of its own (unlike
+// Source, which stays on the EditorSessionState-driven props/session.edit()
+// composition below), so it is driven directly by a live mode-adapter shim
+// bound to attachModeAdapters().
+const visualMarkdown = ref("");
+const visualEditorReadOnly = ref(true);
+let sourceModeAdapter: WorkbenchModeAdapterShim | undefined;
+let visualModeAdapter: WorkbenchModeAdapterShim | undefined;
+let detachModeAdapters: (() => void) | undefined;
+
 const openTabs = computed<WorkbenchNote[]>(() =>
   openTabIds.value
     .map((id) => notes.value.find((note) => note.id === id))
@@ -119,10 +145,21 @@ const activeNote = computed<WorkbenchNote | null>(
 const activeMarkdown = computed(
   () => sessionState.value?.markdown ?? activeNote.value?.markdown ?? "",
 );
-const sourceReadOnly = computed(() => !sessionState.value || sessionState.value.readOnly);
-const mode = computed<WorkbenchEditorMode>(() =>
-  sessionState.value?.mode === "visual" ? "visual" : "source",
+// Source's own pane is writable only while it is also the session's active
+// pane — in "source" mode that is always true, so this is exactly the prior
+// behavior; in "split" mode it correctly yields to whichever pane was active
+// before split was entered.
+const sourceReadOnly = computed(
+  () =>
+    !sessionState.value ||
+    sessionState.value.readOnly ||
+    sessionState.value.activePane !== "source",
 );
+const visualReadOnly = computed(() => visualEditorReadOnly.value);
+const mode = computed<WorkbenchEditorMode>(() => {
+  const sessionMode = sessionState.value?.mode;
+  return sessionMode === "visual" || sessionMode === "split" ? sessionMode : "source";
+});
 
 const wordCount = computed(() => {
   const text = activeMarkdown.value.trim();
@@ -151,8 +188,20 @@ function closeTab(noteId: string): void {
 function onMarkdownChange(markdown: string): void {
   const session = activeSession.value;
   if (!session || sourceReadOnly.value) return;
+  // Bookkeeping only: this shim never routes edits on its own (see
+  // WorkbenchModeAdapterShim), so session.edit() below remains the single
+  // path that actually applies a Source edit.
+  sourceModeAdapter?.syncFromUi(markdown, false);
   session.edit(markdown);
   sessionState.value = session.snapshot();
+}
+
+function onVisualMarkdownChange(markdown: string): void {
+  if (visualEditorReadOnly.value) return;
+  // Notifying routes this through EditorSession's own onAdapterChange
+  // listener, which calls session.edit() for us — Visual has no separate
+  // display path, so this is the only place that edit can originate.
+  visualModeAdapter?.syncFromUi(markdown, true);
 }
 
 function toggleMode(): void {
@@ -212,11 +261,21 @@ function onGlobalKeydown(event: KeyboardEvent): void {
   }
 }
 
+function detachActiveModeAdapters(): void {
+  detachModeAdapters?.();
+  detachModeAdapters = undefined;
+  sourceModeAdapter = undefined;
+  visualModeAdapter = undefined;
+  visualMarkdown.value = "";
+  visualEditorReadOnly.value = true;
+}
+
 async function activateSession(note: WorkbenchNote | null): Promise<void> {
   const generation = ++sessionGeneration;
   const previous = activeSession.value;
   unsubscribeSession?.();
   unsubscribeSession = undefined;
+  detachActiveModeAdapters();
   activeSession.value = undefined;
   sessionState.value = undefined;
   if (previous) await previous.dispose();
@@ -238,6 +297,29 @@ async function activateSession(note: WorkbenchNote | null): Promise<void> {
   unsubscribeSession = next.subscribe((state) => {
     if (activeSession.value === next) sessionState.value = state;
   });
+
+  const initialMarkdown = next.snapshot().markdown;
+  visualMarkdown.value = initialMarkdown;
+  visualEditorReadOnly.value = true;
+  sourceModeAdapter = createBookkeepingModeAdapter(initialMarkdown);
+  visualModeAdapter = createLiveModeAdapter(visualMarkdown, visualEditorReadOnly);
+  try {
+    const detach = await next.attachModeAdapters({
+      source: sourceModeAdapter,
+      visual: visualModeAdapter,
+    });
+    if (generation !== sessionGeneration || activeSession.value !== next) {
+      detach();
+      return;
+    }
+    detachModeAdapters = detach;
+  } catch {
+    // Visual/Split stay unavailable for this session (switchMode reports
+    // "unsupported"); Source keeps working through its existing
+    // session.edit()-based path above.
+    sourceModeAdapter = undefined;
+    visualModeAdapter = undefined;
+  }
 }
 
 watch(activeNote, (note) => void activateSession(note), { immediate: true });
@@ -248,6 +330,7 @@ onBeforeUnmount(() => {
   sessionGeneration += 1;
   unsubscribeSession?.();
   unsubscribeSession = undefined;
+  detachActiveModeAdapters();
   const session = activeSession.value;
   activeSession.value = undefined;
   sessionState.value = undefined;

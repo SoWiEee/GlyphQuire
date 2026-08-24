@@ -26,6 +26,8 @@ function state(overrides: Partial<EditorSessionState> = {}): EditorSessionState 
     saveStatus: "clean",
     conflict: null,
     mode: "source",
+    activePane: "source",
+    diagnostics: [],
     readOnly: false,
     isReadOnly: false,
     draftDurability: "persisted",
@@ -53,6 +55,7 @@ function fakeSession(initialState = state()) {
     snapshot: () => current,
     edit,
     switchMode: vi.fn(async () => ({ success: true, mode: "source" as const })),
+    attachModeAdapters: vi.fn(async () => () => {}),
     saveNow: vi.fn(async () => undefined),
     requestTakeover: vi.fn(async () => false),
     subscribe(listener) {

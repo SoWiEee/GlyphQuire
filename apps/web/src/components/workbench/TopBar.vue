@@ -32,6 +32,16 @@
         >
           Visual
         </button>
+        <button
+          type="button"
+          role="radio"
+          :aria-checked="mode === 'split'"
+          class="rounded px-2 py-1 text-xs font-medium"
+          :class="mode === 'split' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'"
+          @click="emit('update:mode', 'split')"
+        >
+          Split
+        </button>
       </div>
 
       <button

@@ -1,4 +1,5 @@
 import type { NoteConflict, NoteResult, SaveNoteInput } from "@glyphquire/api-contract";
+import type { DocumentDiagnostic } from "@glyphquire/document-engine";
 import type {
   AutosaveClock,
   AutosaveState,
@@ -8,9 +9,38 @@ import type { EditorSessionLifecycle } from "../coordination/SessionLifecycleCoo
 import type { NoteScope } from "../coordination/TabChannel.js";
 import type { DraftKey, DraftRecord, DraftStore } from "../persistence/DraftStore.js";
 import type { EditorLifecycleAdapter } from "./EditorLifecycleController.js";
+import type { DocumentAnalysis } from "./DocumentWorkerClient.js";
 
 export type EditorSessionMode = "visual" | "source" | "split";
+export type EditorPane = "visual" | "source";
 export type DraftDurability = "persisted" | "pending" | "memory-only-error";
+
+export interface EditorSelection {
+  readonly anchor: number;
+  readonly head: number;
+}
+
+/** Mounted adapter capabilities needed by the authoritative mode transaction. */
+export interface EditorModeAdapter {
+  setMarkdown(markdown: string): void | Promise<void>;
+  getMarkdown(): string;
+  setReadOnly(readOnly: boolean): void;
+  onChange(listener: (markdown: string) => void): () => void;
+  getSelection?(): EditorSelection | null;
+  setSelection?(selection: EditorSelection): void;
+}
+
+export interface EditorModeAdapters {
+  readonly source: EditorModeAdapter;
+  readonly visual: EditorModeAdapter;
+}
+
+/** Narrow worker seam; the production implementation is DocumentWorkerClient. */
+export interface DocumentAnalysisPort {
+  parseAndValidate(markdown: string): Promise<DocumentAnalysis>;
+  cancel(): void;
+  dispose(): void;
+}
 
 export interface DraftDurabilityError {
   readonly code: "DRAFT_PERSISTENCE_FAILED";
@@ -32,6 +62,9 @@ export interface EditorSessionState {
   readonly saveStatus: AutosaveStatus;
   readonly conflict: NoteConflict | null;
   readonly mode: EditorSessionMode;
+  /** The only pane allowed to emit authoritative edits, including in split mode. */
+  readonly activePane: EditorPane;
+  readonly diagnostics: readonly DocumentDiagnostic[];
   readonly readOnly: boolean;
   /** Compatibility alias for the Task 8 workbench while it adopts readOnly. */
   readonly isReadOnly: boolean;
@@ -46,6 +79,7 @@ export interface SwitchResult {
   readonly mode: EditorSessionMode;
   /** Present when `success` is false — e.g. the target mode has no adapter yet. */
   readonly reason?: string;
+  readonly diagnostics?: readonly DocumentDiagnostic[];
 }
 
 /** The narrow slice of {@link NoteClient} EditorSession depends on. */
@@ -76,6 +110,7 @@ export interface EditorSessionDeps {
   readonly noteLock: NoteLockLike;
   readonly sessionLifecycle: EditorSessionLifecycle;
   readonly lifecycleAdapter?: EditorLifecycleAdapter;
+  readonly documentAnalysis?: DocumentAnalysisPort;
   readonly generateOperationId?: () => string;
   readonly debounceMs?: number;
   readonly retryBaseMs?: number;
@@ -93,6 +128,8 @@ export interface EditorSession {
   snapshot(): EditorSessionState;
   edit(markdown: string): void;
   switchMode(mode: EditorSessionMode): Promise<SwitchResult>;
+  /** Binds the one mounted Source/Visual pair. The returned function detaches that exact pair. */
+  attachModeAdapters(adapters: EditorModeAdapters): Promise<() => void>;
   saveNow(): Promise<void>;
   requestTakeover(): Promise<boolean>;
   subscribe(listener: (state: EditorSessionState) => void): () => void;
