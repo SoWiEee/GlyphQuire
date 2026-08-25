@@ -6,6 +6,7 @@
       :mode="mode"
       @update:mode="onModeChange"
       @open-palette="openPalette"
+      @open-theme-editor="themeStore.openEditor()"
     />
 
     <div class="flex min-h-0 flex-1">
@@ -58,6 +59,8 @@
     <StatusBar :note-title="activeNote?.title ?? null" :mode="mode" :word-count="wordCount" />
 
     <CommandPalette v-if="paletteOpen" :commands="commands" @close="closePalette" />
+
+    <ThemeEditorPanel v-if="themeStore.editorOpen" @close="themeStore.closeEditor()" />
   </div>
 </template>
 
@@ -71,6 +74,8 @@ import TopBar from "./TopBar.vue";
 import SourceEditor from "../source/SourceEditor.vue";
 import VisualEditor from "../visual/VisualEditor.vue";
 import SplitEditor from "../split/SplitEditor.vue";
+import ThemeEditorPanel from "../theme-editor/ThemeEditorPanel.vue";
+import { useThemeStore } from "../../stores/theme.js";
 import {
   createBookkeepingModeAdapter,
   createLiveModeAdapter,
@@ -83,6 +88,8 @@ import type {
   WorkbenchNote,
   WorkbenchSessionFactory,
 } from "./types.js";
+
+const themeStore = useThemeStore();
 
 const DEFAULT_NOTES: WorkbenchNote[] = [
   {

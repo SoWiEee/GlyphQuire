@@ -47,6 +47,15 @@
       <button
         type="button"
         class="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        aria-label="Open theme editor"
+        @click="emit('open-theme-editor')"
+      >
+        Theme
+      </button>
+
+      <button
+        type="button"
+        class="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
         aria-label="Open command palette"
         @click="emit('open-palette')"
       >
@@ -68,5 +77,6 @@ defineProps<{
 const emit = defineEmits<{
   "update:mode": [mode: WorkbenchEditorMode];
   "open-palette": [];
+  "open-theme-editor": [];
 }>();
 </script>
