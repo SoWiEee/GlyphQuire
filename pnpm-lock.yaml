@@ -97,6 +97,31 @@ importers:
         specifier: ^5.8.0
         version: 5.9.3
 
+  apps/sandbox:
+    dependencies:
+      '@glyphquire/runtime-protocol':
+        specifier: workspace:*
+        version: link:../../packages/runtime-protocol
+      p5:
+        specifier: ^1.11.0
+        version: 1.11.13
+    devDependencies:
+      '@types/p5':
+        specifier: ^1.7.6
+        version: 1.7.7
+      happy-dom:
+        specifier: ^20.11.6
+        version: 20.11.6
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vite:
+        specifier: ^6.3.0
+        version: 6.4.3(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.12)(yaml@2.9.0)
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.11.6)(lightningcss@1.32.0)
+
   apps/web:
     dependencies:
       '@codemirror/autocomplete':
@@ -1577,6 +1602,9 @@ packages:
   '@types/node@22.20.1':
     resolution: {integrity: sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q==}
 
+  '@types/p5@1.7.7':
+    resolution: {integrity: sha512-WFuP7jqc5CkkMtCK/NphgvMnJz1Qi9CMuK7t6xLu/tuXkRdGQA4q4AD0dUYcChC0Oibe8PE8gbKSFPNF0BqVNw==}
+
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
 
@@ -2911,6 +2939,9 @@ packages:
   p-locate@5.0.0:
     resolution: {integrity: sha512-LaNjtRWUBY++zB5nE/NwcaoMylSPk+S+ZHNB1TzdbMJMny6dynpAGt7X/tl/QYq3TIeE6nxHppbo2LGymrG5Pw==}
     engines: {node: '>=10'}
+
+  p5@1.11.13:
+    resolution: {integrity: sha512-gfGo4AkyuNMs6Ko7UNFM9K2edqFRGyLrFaYUB+XXF127JVdEPu0BIaC5uDDNJpsRMOD9hJMUpsOH4HkfuNhvhA==}
 
   package-json-from-dist@1.0.1:
     resolution: {integrity: sha512-UEZIS3/by4OC8vL3P2dTXRETpebLI2NiI5vIrjaD/5UtrkFX/tNbwjTSRAGC/+7CAo2pIcBaRgWmcBBHcsaCIw==}
@@ -4580,6 +4611,8 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/p5@1.7.7': {}
+
   '@types/trusted-types@2.0.7':
     optional: true
 
@@ -6125,6 +6158,8 @@ snapshots:
   p-locate@5.0.0:
     dependencies:
       p-limit: 3.1.0
+
+  p5@1.11.13: {}
 
   package-json-from-dist@1.0.1: {}
 
