@@ -1,0 +1,10 @@
+[data-glyphquire-node="columns"] {
+  display: flex;
+  gap: var(--gq-spacing-md);
+  margin: var(--gq-spacing-md) 0;
+}
+
+[data-glyphquire-node="columns"] > [data-glyphquire-node="column"] {
+  flex: 1;
+  min-width: 0;
+}

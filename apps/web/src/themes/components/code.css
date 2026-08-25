@@ -1,0 +1,28 @@
+.ProseMirror pre,
+.ProseMirror code {
+  font-family: var(--gq-typography-mono-font);
+}
+
+.ProseMirror pre {
+  background: oklch(from var(--gq-color-foreground) l c h / 0.05);
+  border: 1px solid var(--gq-color-border);
+  border-radius: var(--gq-radius-md);
+  padding: var(--gq-spacing-md);
+  overflow-x: auto;
+  margin: var(--gq-spacing-md) 0;
+}
+
+.ProseMirror code {
+  background: oklch(from var(--gq-color-foreground) l c h / 0.05);
+  border-radius: var(--gq-radius-sm);
+  padding: 0.125rem 0.375rem;
+  font-size: 0.875em;
+}
+
+[data-variant="terminal"] pre {
+  background: #0d1117;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  border-radius: var(--gq-radius-lg);
+  box-shadow: inset 0 1px 3px oklch(0% 0 0 / 0.2);
+}

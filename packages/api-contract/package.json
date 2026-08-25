@@ -18,6 +18,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@glyphquire/theme-sdk": "workspace:*",
     "zod": "^3.25.0"
   },
   "devDependencies": {

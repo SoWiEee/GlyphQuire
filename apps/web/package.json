@@ -22,7 +22,9 @@
     "@codemirror/view": "^6.43.9",
     "@glyphquire/api-contract": "workspace:*",
     "@glyphquire/document-engine": "workspace:*",
+    "@glyphquire/theme-engine": "workspace:*",
     "@milkdown/kit": "7.22.1",
+    "katex": "^0.18.4",
     "pinia": "^3.0.0",
     "remark-directive": "3.0.1",
     "vue": "^3.5.0",
@@ -32,6 +34,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.0",
     "@testing-library/vue": "^8.1.0",
+    "@types/katex": "^0.16.8",
     "@vitejs/plugin-vue": "^5.2.0",
     "@vue/test-utils": "^2.4.11",
     "fake-indexeddb": "^6.2.5",

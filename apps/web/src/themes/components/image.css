@@ -1,0 +1,6 @@
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--gq-radius-md);
+  margin: var(--gq-spacing-md) 0;
+}

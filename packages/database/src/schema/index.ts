@@ -28,3 +28,9 @@ export {
   type DocumentJobStatus,
 } from "./document-jobs.js";
 export { rateLimitBuckets, rateLimitReservations } from "./rate-limit-buckets.js";
+export {
+  themes,
+  themesRelations,
+  userThemes,
+  userThemesRelations,
+} from "./themes.js";

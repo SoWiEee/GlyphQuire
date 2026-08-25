@@ -19,7 +19,15 @@ export const visualCalloutSchema = $nodeSchema("gq_callout", () => ({
     icon: { default: null, validate: "string|null" },
   },
   parseDOM: [{ tag: "section[data-glyphquire-node='callout']" }],
-  toDOM: () => ["section", { "data-glyphquire-node": "callout" }, 0],
+  toDOM: () => [
+    "section",
+    {
+      "data-glyphquire-node": "callout",
+      "data-variant": "solid",
+      "data-animation": "none",
+    },
+    0,
+  ],
   parseMarkdown: {
     match: (node) => annotatedVisualKind(node) === "callout",
     runner: (state, markdownNode, type) => {

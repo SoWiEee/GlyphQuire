@@ -1,0 +1,27 @@
+.ProseMirror blockquote,
+[data-glyphquire-node="quote"] {
+  font-family: var(--gq-typography-body-font);
+  color: var(--gq-color-muted);
+  border-left: 3px solid var(--gq-color-accent);
+  padding: var(--gq-spacing-sm) var(--gq-spacing-md);
+  margin: var(--gq-spacing-md) 0;
+  border-radius: 0 var(--gq-radius-sm) var(--gq-radius-sm) 0;
+}
+
+[data-variant="sticky"] {
+  background: oklch(90% 0.05 85);
+  border-left: none;
+  border-radius: var(--gq-radius-md);
+  box-shadow: 2px 2px 6px oklch(0% 0 0 / 0.1);
+  transform: rotate(-0.5deg);
+  padding: var(--gq-spacing-md);
+}
+
+[data-variant="paper"] {
+  background: var(--gq-color-background);
+  border: 1px solid var(--gq-color-border);
+  border-left: 3px solid var(--gq-color-accent);
+  border-radius: var(--gq-radius-md);
+  padding: var(--gq-spacing-md);
+  box-shadow: 0 1px 3px oklch(0% 0 0 / 0.05);
+}

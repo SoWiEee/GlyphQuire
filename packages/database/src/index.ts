@@ -23,6 +23,10 @@ export {
   documentJobsRelations,
   rateLimitBuckets,
   rateLimitReservations,
+  themes,
+  themesRelations,
+  userThemes,
+  userThemesRelations,
   type WorkspaceRole,
   type NoteVisibility,
   type SnapshotReason,
@@ -39,6 +43,8 @@ import type {
   noteOperations,
   notes,
   noteVersions,
+  themes,
+  userThemes,
   workspaceMembers,
   workspaces,
 } from "./schema/index.js";
@@ -55,3 +61,7 @@ export type NoteOperation = InferSelectModel<typeof noteOperations>;
 export type NewNoteOperation = InferInsertModel<typeof noteOperations>;
 export type DocumentJob = InferSelectModel<typeof documentJobs>;
 export type NewDocumentJob = InferInsertModel<typeof documentJobs>;
+export type Theme = InferSelectModel<typeof themes>;
+export type NewTheme = InferInsertModel<typeof themes>;
+export type UserTheme = InferSelectModel<typeof userThemes>;
+export type NewUserTheme = InferInsertModel<typeof userThemes>;
