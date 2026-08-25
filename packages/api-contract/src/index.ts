@@ -10,6 +10,8 @@ import type {
 export * from "./notes/errors.js";
 export * from "./notes/schemas.js";
 export * from "./notes/types.js";
+export * from "./themes/schemas.js";
+export * from "./themes/types.js";
 
 export function createApiClient(transport: ApiClientTransport): ApiClient {
   return {

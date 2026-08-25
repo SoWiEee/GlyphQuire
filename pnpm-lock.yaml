@@ -178,6 +178,9 @@ importers:
 
   packages/api-contract:
     dependencies:
+      '@glyphquire/theme-sdk':
+        specifier: workspace:*
+        version: link:../theme-sdk
       zod:
         specifier: ^3.25.0
         version: 3.25.76
