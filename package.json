@@ -12,7 +12,7 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "test:integration": "pnpm --filter @glyphquire/api test:integration",
+    "test:integration": "pnpm --filter @glyphquire/api test:integration && pnpm --filter @glyphquire/queue test:integration",
     "test:cross-package": "vitest run --config vitest.config.ts",
     "test:e2e": "playwright test",
     "test:load:phase2": "tsx tests/load/autosave-conflict.ts",
