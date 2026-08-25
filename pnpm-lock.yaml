@@ -154,6 +154,9 @@ importers:
       '@glyphquire/document-engine':
         specifier: workspace:*
         version: link:../../packages/document-engine
+      '@glyphquire/runtime-protocol':
+        specifier: workspace:*
+        version: link:../../packages/runtime-protocol
       '@glyphquire/theme-engine':
         specifier: workspace:*
         version: link:../../packages/theme-engine
