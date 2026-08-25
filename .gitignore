@@ -151,6 +151,9 @@ vite.config.ts.timestamp-*
 # Superpowers workspace
 .superpowers/
 
+# Git worktrees
+.worktrees/
+
 # AI
 CLAUDE.md
 AGENTS.md
