@@ -1,6 +1,8 @@
 <template>
   <div class="flex items-center gap-2">
-    <label :for="`variant-${componentName}`" class="w-24 text-xs text-gray-600">{{ componentName }}</label>
+    <label :for="`variant-${componentName}`" class="w-24 text-xs text-gray-600">{{
+      componentName
+    }}</label>
     <select
       :id="`variant-${componentName}`"
       :value="selectedVariant"

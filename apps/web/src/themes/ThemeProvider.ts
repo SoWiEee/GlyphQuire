@@ -46,7 +46,10 @@ export function useTheme(): ThemeContext {
 
   const cssVariables = computed(() => tokensToCssVariables(tokens.value));
 
-  function setTheme(tokenOverrides: Partial<ThemeTokens>, variantOverrides?: Partial<ThemeComponentVariants>) {
+  function setTheme(
+    tokenOverrides: Partial<ThemeTokens>,
+    variantOverrides?: Partial<ThemeComponentVariants>,
+  ) {
     baseTokenOverrides.value = tokenOverrides;
     if (variantOverrides) baseVariantOverrides.value = variantOverrides;
     draftTokenOverrides.value = null;

@@ -35,8 +35,12 @@ function focusableElements(container: HTMLElement): HTMLElement[] {
  * `initialFocus` when given and still present, otherwise the first
  * focusable descendant, otherwise the container itself.
  */
-export function trapFocus(container: HTMLElement, initialFocus?: HTMLElement | null): FocusTrapHandle {
-  const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+export function trapFocus(
+  container: HTMLElement,
+  initialFocus?: HTMLElement | null,
+): FocusTrapHandle {
+  const previouslyFocused =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
   function onKeydown(event: KeyboardEvent): void {
     if (event.key !== "Tab") return;

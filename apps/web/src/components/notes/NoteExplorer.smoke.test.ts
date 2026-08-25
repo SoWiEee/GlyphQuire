@@ -33,7 +33,9 @@ describe("NoteExplorer smoke test", () => {
     const store = useNotesStore();
     const listNotes = vi.fn(async () => ({ items: [note()], nextCursor: null }));
     const renameNote = vi.fn(async () => note({ title: "Renamed" }));
-    const deleteNote = vi.fn(async () => note({ deletedAt: "2026-08-20T00:00:00.000Z", revision: 2 }));
+    const deleteNote = vi.fn(async () =>
+      note({ deletedAt: "2026-08-20T00:00:00.000Z", revision: 2 }),
+    );
     const restoreNote = vi.fn(async () => note({ deletedAt: null, revision: 3 }));
     store.configure({
       listNotes,

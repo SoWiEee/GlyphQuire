@@ -9,12 +9,28 @@ describe("mergeTokens", () => {
 
   it("does not mutate the base", () => {
     const base = structuredClone(defaultTheme);
-    mergeTokens(base, { color: { background: "#000", foreground: "#fff", muted: "#999", accent: "#f00", border: "#333" } });
+    mergeTokens(base, {
+      color: {
+        background: "#000",
+        foreground: "#fff",
+        muted: "#999",
+        accent: "#f00",
+        border: "#333",
+      },
+    });
     expect(base).toEqual(defaultTheme);
   });
 
   it("deep merges color overrides while preserving other groups", () => {
-    const result = mergeTokens(defaultTheme, { color: { background: "#000", foreground: "#fff", muted: "#999", accent: "#f00", border: "#333" } });
+    const result = mergeTokens(defaultTheme, {
+      color: {
+        background: "#000",
+        foreground: "#fff",
+        muted: "#999",
+        accent: "#f00",
+        border: "#333",
+      },
+    });
     expect(result.color.background).toBe("#000");
     expect(result.typography).toEqual(defaultTheme.typography);
     expect(result.radius).toEqual(defaultTheme.radius);
@@ -30,7 +46,15 @@ describe("mergeTokens", () => {
 
 describe("resolveTheme", () => {
   it("applies overrides on top of the base theme", () => {
-    const overrides: Partial<ThemeTokens> = { color: { background: "#111", foreground: "#eee", muted: "#888", accent: "#00f", border: "#444" } };
+    const overrides: Partial<ThemeTokens> = {
+      color: {
+        background: "#111",
+        foreground: "#eee",
+        muted: "#888",
+        accent: "#00f",
+        border: "#444",
+      },
+    };
     const resolved = resolveTheme(defaultTheme, overrides);
     expect(resolved.color.background).toBe("#111");
     expect(resolved.typography).toEqual(defaultTheme.typography);

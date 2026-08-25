@@ -1,9 +1,4 @@
-import {
-  themes,
-  userThemes,
-  workspaceMembers,
-  type Database,
-} from "@glyphquire/database";
+import { themes, userThemes, workspaceMembers, type Database } from "@glyphquire/database";
 import type {
   CreateThemeInput,
   UpdateThemeInput,
@@ -28,7 +23,11 @@ export interface ThemeService {
   update(actorId: string, themeId: string, input: UpdateThemeInput): Promise<ThemeResult>;
   remove(actorId: string, themeId: string): Promise<void>;
   getUserTheme(actorId: string, workspaceId: string): Promise<UserThemeResult>;
-  setUserTheme(actorId: string, workspaceId: string, input: SetUserThemeInput): Promise<UserThemeResult>;
+  setUserTheme(
+    actorId: string,
+    workspaceId: string,
+    input: SetUserThemeInput,
+  ): Promise<UserThemeResult>;
 }
 
 function toResult(row: typeof themes.$inferSelect): ThemeResult {
@@ -54,7 +53,9 @@ export class ThemeServiceImpl implements ThemeService {
     const [member] = await this.db
       .select()
       .from(workspaceMembers)
-      .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, actorId)))
+      .where(
+        and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, actorId)),
+      )
       .limit(1);
     if (!member) throw new PublicApiError("NOTE_NOT_FOUND", 404);
   }
@@ -68,7 +69,11 @@ export class ThemeServiceImpl implements ThemeService {
     return { items: rows.map(toResult) };
   }
 
-  async create(actorId: string, workspaceId: string, input: CreateThemeInput): Promise<ThemeResult> {
+  async create(
+    actorId: string,
+    workspaceId: string,
+    input: CreateThemeInput,
+  ): Promise<ThemeResult> {
     await this.requireMembership(actorId, workspaceId);
     const [row] = await this.db
       .insert(themes)
@@ -104,7 +109,10 @@ export class ThemeServiceImpl implements ThemeService {
       throw new PublicApiError("REVISION_CONFLICT", 409);
     }
 
-    const updates: Record<string, unknown> = { revision: existing.revision + 1, updatedAt: new Date() };
+    const updates: Record<string, unknown> = {
+      revision: existing.revision + 1,
+      updatedAt: new Date(),
+    };
     if (input.name !== undefined) updates.name = input.name;
     if (input.version !== undefined) updates.version = input.version;
     if (input.tokens !== undefined) updates.tokens = input.tokens;
@@ -165,9 +173,17 @@ export class ThemeServiceImpl implements ThemeService {
     };
   }
 
-  async setUserTheme(actorId: string, workspaceId: string, input: SetUserThemeInput): Promise<UserThemeResult> {
+  async setUserTheme(
+    actorId: string,
+    workspaceId: string,
+    input: SetUserThemeInput,
+  ): Promise<UserThemeResult> {
     await this.requireMembership(actorId, workspaceId);
-    const [themeRow] = await this.db.select().from(themes).where(eq(themes.id, input.themeId)).limit(1);
+    const [themeRow] = await this.db
+      .select()
+      .from(themes)
+      .where(eq(themes.id, input.themeId))
+      .limit(1);
     if (!themeRow) throw new PublicApiError("NOTE_NOT_FOUND", 404);
 
     const [existing] = await this.db

@@ -69,7 +69,11 @@ export interface NoteService {
     noteId: string,
     input: CheckpointNoteInput,
   ): Promise<CheckpointNoteResult>;
-  listVersions(actorId: string, noteId: string, input: CursorPaginationQuery): Promise<NoteVersionPage>;
+  listVersions(
+    actorId: string,
+    noteId: string,
+    input: CursorPaginationQuery,
+  ): Promise<NoteVersionPage>;
   getVersion(actorId: string, noteId: string, versionId: string): Promise<NoteVersionResult>;
   restoreVersion(
     actorId: string,
@@ -131,10 +135,9 @@ function resolveOperationReplay(operation: NoteOperation, canonicalHash: string)
 const CURSOR_DELIMITER = "|";
 
 function encodeCursor(updatedAt: Date, id: string): string {
-  return Buffer.from(
-    `${updatedAt.toISOString()}${CURSOR_DELIMITER}${id}`,
-    "utf8",
-  ).toString("base64url");
+  return Buffer.from(`${updatedAt.toISOString()}${CURSOR_DELIMITER}${id}`, "utf8").toString(
+    "base64url",
+  );
 }
 
 function decodeCursor(cursor: string): { updatedAt: Date; id: string } {
@@ -299,10 +302,7 @@ export class NoteServiceImpl implements NoteService {
 
   async list(actorId: string, input: ListNotesInput): Promise<NotePage> {
     const cursor = input.cursor ? decodeCursor(input.cursor) : undefined;
-    const conditions = [
-      eq(notes.workspaceId, input.workspaceId),
-      isNull(notes.deletedAt),
-    ];
+    const conditions = [eq(notes.workspaceId, input.workspaceId), isNull(notes.deletedAt)];
     if (cursor) {
       conditions.push(
         or(

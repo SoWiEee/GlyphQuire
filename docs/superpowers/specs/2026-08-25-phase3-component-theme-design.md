@@ -137,35 +137,36 @@ interface ThemeManifest {
 
 These are ProseMirror native node types, not directive-based. Theme integration via Milkdown plugins that add `data-*` attributes for variant selection:
 
-| Component | Theme Integration | Variant Support |
-|-----------|------------------|-----------------|
-| heading | `data-decoration` attribute | sparkle, line, none |
-| paragraph | typography tokens only | none |
-| quote | `data-variant` attribute | plain, sticky, paper |
-| code | `data-variant` attribute | plain, terminal |
-| image | responsive + lazy loading | none |
-| divider | token-driven color/spacing | none |
-| math | KaTeX rendering, token-driven font/color | none |
+| Component | Theme Integration                        | Variant Support      |
+| --------- | ---------------------------------------- | -------------------- |
+| heading   | `data-decoration` attribute              | sparkle, line, none  |
+| paragraph | typography tokens only                   | none                 |
+| quote     | `data-variant` attribute                 | plain, sticky, paper |
+| code      | `data-variant` attribute                 | plain, terminal      |
+| image     | responsive + lazy loading                | none                 |
+| divider   | token-driven color/spacing               | none                 |
+| math      | KaTeX rendering, token-driven font/color | none                 |
 
 ### 2.2 Extended Blocks
 
 Existing Milkdown node views from Phase 2 are extended to read injected `ThemeComponentVariants`:
 
-| Component | Variant Support | Animation |
-|-----------|-----------------|-----------|
-| callout | solid, glass, outline | glow, lift (motion-safe) |
-| sticky-note | plain, paper, neon | none |
-| toggle | plain, card | none |
-| tabs | plain, pill, underline | none |
-| columns | token-driven spacing | none |
-| p5 | inert placeholder (Phase 4) | none |
-| canvas | inert placeholder (Phase 4) | none |
+| Component   | Variant Support             | Animation                |
+| ----------- | --------------------------- | ------------------------ |
+| callout     | solid, glass, outline       | glow, lift (motion-safe) |
+| sticky-note | plain, paper, neon          | none                     |
+| toggle      | plain, card                 | none                     |
+| tabs        | plain, pill, underline      | none                     |
+| columns     | token-driven spacing        | none                     |
+| p5          | inert placeholder (Phase 4) | none                     |
+| canvas      | inert placeholder (Phase 4) | none                     |
 
 ### 2.3 CSS Architecture
 
 Each component has a dedicated CSS file in `apps/web/src/themes/components/`. All styles use `var(--gq-*)` tokens exclusively. Variant styles use `[data-variant]` or `[data-decoration]` attribute selectors. No component CSS imports another component's CSS.
 
 Animation variants use CSS `@keyframes` guarded by:
+
 ```css
 @media (prefers-reduced-motion: no-preference) { ... }
 ```
@@ -182,33 +183,33 @@ Add `katex` as a dependency. Math blocks (`$...$` inline, `$$...$$` display) ren
 
 **`themes` table:**
 
-| Column | Type | Constraints |
-|--------|------|-------------|
-| id | uuid | PK, default gen_random_uuid() |
-| workspace_id | uuid | FK workspaces, nullable (null = system theme) |
-| name | varchar(200) | NOT NULL |
-| version | varchar(50) | NOT NULL |
-| tokens | jsonb | NOT NULL, default '{}' |
-| dark_tokens | jsonb | nullable |
-| components | jsonb | nullable |
-| is_system | boolean | NOT NULL, default false |
-| revision | integer | NOT NULL, default 1 |
-| created_at | timestamptz | NOT NULL, default now() |
-| updated_at | timestamptz | NOT NULL, default now() |
+| Column       | Type         | Constraints                                   |
+| ------------ | ------------ | --------------------------------------------- |
+| id           | uuid         | PK, default gen_random_uuid()                 |
+| workspace_id | uuid         | FK workspaces, nullable (null = system theme) |
+| name         | varchar(200) | NOT NULL                                      |
+| version      | varchar(50)  | NOT NULL                                      |
+| tokens       | jsonb        | NOT NULL, default '{}'                        |
+| dark_tokens  | jsonb        | nullable                                      |
+| components   | jsonb        | nullable                                      |
+| is_system    | boolean      | NOT NULL, default false                       |
+| revision     | integer      | NOT NULL, default 1                           |
+| created_at   | timestamptz  | NOT NULL, default now()                       |
+| updated_at   | timestamptz  | NOT NULL, default now()                       |
 
 Constraints: system themes have `workspace_id IS NULL AND is_system = true`. Workspace themes have `workspace_id IS NOT NULL AND is_system = false`. Unique on `(workspace_id, name)` where `workspace_id IS NOT NULL`.
 
 **`user_themes` table:**
 
-| Column | Type | Constraints |
-|--------|------|-------------|
-| id | uuid | PK, default gen_random_uuid() |
-| user_id | uuid | FK users, NOT NULL |
-| workspace_id | uuid | FK workspaces, NOT NULL |
-| theme_id | uuid | FK themes, NOT NULL |
-| custom_overrides | jsonb | nullable |
-| created_at | timestamptz | NOT NULL, default now() |
-| updated_at | timestamptz | NOT NULL, default now() |
+| Column           | Type        | Constraints                   |
+| ---------------- | ----------- | ----------------------------- |
+| id               | uuid        | PK, default gen_random_uuid() |
+| user_id          | uuid        | FK users, NOT NULL            |
+| workspace_id     | uuid        | FK workspaces, NOT NULL       |
+| theme_id         | uuid        | FK themes, NOT NULL           |
+| custom_overrides | jsonb       | nullable                      |
+| created_at       | timestamptz | NOT NULL, default now()       |
+| updated_at       | timestamptz | NOT NULL, default now()       |
 
 Unique on `(user_id, workspace_id)`.
 

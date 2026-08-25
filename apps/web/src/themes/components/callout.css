@@ -29,11 +29,17 @@
   [data-glyphquire-node="callout"][data-animation="lift"]:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px oklch(0% 0 0 / 0.1);
-    transition: transform 200ms ease, box-shadow 200ms ease;
+    transition:
+      transform 200ms ease,
+      box-shadow 200ms ease;
   }
 }
 
 @keyframes gq-callout-glow {
-  from { box-shadow: 0 0 4px oklch(from var(--gq-color-accent) l c h / 0.2); }
-  to { box-shadow: 0 0 12px oklch(from var(--gq-color-accent) l c h / 0.4); }
+  from {
+    box-shadow: 0 0 4px oklch(from var(--gq-color-accent) l c h / 0.2);
+  }
+  to {
+    box-shadow: 0 0 12px oklch(from var(--gq-color-accent) l c h / 0.4);
+  }
 }

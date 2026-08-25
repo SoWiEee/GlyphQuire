@@ -13,11 +13,7 @@ const DEFAULT_TIMEOUT_MS = 5_000;
 const UTF8_ENCODER = new TextEncoder();
 
 export type DocumentWorkerClientErrorCode =
-  | "CANCELLED"
-  | "DISPOSED"
-  | "MALFORMED_RESPONSE"
-  | "TIMEOUT"
-  | "WORKER_FAILED";
+  "CANCELLED" | "DISPOSED" | "MALFORMED_RESPONSE" | "TIMEOUT" | "WORKER_FAILED";
 
 export class DocumentWorkerClientError extends Error {
   constructor(readonly code: DocumentWorkerClientErrorCode) {

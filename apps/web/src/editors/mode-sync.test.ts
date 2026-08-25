@@ -243,12 +243,14 @@ class FakeModeAdapter implements EditorModeAdapter {
   }
 }
 
-async function createSession(options: {
-  markdown?: string;
-  documents?: DocumentAnalysisPort;
-  lock?: ModeLock;
-  lifecycle?: LiveLifecycle;
-} = {}) {
+async function createSession(
+  options: {
+    markdown?: string;
+    documents?: DocumentAnalysisPort;
+    lock?: ModeLock;
+    lifecycle?: LiveLifecycle;
+  } = {},
+) {
   const documents = options.documents ?? new ImmediateDocuments();
   const lock = options.lock ?? new ModeLock();
   const lifecycle = options.lifecycle ?? new LiveLifecycle();

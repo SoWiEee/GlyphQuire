@@ -18,7 +18,7 @@
 > **目前狀態：開發中。**  
 > GlyphQuire 目前以本地部署與 self-hosted 為主要開發目標，後續預計支援 Cloudflare Workers、R2、Queues 與 PostgreSQL + Hyperdrive 部署架構。
 
-> 工程規格文件 [SPEC.md](docs/SPEC.md)，Markdown 與 Custom Block 語法 [MARKDOWN_SPEC.md](docs/MARKDOWN_SPEC.md)。若兩份規格與實作發生衝突，前者負責 Application / System Architecture，後者負責  Markdown grammar / AST / serialization。
+> 工程規格文件 [SPEC.md](docs/SPEC.md)，Markdown 與 Custom Block 語法 [MARKDOWN_SPEC.md](docs/MARKDOWN_SPEC.md)。若兩份規格與實作發生衝突，前者負責 Application / System Architecture，後者負責 Markdown grammar / AST / serialization。
 
 ---
 

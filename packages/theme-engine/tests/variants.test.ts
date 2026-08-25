@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  defaultVariants,
-  resolveVariants,
-} from "../src/index.js";
+import { defaultVariants, resolveVariants } from "../src/index.js";
 
 describe("defaultVariants", () => {
   it("has default variants for all supported components", () => {

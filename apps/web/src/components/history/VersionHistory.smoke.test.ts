@@ -43,37 +43,33 @@ describe("VersionHistory smoke test", () => {
       nextCursor: null,
     }));
     const getNoteVersion = vi.fn(async () => versionResult());
-    const checkpointNote = vi.fn(
-      async (): Promise<CheckpointNoteResult> => ({
-        note: {
-          id: NOTE_ID,
-          workspaceId: "33333333-3333-4333-8333-333333333333",
-          title: "Note",
-          revision: 4,
-          visibility: "private",
-          createdAt: "2026-08-01T00:00:00.000Z",
-          updatedAt: "2026-08-20T00:00:00.000Z",
-          deletedAt: null,
-          contentMarkdown: "current",
-          schemaVersion: 1,
-        },
-        version: versionResult({ id: "77777777-7777-4777-8777-777777777777", revision: 4 }),
-      }),
-    );
-    const restoreNoteVersion = vi.fn(
-      async (): Promise<NoteResult> => ({
+    const checkpointNote = vi.fn(async (): Promise<CheckpointNoteResult> => ({
+      note: {
         id: NOTE_ID,
         workspaceId: "33333333-3333-4333-8333-333333333333",
         title: "Note",
-        revision: 5,
+        revision: 4,
         visibility: "private",
         createdAt: "2026-08-01T00:00:00.000Z",
-        updatedAt: "2026-08-20T00:10:00.000Z",
+        updatedAt: "2026-08-20T00:00:00.000Z",
         deletedAt: null,
-        contentMarkdown: "# Snapshot body",
+        contentMarkdown: "current",
         schemaVersion: 1,
-      }),
-    );
+      },
+      version: versionResult({ id: "77777777-7777-4777-8777-777777777777", revision: 4 }),
+    }));
+    const restoreNoteVersion = vi.fn(async (): Promise<NoteResult> => ({
+      id: NOTE_ID,
+      workspaceId: "33333333-3333-4333-8333-333333333333",
+      title: "Note",
+      revision: 5,
+      visibility: "private",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-20T00:10:00.000Z",
+      deletedAt: null,
+      contentMarkdown: "# Snapshot body",
+      schemaVersion: 1,
+    }));
     store.configure({ listNoteVersions, checkpointNote, getNoteVersion, restoreNoteVersion });
 
     const wrapper = mount(VersionHistory, { props: { noteId: NOTE_ID, currentRevision: 3 } });
@@ -102,7 +98,9 @@ describe("VersionHistory smoke test", () => {
     );
 
     // Restore the (now-selected, freshly checkpointed) version.
-    const restoreTrigger = wrapper.findAll("button").find((b) => b.text() === "Restore this version");
+    const restoreTrigger = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Restore this version");
     await restoreTrigger!.trigger("click");
     await flushPromises();
     const confirmRestore = wrapper.findAll("button").find((b) => b.text() === "Restore");

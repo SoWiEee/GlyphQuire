@@ -1,6 +1,8 @@
 <template>
   <fieldset class="space-y-2">
-    <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500">Component Variants</legend>
+    <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500">
+      Component Variants
+    </legend>
     <ComponentVariantRow
       v-for="entry in entries"
       :key="entry.name"

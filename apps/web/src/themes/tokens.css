@@ -4,9 +4,9 @@
   --gq-color-muted: #6b7280;
   --gq-color-accent: #2563eb;
   --gq-color-border: #e5e7eb;
-  --gq-typography-body-font: 'Inter', 'Noto Sans TC', system-ui, sans-serif;
-  --gq-typography-heading-font: 'Inter', 'Noto Sans TC', system-ui, sans-serif;
-  --gq-typography-mono-font: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  --gq-typography-body-font: "Inter", "Noto Sans TC", system-ui, sans-serif;
+  --gq-typography-heading-font: "Inter", "Noto Sans TC", system-ui, sans-serif;
+  --gq-typography-mono-font: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
   --gq-radius-sm: 0.25rem;
   --gq-radius-md: 0.5rem;
   --gq-radius-lg: 0.75rem;

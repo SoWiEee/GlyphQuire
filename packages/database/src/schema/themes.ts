@@ -74,9 +74,7 @@ export const userThemes = pgTable(
       .$onUpdate(() => new Date())
       .notNull(),
   },
-  (table) => [
-    uniqueIndex("user_themes_user_workspace_unique").on(table.userId, table.workspaceId),
-  ],
+  (table) => [uniqueIndex("user_themes_user_workspace_unique").on(table.userId, table.workspaceId)],
 );
 
 export const userThemesRelations = relations(userThemes, ({ one }) => ({

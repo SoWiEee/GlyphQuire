@@ -1,6 +1,8 @@
 <template>
   <div class="space-y-1">
-    <label for="theme-select" class="text-xs font-semibold uppercase tracking-wide text-gray-500">Theme</label>
+    <label for="theme-select" class="text-xs font-semibold uppercase tracking-wide text-gray-500"
+      >Theme</label
+    >
     <select
       id="theme-select"
       :value="selectedThemeId"

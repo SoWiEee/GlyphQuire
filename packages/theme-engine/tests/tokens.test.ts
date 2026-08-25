@@ -26,7 +26,11 @@ describe("defaultTheme", () => {
 
   it("has all required radius token keys", () => {
     expect(defaultTheme.radius).toEqual(
-      expect.objectContaining({ sm: expect.any(String), md: expect.any(String), lg: expect.any(String) }),
+      expect.objectContaining({
+        sm: expect.any(String),
+        md: expect.any(String),
+        lg: expect.any(String),
+      }),
     );
   });
 

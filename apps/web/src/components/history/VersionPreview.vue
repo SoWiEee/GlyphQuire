@@ -1,7 +1,9 @@
 <template>
   <section class="flex min-h-0 flex-1 flex-col" aria-label="Version preview">
     <div v-if="version" class="flex min-h-0 flex-1 flex-col">
-      <header class="flex items-center justify-between border-b border-gray-200 px-3 py-2 text-xs text-gray-500">
+      <header
+        class="flex items-center justify-between border-b border-gray-200 px-3 py-2 text-xs text-gray-500"
+      >
         <span>Revision {{ version.revision }} · {{ reasonLabel }}</span>
         <span>{{ version.createdBy.displayName }} · {{ formattedDate }}</span>
       </header>
@@ -15,8 +17,7 @@
         tabindex="0"
         aria-readonly="true"
         data-testid="version-preview-body"
-        >{{ version.contentMarkdown }}</pre
-      >
+        >{{ version.contentMarkdown }}</pre>
     </div>
     <p v-else class="flex flex-1 items-center justify-center px-3 py-6 text-sm text-gray-400">
       Select a version to preview it.
@@ -33,7 +34,9 @@ const props = defineProps<{
   version: NoteVersionResult | null;
 }>();
 
-const reasonLabel = computed(() => (props.version ? describeVersionReason(props.version.reason) : ""));
+const reasonLabel = computed(() =>
+  props.version ? describeVersionReason(props.version.reason) : "",
+);
 
 const formattedDate = computed(() => {
   if (!props.version) return "";

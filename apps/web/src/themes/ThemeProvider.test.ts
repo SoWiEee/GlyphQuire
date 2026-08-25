@@ -17,13 +17,29 @@ describe("useTheme", () => {
 
   it("setDraftTokens applies partial overrides reactively", () => {
     const theme = useTheme();
-    theme.setDraftTokens({ color: { background: "#000", foreground: "#fff", muted: "#888", accent: "#00f", border: "#333" } });
+    theme.setDraftTokens({
+      color: {
+        background: "#000",
+        foreground: "#fff",
+        muted: "#888",
+        accent: "#00f",
+        border: "#333",
+      },
+    });
     expect(theme.cssVariables.value["--gq-color-background"]).toBe("#000");
   });
 
   it("resetDraft reverts to base tokens", () => {
     const theme = useTheme();
-    theme.setDraftTokens({ color: { background: "#000", foreground: "#fff", muted: "#888", accent: "#00f", border: "#333" } });
+    theme.setDraftTokens({
+      color: {
+        background: "#000",
+        foreground: "#fff",
+        muted: "#888",
+        accent: "#00f",
+        border: "#333",
+      },
+    });
     theme.resetDraft();
     expect(theme.cssVariables.value["--gq-color-background"]).toBe(defaultTheme.color.background);
   });

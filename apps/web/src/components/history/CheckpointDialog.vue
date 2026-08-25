@@ -11,10 +11,12 @@
       aria-labelledby="checkpoint-dialog-title"
       class="w-full max-w-sm rounded-lg bg-white p-4 shadow-xl"
     >
-      <h2 id="checkpoint-dialog-title" class="text-sm font-semibold text-gray-900">Create checkpoint</h2>
+      <h2 id="checkpoint-dialog-title" class="text-sm font-semibold text-gray-900">
+        Create checkpoint
+      </h2>
       <p class="mt-2 text-sm text-gray-600">
-        Saves the note's current content (revision {{ baseRevision }}) as a named point in history you
-        can preview or restore later.
+        Saves the note's current content (revision {{ baseRevision }}) as a named point in history
+        you can preview or restore later.
       </p>
       <p v-if="error" role="alert" class="mt-2 text-xs text-red-600">{{ error }}</p>
       <div class="mt-4 flex justify-end gap-2">

@@ -11,7 +11,9 @@
           Checkpoint
         </button>
       </div>
-      <p v-if="store.error" role="alert" class="px-3 pb-2 text-xs text-red-600">{{ store.error }}</p>
+      <p v-if="store.error" role="alert" class="px-3 pb-2 text-xs text-red-600">
+        {{ store.error }}
+      </p>
       <ul class="min-h-0 flex-1 overflow-y-auto" aria-label="Versions">
         <li v-for="version in versions" :key="version.id">
           <button
@@ -71,8 +73,8 @@
     @cancel="confirmRestore = false"
   >
     This replaces the note's current content (revision {{ currentRevision }}) with the content from
-    revision {{ selectedVersion.revision }}. The note moves forward to a new revision — nothing already
-    in history is lost.
+    revision {{ selectedVersion.revision }}. The note moves forward to a new revision — nothing
+    already in history is lost.
   </ConfirmDialog>
 </template>
 

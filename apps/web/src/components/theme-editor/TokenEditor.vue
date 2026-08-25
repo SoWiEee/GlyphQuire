@@ -9,7 +9,10 @@
     <details>
       <summary class="cursor-pointer text-xs font-semibold text-gray-700">Typography</summary>
       <div class="mt-2">
-        <TypographyTokenGroup :typography="typography" @update:typography="(k, v) => emit('update:typography', k, v)" />
+        <TypographyTokenGroup
+          :typography="typography"
+          @update:typography="(k, v) => emit('update:typography', k, v)"
+        />
       </div>
     </details>
     <details>
@@ -21,7 +24,10 @@
     <details>
       <summary class="cursor-pointer text-xs font-semibold text-gray-700">Spacing</summary>
       <div class="mt-2">
-        <SpacingTokenGroup :spacing="spacing" @update:spacing="(k, v) => emit('update:spacing', k, v)" />
+        <SpacingTokenGroup
+          :spacing="spacing"
+          @update:spacing="(k, v) => emit('update:spacing', k, v)"
+        />
       </div>
     </details>
   </div>

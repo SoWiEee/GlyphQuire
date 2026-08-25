@@ -146,6 +146,7 @@ apps/web/src/components/theme-editor/
 ### Task 1: Theme Engine — Tokens and Resolution
 
 **Files:**
+
 - Create: `packages/theme-engine/package.json`
 - Create: `packages/theme-engine/tsconfig.json`
 - Create: `packages/theme-engine/vitest.config.ts`
@@ -160,6 +161,7 @@ apps/web/src/components/theme-editor/
 - Create: `packages/theme-engine/tests/variants.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing (foundational package)
 - Produces:
   - `ThemeTokens` interface (color, typography, radius, spacing)
@@ -258,7 +260,11 @@ describe("defaultTheme", () => {
 
   it("has all required radius token keys", () => {
     expect(defaultTheme.radius).toEqual(
-      expect.objectContaining({ sm: expect.any(String), md: expect.any(String), lg: expect.any(String) }),
+      expect.objectContaining({
+        sm: expect.any(String),
+        md: expect.any(String),
+        lg: expect.any(String),
+      }),
     );
   });
 
@@ -403,12 +409,28 @@ describe("mergeTokens", () => {
 
   it("does not mutate the base", () => {
     const base = structuredClone(defaultTheme);
-    mergeTokens(base, { color: { background: "#000", foreground: "#fff", muted: "#999", accent: "#f00", border: "#333" } });
+    mergeTokens(base, {
+      color: {
+        background: "#000",
+        foreground: "#fff",
+        muted: "#999",
+        accent: "#f00",
+        border: "#333",
+      },
+    });
     expect(base).toEqual(defaultTheme);
   });
 
   it("deep merges color overrides while preserving other groups", () => {
-    const result = mergeTokens(defaultTheme, { color: { background: "#000", foreground: "#fff", muted: "#999", accent: "#f00", border: "#333" } });
+    const result = mergeTokens(defaultTheme, {
+      color: {
+        background: "#000",
+        foreground: "#fff",
+        muted: "#999",
+        accent: "#f00",
+        border: "#333",
+      },
+    });
     expect(result.color.background).toBe("#000");
     expect(result.typography).toEqual(defaultTheme.typography);
     expect(result.radius).toEqual(defaultTheme.radius);
@@ -424,7 +446,15 @@ describe("mergeTokens", () => {
 
 describe("resolveTheme", () => {
   it("applies overrides on top of the base theme", () => {
-    const overrides: Partial<ThemeTokens> = { color: { background: "#111", foreground: "#eee", muted: "#888", accent: "#00f", border: "#444" } };
+    const overrides: Partial<ThemeTokens> = {
+      color: {
+        background: "#111",
+        foreground: "#eee",
+        muted: "#888",
+        accent: "#00f",
+        border: "#444",
+      },
+    };
     const resolved = resolveTheme(defaultTheme, overrides);
     expect(resolved.color.background).toBe("#111");
     expect(resolved.typography).toEqual(defaultTheme.typography);
@@ -567,11 +597,7 @@ Create `packages/theme-engine/tests/variants.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
-import {
-  defaultVariants,
-  resolveVariants,
-  type ThemeComponentVariants,
-} from "../src/index.js";
+import { defaultVariants, resolveVariants, type ThemeComponentVariants } from "../src/index.js";
 
 describe("defaultVariants", () => {
   it("has default variants for all supported components", () => {
@@ -685,6 +711,7 @@ git commit -m "feat: add theme-engine package with tokens, resolution, CSS varia
 ### Task 2: Theme SDK — Zod Schemas and Validation
 
 **Files:**
+
 - Create: `packages/theme-sdk/package.json`
 - Create: `packages/theme-sdk/tsconfig.json`
 - Create: `packages/theme-sdk/vitest.config.ts`
@@ -696,6 +723,7 @@ git commit -m "feat: add theme-engine package with tokens, resolution, CSS varia
 - Create: `packages/theme-sdk/tests/validation.test.ts`
 
 **Interfaces:**
+
 - Consumes: `ThemeTokens`, `ThemeComponentVariants` from `@glyphquire/theme-engine`
 - Produces:
   - `themeTokensSchema: z.ZodType`
@@ -777,8 +805,18 @@ import {
 describe("themeTokensSchema", () => {
   it("accepts valid complete tokens", () => {
     const result = themeTokensSchema.safeParse({
-      color: { background: "#fff", foreground: "#000", muted: "#999", accent: "#00f", border: "#ccc" },
-      typography: { bodyFont: "Inter, sans-serif", headingFont: "Inter, sans-serif", monoFont: "monospace" },
+      color: {
+        background: "#fff",
+        foreground: "#000",
+        muted: "#999",
+        accent: "#00f",
+        border: "#ccc",
+      },
+      typography: {
+        bodyFont: "Inter, sans-serif",
+        headingFont: "Inter, sans-serif",
+        monoFont: "monospace",
+      },
       radius: { sm: "0.25rem", md: "0.5rem", lg: "1rem" },
       spacing: { xs: "0.25rem", sm: "0.5rem" },
     });
@@ -787,7 +825,13 @@ describe("themeTokensSchema", () => {
 
   it("rejects color values containing url()", () => {
     const result = themeTokensSchema.safeParse({
-      color: { background: "url(evil)", foreground: "#000", muted: "#999", accent: "#00f", border: "#ccc" },
+      color: {
+        background: "url(evil)",
+        foreground: "#000",
+        muted: "#999",
+        accent: "#00f",
+        border: "#ccc",
+      },
       typography: { bodyFont: "sans-serif", headingFont: "sans-serif", monoFont: "monospace" },
       radius: { sm: "0.25rem", md: "0.5rem", lg: "1rem" },
       spacing: {},
@@ -797,7 +841,13 @@ describe("themeTokensSchema", () => {
 
   it("rejects font values containing url()", () => {
     const result = themeTokensSchema.safeParse({
-      color: { background: "#fff", foreground: "#000", muted: "#999", accent: "#00f", border: "#ccc" },
+      color: {
+        background: "#fff",
+        foreground: "#000",
+        muted: "#999",
+        accent: "#00f",
+        border: "#ccc",
+      },
       typography: { bodyFont: "url(evil)", headingFont: "sans-serif", monoFont: "monospace" },
       radius: { sm: "0.25rem", md: "0.5rem", lg: "1rem" },
       spacing: {},
@@ -839,10 +889,22 @@ describe("themeManifestSchema", () => {
       name: "My Theme",
       version: "1.0.0",
       tokens: {
-        color: { background: "#111", foreground: "#eee", muted: "#888", accent: "#00f", border: "#444" },
+        color: {
+          background: "#111",
+          foreground: "#eee",
+          muted: "#888",
+          accent: "#00f",
+          border: "#444",
+        },
       },
       darkTokens: {
-        color: { background: "#000", foreground: "#fff", muted: "#aaa", accent: "#0af", border: "#333" },
+        color: {
+          background: "#000",
+          foreground: "#fff",
+          muted: "#aaa",
+          accent: "#0af",
+          border: "#333",
+        },
       },
       components: {
         heading: { decoration: "line" },
@@ -885,20 +947,31 @@ import { describe, expect, it } from "vitest";
 import { validateThemeManifest, validateColorValue, validateFontValue } from "../src/index.js";
 
 describe("validateColorValue", () => {
-  it.each(["#fff", "#ffffff", "#aabbcc", "rgb(0,0,0)", "rgba(0,0,0,1)", "hsl(0,0%,0%)", "oklch(50% 0.2 250)"])(
-    "accepts valid color: %s", (v) => expect(validateColorValue(v)).toBe(true),
-  );
+  it.each([
+    "#fff",
+    "#ffffff",
+    "#aabbcc",
+    "rgb(0,0,0)",
+    "rgba(0,0,0,1)",
+    "hsl(0,0%,0%)",
+    "oklch(50% 0.2 250)",
+  ])("accepts valid color: %s", (v) => expect(validateColorValue(v)).toBe(true));
   it.each(["url(evil)", "expression(alert(1))", "var(--x)", "javascript:void(0)"])(
-    "rejects dangerous color: %s", (v) => expect(validateColorValue(v)).toBe(false),
+    "rejects dangerous color: %s",
+    (v) => expect(validateColorValue(v)).toBe(false),
   );
 });
 
 describe("validateFontValue", () => {
-  it.each(["'Inter', sans-serif", "monospace", "system-ui", "'Noto Sans TC', 'Helvetica Neue', sans-serif"])(
-    "accepts valid font: %s", (v) => expect(validateFontValue(v)).toBe(true),
-  );
+  it.each([
+    "'Inter', sans-serif",
+    "monospace",
+    "system-ui",
+    "'Noto Sans TC', 'Helvetica Neue', sans-serif",
+  ])("accepts valid font: %s", (v) => expect(validateFontValue(v)).toBe(true));
   it.each(["url(evil.woff2)", "expression(alert(1))", "javascript:void"])(
-    "rejects dangerous font: %s", (v) => expect(validateFontValue(v)).toBe(false),
+    "rejects dangerous font: %s",
+    (v) => expect(validateFontValue(v)).toBe(false),
   );
 });
 
@@ -925,86 +998,130 @@ import { z } from "zod";
 const FORBIDDEN_CSS_PATTERN = /(?:url|expression|javascript)\s*\(/i;
 const COLOR_PATTERN = /^(?:#[0-9a-fA-F]{3,8}|(?:rgb|rgba|hsl|hsla|oklch)\s*\(.*\))$/;
 
-const safeColorSchema = z.string().max(200).refine(
-  (v) => !FORBIDDEN_CSS_PATTERN.test(v) && !v.includes("var("),
-  { message: "Color value contains forbidden CSS pattern" },
-);
+const safeColorSchema = z
+  .string()
+  .max(200)
+  .refine((v) => !FORBIDDEN_CSS_PATTERN.test(v) && !v.includes("var("), {
+    message: "Color value contains forbidden CSS pattern",
+  });
 
-const safeFontSchema = z.string().max(500).refine(
-  (v) => !FORBIDDEN_CSS_PATTERN.test(v),
-  { message: "Font value contains forbidden CSS pattern" },
-);
+const safeFontSchema = z
+  .string()
+  .max(500)
+  .refine((v) => !FORBIDDEN_CSS_PATTERN.test(v), {
+    message: "Font value contains forbidden CSS pattern",
+  });
 
 const safeCssLengthSchema = z.string().max(50);
 
-export const themeTokensSchema = z.object({
-  color: z.object({
-    background: safeColorSchema,
-    foreground: safeColorSchema,
-    muted: safeColorSchema,
-    accent: safeColorSchema,
-    border: safeColorSchema,
-  }).strict(),
-  typography: z.object({
-    bodyFont: safeFontSchema,
-    headingFont: safeFontSchema,
-    monoFont: safeFontSchema,
-  }).strict(),
-  radius: z.object({
-    sm: safeCssLengthSchema,
-    md: safeCssLengthSchema,
-    lg: safeCssLengthSchema,
-  }).strict(),
-  spacing: z.record(z.string().max(30), safeCssLengthSchema),
-}).strict();
+export const themeTokensSchema = z
+  .object({
+    color: z
+      .object({
+        background: safeColorSchema,
+        foreground: safeColorSchema,
+        muted: safeColorSchema,
+        accent: safeColorSchema,
+        border: safeColorSchema,
+      })
+      .strict(),
+    typography: z
+      .object({
+        bodyFont: safeFontSchema,
+        headingFont: safeFontSchema,
+        monoFont: safeFontSchema,
+      })
+      .strict(),
+    radius: z
+      .object({
+        sm: safeCssLengthSchema,
+        md: safeCssLengthSchema,
+        lg: safeCssLengthSchema,
+      })
+      .strict(),
+    spacing: z.record(z.string().max(30), safeCssLengthSchema),
+  })
+  .strict();
 
 export const partialThemeTokensSchema = themeTokensSchema.deepPartial();
 
-export const themeComponentVariantsSchema = z.object({
-  heading: z.object({ decoration: z.enum(["none", "sparkle", "line"]) }).strict().optional(),
-  quote: z.object({ variant: z.enum(["plain", "sticky", "paper"]) }).strict().optional(),
-  callout: z.object({
-    variant: z.enum(["solid", "glass", "outline"]),
-    animation: z.enum(["none", "glow", "lift"]).optional(),
-  }).strict().optional(),
-  code: z.object({ variant: z.enum(["plain", "terminal"]) }).strict().optional(),
-  toggle: z.object({ variant: z.enum(["plain", "card"]) }).strict().optional(),
-  tabs: z.object({ variant: z.enum(["plain", "pill", "underline"]) }).strict().optional(),
-  stickyNote: z.object({ variant: z.enum(["plain", "paper", "neon"]) }).strict().optional(),
-}).strict().optional();
+export const themeComponentVariantsSchema = z
+  .object({
+    heading: z
+      .object({ decoration: z.enum(["none", "sparkle", "line"]) })
+      .strict()
+      .optional(),
+    quote: z
+      .object({ variant: z.enum(["plain", "sticky", "paper"]) })
+      .strict()
+      .optional(),
+    callout: z
+      .object({
+        variant: z.enum(["solid", "glass", "outline"]),
+        animation: z.enum(["none", "glow", "lift"]).optional(),
+      })
+      .strict()
+      .optional(),
+    code: z
+      .object({ variant: z.enum(["plain", "terminal"]) })
+      .strict()
+      .optional(),
+    toggle: z
+      .object({ variant: z.enum(["plain", "card"]) })
+      .strict()
+      .optional(),
+    tabs: z
+      .object({ variant: z.enum(["plain", "pill", "underline"]) })
+      .strict()
+      .optional(),
+    stickyNote: z
+      .object({ variant: z.enum(["plain", "paper", "neon"]) })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .optional();
 
-export const themeManifestSchema = z.object({
-  id: z.string().min(1).max(100),
-  name: z.string().min(1).max(200),
-  version: z.string().min(1).max(50),
-  tokens: partialThemeTokensSchema.optional(),
-  darkTokens: partialThemeTokensSchema.optional(),
-  components: themeComponentVariantsSchema,
-}).strict();
+export const themeManifestSchema = z
+  .object({
+    id: z.string().min(1).max(100),
+    name: z.string().min(1).max(200),
+    version: z.string().min(1).max(50),
+    tokens: partialThemeTokensSchema.optional(),
+    darkTokens: partialThemeTokensSchema.optional(),
+    components: themeComponentVariantsSchema,
+  })
+  .strict();
 
-export const blockManifestSchema = z.object({
-  name: z.string().min(1).max(100),
-  version: z.number().int().positive(),
-  kind: z.enum(["container", "leaf", "text"]),
-}).strict();
+export const blockManifestSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    version: z.number().int().positive(),
+    kind: z.enum(["container", "leaf", "text"]),
+  })
+  .strict();
 
-export const runtimeManifestSchema = z.object({
-  name: z.string().min(1).max(100),
-  entrypoint: z.string().min(1).max(500),
-}).strict();
+export const runtimeManifestSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    entrypoint: z.string().min(1).max(500),
+  })
+  .strict();
 
 export const pluginPermissionSchema = z.string().min(1).max(100);
 
-export const pluginManifestSchema = z.object({
-  id: z.string().min(1).max(100),
-  name: z.string().min(1).max(200),
-  version: z.string().min(1).max(50),
-  apiVersion: z.string().min(1).max(20),
-  blocks: z.array(blockManifestSchema).optional(),
-  themes: z.array(themeManifestSchema).optional(),
-  runtimes: z.array(runtimeManifestSchema).optional(),
-  permissions: z.array(pluginPermissionSchema).optional(),
-}).strict();
+export const pluginManifestSchema = z
+  .object({
+    id: z.string().min(1).max(100),
+    name: z.string().min(1).max(200),
+    version: z.string().min(1).max(50),
+    apiVersion: z.string().min(1).max(20),
+    blocks: z.array(blockManifestSchema).optional(),
+    themes: z.array(themeManifestSchema).optional(),
+    runtimes: z.array(runtimeManifestSchema).optional(),
+    permissions: z.array(pluginPermissionSchema).optional(),
+  })
+  .strict();
 
 export function isValidColorValue(value: string): boolean {
   return !FORBIDDEN_CSS_PATTERN.test(value) && !value.includes("var(");
@@ -1124,6 +1241,7 @@ git commit -m "feat: add theme-sdk package with Zod schemas, validation, and plu
 ### Task 3: Database — Theme Tables and Migration
 
 **Files:**
+
 - Create: `packages/database/src/migrations/0004_phase3_themes.sql`
 - Create: `packages/database/src/schema/themes.ts`
 - Create: `packages/database/src/schema/user-themes.ts`
@@ -1131,6 +1249,7 @@ git commit -m "feat: add theme-sdk package with Zod schemas, validation, and plu
 - Modify: `packages/database/src/index.ts`
 
 **Interfaces:**
+
 - Consumes: existing `workspaces`, `user` tables from `packages/database`
 - Produces:
   - `themes` Drizzle table (id, workspace_id, name, version, tokens, dark_tokens, components, is_system, revision, created_at, updated_at)
@@ -1289,9 +1408,7 @@ export const userThemes = pgTable(
       .$onUpdate(() => new Date())
       .notNull(),
   },
-  (table) => [
-    uniqueIndex("user_themes_user_workspace_unique").on(table.userId, table.workspaceId),
-  ],
+  (table) => [uniqueIndex("user_themes_user_workspace_unique").on(table.userId, table.workspaceId)],
 );
 
 export const userThemesRelations = relations(userThemes, ({ one }) => ({
@@ -1306,12 +1423,7 @@ export const userThemesRelations = relations(userThemes, ({ one }) => ({
 Add to `packages/database/src/schema/index.ts`:
 
 ```ts
-export {
-  themes,
-  themesRelations,
-  userThemes,
-  userThemesRelations,
-} from "./themes.js";
+export { themes, themesRelations, userThemes, userThemesRelations } from "./themes.js";
 ```
 
 - [ ] **Step 4: Update database index.ts to export theme types**
@@ -1321,12 +1433,7 @@ Add to `packages/database/src/index.ts` — in the import section and type expor
 ```ts
 import type { themes, userThemes } from "./schema/index.js";
 // ... in re-exports:
-export {
-  themes,
-  themesRelations,
-  userThemes,
-  userThemesRelations,
-} from "./schema/index.js";
+export { themes, themesRelations, userThemes, userThemesRelations } from "./schema/index.js";
 // ... in type aliases:
 export type Theme = InferSelectModel<typeof themes>;
 export type NewTheme = InferInsertModel<typeof themes>;
@@ -1356,11 +1463,13 @@ git commit -m "feat: add themes and user_themes tables with system theme seed"
 ### Task 4: API Contract — Theme Endpoint Schemas
 
 **Files:**
+
 - Create: `packages/api-contract/src/themes/schemas.ts`
 - Create: `packages/api-contract/src/themes/types.ts`
 - Modify: `packages/api-contract/src/index.ts`
 
 **Interfaces:**
+
 - Consumes: `canonicalUuidSchema`, `cursorPaginationQuerySchema`, `requestIdSchema` from `@glyphquire/api-contract`, `partialThemeTokensSchema`, `themeComponentVariantsSchema` from `@glyphquire/theme-sdk`
 - Produces:
   - `createThemeInputSchema`, `updateThemeInputSchema`, `setUserThemeInputSchema` Zod schemas
@@ -1373,36 +1482,48 @@ Create `packages/api-contract/src/themes/schemas.ts`:
 
 ```ts
 import { z } from "zod";
-import { canonicalUuidSchema, requestIdSchema, cursorPaginationQuerySchema } from "../notes/schemas.js";
+import {
+  canonicalUuidSchema,
+  requestIdSchema,
+  cursorPaginationQuerySchema,
+} from "../notes/schemas.js";
 import { partialThemeTokensSchema, themeComponentVariantsSchema } from "@glyphquire/theme-sdk";
 
-export const themeIdParamsSchema = z.object({
-  themeId: canonicalUuidSchema,
-}).strict();
+export const themeIdParamsSchema = z
+  .object({
+    themeId: canonicalUuidSchema,
+  })
+  .strict();
 
-export const createThemeInputSchema = z.object({
-  operationId: requestIdSchema,
-  name: z.string().min(1).max(200),
-  version: z.string().min(1).max(50),
-  tokens: partialThemeTokensSchema.optional(),
-  darkTokens: partialThemeTokensSchema.optional(),
-  components: themeComponentVariantsSchema,
-}).strict();
+export const createThemeInputSchema = z
+  .object({
+    operationId: requestIdSchema,
+    name: z.string().min(1).max(200),
+    version: z.string().min(1).max(50),
+    tokens: partialThemeTokensSchema.optional(),
+    darkTokens: partialThemeTokensSchema.optional(),
+    components: themeComponentVariantsSchema,
+  })
+  .strict();
 
-export const updateThemeInputSchema = z.object({
-  operationId: requestIdSchema,
-  baseRevision: z.number().int().positive(),
-  name: z.string().min(1).max(200).optional(),
-  version: z.string().min(1).max(50).optional(),
-  tokens: partialThemeTokensSchema.optional(),
-  darkTokens: partialThemeTokensSchema.optional(),
-  components: themeComponentVariantsSchema,
-}).strict();
+export const updateThemeInputSchema = z
+  .object({
+    operationId: requestIdSchema,
+    baseRevision: z.number().int().positive(),
+    name: z.string().min(1).max(200).optional(),
+    version: z.string().min(1).max(50).optional(),
+    tokens: partialThemeTokensSchema.optional(),
+    darkTokens: partialThemeTokensSchema.optional(),
+    components: themeComponentVariantsSchema,
+  })
+  .strict();
 
-export const setUserThemeInputSchema = z.object({
-  themeId: canonicalUuidSchema,
-  customOverrides: partialThemeTokensSchema.optional(),
-}).strict();
+export const setUserThemeInputSchema = z
+  .object({
+    themeId: canonicalUuidSchema,
+    customOverrides: partialThemeTokensSchema.optional(),
+  })
+  .strict();
 
 export const themeResultSchema = z.object({
   id: z.string(),
@@ -1482,10 +1603,12 @@ git commit -m "feat: add theme API contract schemas and types"
 ### Task 5: ThemeService — Backend CRUD with Tenant Isolation
 
 **Files:**
+
 - Create: `apps/api/src/modules/themes/ThemeService.ts`
 - Create: `apps/api/src/modules/themes/ThemeService.integration.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Database`, `themes`, `userThemes`, `workspaceMembers` from `@glyphquire/database`; `CreateThemeInput`, `UpdateThemeInput`, `SetUserThemeInput` from `@glyphquire/api-contract`; `resolveTheme`, `tokensToCssVariables`, `defaultTheme`, `defaultDarkTheme` from `@glyphquire/theme-engine`
 - Produces:
   - `ThemeService` interface: `list(actorId, workspaceId)`, `create(actorId, workspaceId, input)`, `get(actorId, themeId)`, `update(actorId, themeId, input)`, `remove(actorId, themeId)`, `getUserTheme(actorId, workspaceId)`, `setUserTheme(actorId, workspaceId, input)`
@@ -1500,7 +1623,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createDb, type Database } from "@glyphquire/database";
 import { ThemeServiceImpl, type ThemeService } from "./ThemeService.js";
 
-const TEST_DATABASE_URL = process.env.DATABASE_URL ?? "postgres://gq_app:gq_app_dev@localhost:5432/glyphquire_dev";
+const TEST_DATABASE_URL =
+  process.env.DATABASE_URL ?? "postgres://gq_app:gq_app_dev@localhost:5432/glyphquire_dev";
 
 describe("ThemeService", () => {
   let db: Database;
@@ -1549,7 +1673,15 @@ describe("ThemeService", () => {
       operationId: crypto.randomUUID(),
       name: "Custom Theme",
       version: "1.0.0",
-      tokens: { color: { background: "#111", foreground: "#eee", muted: "#888", accent: "#00f", border: "#444" } },
+      tokens: {
+        color: {
+          background: "#111",
+          foreground: "#eee",
+          muted: "#888",
+          accent: "#00f",
+          border: "#444",
+        },
+      },
     });
     expect(created.name).toBe("Custom Theme");
     expect(created.isSystem).toBe(false);
@@ -1590,7 +1722,15 @@ describe("ThemeService", () => {
 
     await service.setUserTheme(testUserId, testWorkspaceId, {
       themeId: defaultLight.id,
-      customOverrides: { color: { background: "#fafafa", foreground: "#1a1a1a", muted: "#6b7280", accent: "#2563eb", border: "#e5e7eb" } },
+      customOverrides: {
+        color: {
+          background: "#fafafa",
+          foreground: "#1a1a1a",
+          muted: "#6b7280",
+          accent: "#2563eb",
+          border: "#e5e7eb",
+        },
+      },
     });
 
     const userTheme = await service.getUserTheme(testUserId, testWorkspaceId);
@@ -1611,12 +1751,7 @@ Expected: FAIL — module not found
 Create `apps/api/src/modules/themes/ThemeService.ts`:
 
 ```ts
-import {
-  themes,
-  userThemes,
-  workspaceMembers,
-  type Database,
-} from "@glyphquire/database";
+import { themes, userThemes, workspaceMembers, type Database } from "@glyphquire/database";
 import type {
   CreateThemeInput,
   UpdateThemeInput,
@@ -1642,7 +1777,11 @@ export interface ThemeService {
   update(actorId: string, themeId: string, input: UpdateThemeInput): Promise<ThemeResult>;
   remove(actorId: string, themeId: string): Promise<void>;
   getUserTheme(actorId: string, workspaceId: string): Promise<UserThemeResult>;
-  setUserTheme(actorId: string, workspaceId: string, input: SetUserThemeInput): Promise<UserThemeResult>;
+  setUserTheme(
+    actorId: string,
+    workspaceId: string,
+    input: SetUserThemeInput,
+  ): Promise<UserThemeResult>;
 }
 
 function toResult(row: typeof themes.$inferSelect): ThemeResult {
@@ -1668,7 +1807,9 @@ export class ThemeServiceImpl implements ThemeService {
     const [member] = await this.db
       .select()
       .from(workspaceMembers)
-      .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, actorId)))
+      .where(
+        and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, actorId)),
+      )
       .limit(1);
     if (!member) throw new PublicApiError("NOT_FOUND", 404);
   }
@@ -1682,7 +1823,11 @@ export class ThemeServiceImpl implements ThemeService {
     return { items: rows.map(toResult) };
   }
 
-  async create(actorId: string, workspaceId: string, input: CreateThemeInput): Promise<ThemeResult> {
+  async create(
+    actorId: string,
+    workspaceId: string,
+    input: CreateThemeInput,
+  ): Promise<ThemeResult> {
     await this.requireMembership(actorId, workspaceId);
     const [row] = await this.db
       .insert(themes)
@@ -1718,7 +1863,10 @@ export class ThemeServiceImpl implements ThemeService {
       throw new PublicApiError("CONFLICT", 409);
     }
 
-    const updates: Record<string, unknown> = { revision: existing.revision + 1, updatedAt: new Date() };
+    const updates: Record<string, unknown> = {
+      revision: existing.revision + 1,
+      updatedAt: new Date(),
+    };
     if (input.name !== undefined) updates.name = input.name;
     if (input.version !== undefined) updates.version = input.version;
     if (input.tokens !== undefined) updates.tokens = input.tokens;
@@ -1779,9 +1927,17 @@ export class ThemeServiceImpl implements ThemeService {
     };
   }
 
-  async setUserTheme(actorId: string, workspaceId: string, input: SetUserThemeInput): Promise<UserThemeResult> {
+  async setUserTheme(
+    actorId: string,
+    workspaceId: string,
+    input: SetUserThemeInput,
+  ): Promise<UserThemeResult> {
     await this.requireMembership(actorId, workspaceId);
-    const [themeRow] = await this.db.select().from(themes).where(eq(themes.id, input.themeId)).limit(1);
+    const [themeRow] = await this.db
+      .select()
+      .from(themes)
+      .where(eq(themes.id, input.themeId))
+      .limit(1);
     if (!themeRow) throw new PublicApiError("NOT_FOUND", 404);
 
     const [existing] = await this.db
@@ -1830,11 +1986,13 @@ git commit -m "feat: add ThemeService with CRUD, CAS, tenant isolation, and user
 ### Task 6: Theme API Routes and App Wiring
 
 **Files:**
+
 - Create: `apps/api/src/routes/v1/themes.ts`
 - Create: `apps/api/src/routes/v1/themes.integration.test.ts`
 - Modify: `apps/api/src/app.ts`
 
 **Interfaces:**
+
 - Consumes: `ThemeService` from Task 5; `createThemeInputSchema`, `updateThemeInputSchema`, `setUserThemeInputSchema`, `themeIdParamsSchema` from Task 4; `getRequestContext` from existing middleware
 - Produces: 7 route handlers mounted at `/api/v1`
 
@@ -1871,14 +2029,18 @@ async function parseJsonBody(request: Request): Promise<unknown> {
 export function createThemeRoutes(themeService: ThemeService) {
   return new Hono<{ Variables: SecurityVariables }>()
     .get("/workspaces/:workspaceId/themes", async (context) => {
-      const params = workspaceIdParamsSchema.safeParse({ workspaceId: context.req.param("workspaceId") });
+      const params = workspaceIdParamsSchema.safeParse({
+        workspaceId: context.req.param("workspaceId"),
+      });
       if (!params.success) invalidRequest();
       const { actorId } = getRequestContext(context);
       const result = await themeService.list(actorId, params.data.workspaceId);
       return context.json(result, 200);
     })
     .post("/workspaces/:workspaceId/themes", async (context) => {
-      const params = workspaceIdParamsSchema.safeParse({ workspaceId: context.req.param("workspaceId") });
+      const params = workspaceIdParamsSchema.safeParse({
+        workspaceId: context.req.param("workspaceId"),
+      });
       if (!params.success) invalidRequest();
       const body = createThemeInputSchema.safeParse(await parseJsonBody(context.req.raw));
       if (!body.success) invalidRequest();
@@ -1933,6 +2095,7 @@ export function createThemeRoutes(themeService: ThemeService) {
 In `apps/api/src/app.ts`, add:
 
 Import:
+
 ```ts
 import { ThemeServiceImpl, type ThemeService } from "./modules/themes/ThemeService.js";
 import { createThemeRoutes } from "./routes/v1/themes.js";
@@ -1941,11 +2104,13 @@ import { createThemeRoutes } from "./routes/v1/themes.js";
 In `AppDependencies` interface add `themeService?: ThemeService;`.
 
 In `createAppRuntime`, after `const noteService = ...`:
+
 ```ts
 const themeService = dependencies.themeService ?? new ThemeServiceImpl(db);
 ```
 
 After the `.route("/api/v1", createVersionRoutes(noteService))` line:
+
 ```ts
 .route("/api/v1", createThemeRoutes(themeService))
 ```
@@ -1959,7 +2124,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../../app.js";
 
 const TEST_ENV = {
-  DATABASE_URL: process.env.DATABASE_URL ?? "postgres://gq_app:gq_app_dev@localhost:5432/glyphquire_dev",
+  DATABASE_URL:
+    process.env.DATABASE_URL ?? "postgres://gq_app:gq_app_dev@localhost:5432/glyphquire_dev",
   BETTER_AUTH_URL: "http://localhost:3001",
   WEB_ORIGIN: "http://localhost:5173",
   BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long!!",
@@ -1980,7 +2146,9 @@ describe("Theme API routes", () => {
   });
 
   it("DELETE /api/v1/themes/:id returns 401 without auth", async () => {
-    const res = await app.request("/api/v1/themes/00000000-0000-4000-8000-000000000001", { method: "DELETE" });
+    const res = await app.request("/api/v1/themes/00000000-0000-4000-8000-000000000001", {
+      method: "DELETE",
+    });
     expect(res.status).toBe(401);
   });
 });
@@ -2008,11 +2176,13 @@ git commit -m "feat: add theme API routes and wire into Hono app"
 ### Task 7: ThemeProvider Vue Composable
 
 **Files:**
+
 - Create: `apps/web/src/themes/ThemeProvider.ts`
 - Create: `apps/web/src/themes/ThemeProvider.test.ts`
 - Create: `apps/web/src/stores/theme.ts`
 
 **Interfaces:**
+
 - Consumes: `resolveTheme`, `tokensToCssVariables`, `resolveVariants`, `defaultTheme`, `defaultDarkTheme`, `defaultVariants`, `type ThemeTokens`, `type ThemeComponentVariants` from `@glyphquire/theme-engine`
 - Produces:
   - `useTheme()` composable: `tokens` (reactive `ThemeTokens`), `variants` (reactive `ThemeComponentVariants`), `cssVariables` (computed `Record<string, string>`), `isDark` (ref), `setTheme(tokens, variants)`, `setDraftTokens(partial)`, `commitDraft()`, `resetDraft()`, `applyToDocument()`
@@ -2026,7 +2196,12 @@ Create `apps/web/src/themes/ThemeProvider.test.ts`:
 ```ts
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { useTheme, THEME_INJECTION_KEY } from "./ThemeProvider.js";
-import { defaultTheme, defaultDarkTheme, defaultVariants, tokensToCssVariables } from "@glyphquire/theme-engine";
+import {
+  defaultTheme,
+  defaultDarkTheme,
+  defaultVariants,
+  tokensToCssVariables,
+} from "@glyphquire/theme-engine";
 
 describe("useTheme", () => {
   it("provides default light tokens initially", () => {
@@ -2043,13 +2218,29 @@ describe("useTheme", () => {
 
   it("setDraftTokens applies partial overrides reactively", () => {
     const theme = useTheme();
-    theme.setDraftTokens({ color: { background: "#000", foreground: "#fff", muted: "#888", accent: "#00f", border: "#333" } });
+    theme.setDraftTokens({
+      color: {
+        background: "#000",
+        foreground: "#fff",
+        muted: "#888",
+        accent: "#00f",
+        border: "#333",
+      },
+    });
     expect(theme.cssVariables.value["--gq-color-background"]).toBe("#000");
   });
 
   it("resetDraft reverts to base tokens", () => {
     const theme = useTheme();
-    theme.setDraftTokens({ color: { background: "#000", foreground: "#fff", muted: "#888", accent: "#00f", border: "#333" } });
+    theme.setDraftTokens({
+      color: {
+        background: "#000",
+        foreground: "#fff",
+        muted: "#888",
+        accent: "#00f",
+        border: "#333",
+      },
+    });
     theme.resetDraft();
     expect(theme.cssVariables.value["--gq-color-background"]).toBe(defaultTheme.color.background);
   });
@@ -2114,7 +2305,10 @@ export function useTheme(): ThemeContext {
 
   const cssVariables = computed(() => tokensToCssVariables(tokens.value));
 
-  function setTheme(tokenOverrides: Partial<ThemeTokens>, variantOverrides?: Partial<ThemeComponentVariants>) {
+  function setTheme(
+    tokenOverrides: Partial<ThemeTokens>,
+    variantOverrides?: Partial<ThemeComponentVariants>,
+  ) {
     baseTokenOverrides.value = tokenOverrides;
     if (variantOverrides) baseVariantOverrides.value = variantOverrides;
     draftTokenOverrides.value = null;
@@ -2227,6 +2421,7 @@ git commit -m "feat: add ThemeProvider composable and theme Pinia store"
 ### Task 8: Component Theme CSS — All 12 Visual Components
 
 **Files:**
+
 - Create: `apps/web/src/themes/tokens.css`
 - Create: `apps/web/src/themes/components/heading.css`
 - Create: `apps/web/src/themes/components/paragraph.css`
@@ -2242,6 +2437,7 @@ git commit -m "feat: add ThemeProvider composable and theme Pinia store"
 - Create: `apps/web/src/themes/components/math.css`
 
 **Interfaces:**
+
 - Consumes: CSS variable naming from Task 1 (`--gq-color-*`, `--gq-typography-*`, `--gq-radius-*`, `--gq-spacing-*`)
 - Produces: Complete CSS for all 12 themed visual components. Each CSS file self-contained; no cross-imports between component CSS files. Variant styles via `[data-variant]` / `[data-decoration]` attribute selectors.
 
@@ -2256,9 +2452,9 @@ Create `apps/web/src/themes/tokens.css`:
   --gq-color-muted: #6b7280;
   --gq-color-accent: #2563eb;
   --gq-color-border: #e5e7eb;
-  --gq-typography-body-font: 'Inter', 'Noto Sans TC', system-ui, sans-serif;
-  --gq-typography-heading-font: 'Inter', 'Noto Sans TC', system-ui, sans-serif;
-  --gq-typography-mono-font: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  --gq-typography-body-font: "Inter", "Noto Sans TC", system-ui, sans-serif;
+  --gq-typography-heading-font: "Inter", "Noto Sans TC", system-ui, sans-serif;
+  --gq-typography-mono-font: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
   --gq-radius-sm: 0.25rem;
   --gq-radius-md: 0.5rem;
   --gq-radius-lg: 0.75rem;
@@ -2277,8 +2473,12 @@ Create `apps/web/src/themes/components/heading.css`:
 
 ```css
 [data-glyphquire-node="heading"],
-.ProseMirror h1, .ProseMirror h2, .ProseMirror h3,
-.ProseMirror h4, .ProseMirror h5, .ProseMirror h6 {
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3,
+.ProseMirror h4,
+.ProseMirror h5,
+.ProseMirror h6 {
   font-family: var(--gq-typography-heading-font);
   color: var(--gq-color-foreground);
   line-height: 1.3;
@@ -2417,13 +2617,19 @@ Create `apps/web/src/themes/components/callout.css`:
   [data-glyphquire-node="callout"][data-animation="lift"]:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px oklch(0% 0 0 / 0.1);
-    transition: transform 200ms ease, box-shadow 200ms ease;
+    transition:
+      transform 200ms ease,
+      box-shadow 200ms ease;
   }
 }
 
 @keyframes gq-callout-glow {
-  from { box-shadow: 0 0 4px oklch(from var(--gq-color-accent) l c h / 0.2); }
-  to { box-shadow: 0 0 12px oklch(from var(--gq-color-accent) l c h / 0.4); }
+  from {
+    box-shadow: 0 0 4px oklch(from var(--gq-color-accent) l c h / 0.2);
+  }
+  to {
+    box-shadow: 0 0 12px oklch(from var(--gq-color-accent) l c h / 0.4);
+  }
 }
 ```
 
@@ -2598,6 +2804,7 @@ git commit -m "feat: add theme-aware CSS for all 12 visual components with varia
 ### Task 9: Extend Milkdown Node Views with Variant Attributes
 
 **Files:**
+
 - Modify: `apps/web/src/editors/visual/nodes/callout.ts`
 - Modify: `apps/web/src/editors/visual/nodes/sticky.ts`
 - Modify: `apps/web/src/editors/visual/nodes/toggle.ts`
@@ -2606,6 +2813,7 @@ git commit -m "feat: add theme-aware CSS for all 12 visual components with varia
 - Modify: `apps/web/src/editors/visual/schema.ts`
 
 **Interfaces:**
+
 - Consumes: `THEME_INJECTION_KEY`, `ThemeContext` from Task 7; existing Milkdown node schemas from Phase 2
 - Produces: Each node schema's `toDOM` adds `data-variant` or `data-decoration` or `data-animation` attributes read from the current ThemeComponentVariants via a shared helper
 
@@ -2663,16 +2871,19 @@ The ThemeProvider will dynamically update these attributes via a Milkdown plugin
 For each file, add default `"data-variant": "plain"` to the `toDOM` output.
 
 `apps/web/src/editors/visual/nodes/sticky.ts` toDOM:
+
 ```ts
 toDOM: () => ["section", { "data-glyphquire-node": "sticky", "data-variant": "plain" }, 0],
 ```
 
 `apps/web/src/editors/visual/nodes/toggle.ts` toDOM:
+
 ```ts
 toDOM: () => ["details", { "data-glyphquire-node": "toggle", "data-variant": "plain" }, 0],
 ```
 
 `apps/web/src/editors/visual/nodes/tabs.ts` toDOM:
+
 ```ts
 toDOM: () => ["section", { "data-glyphquire-node": "tabs", "data-variant": "plain" }, 0],
 ```
@@ -2694,6 +2905,7 @@ git commit -m "feat: extend Milkdown node views with data-variant and data-anima
 ### Task 10: Theme Editor UI Components
 
 **Files:**
+
 - Create: `apps/web/src/components/theme-editor/ThemeEditorPanel.vue`
 - Create: `apps/web/src/components/theme-editor/ThemeSelector.vue`
 - Create: `apps/web/src/components/theme-editor/TokenEditor.vue`
@@ -2709,6 +2921,7 @@ git commit -m "feat: extend Milkdown node views with data-variant and data-anima
 - Modify: `apps/web/src/components/workbench/Workbench.vue`
 
 **Interfaces:**
+
 - Consumes: `useTheme()` from Task 7; `useThemeStore` from Task 7; `ThemeResult`, `UserThemeResult` from Task 4
 - Produces: Complete theme editor slide-over panel with live preview
 
@@ -2851,10 +3064,7 @@ Add `"open-theme-editor": []` to the `defineEmits`.
 In `apps/web/src/components/workbench/Workbench.vue`, import and mount `ThemeEditorPanel`:
 
 ```html
-<ThemeEditorPanel
-  v-if="themeStore.editorOpen"
-  @close="themeStore.closeEditor()"
-/>
+<ThemeEditorPanel v-if="themeStore.editorOpen" @close="themeStore.closeEditor()" />
 ```
 
 Wire TopBar's `open-theme-editor` event to `themeStore.openEditor()`.
@@ -2876,11 +3086,13 @@ git commit -m "feat: add theme editor UI panel with live preview, variant picker
 ### Task 11: KaTeX Math Rendering Integration
 
 **Files:**
+
 - Modify: `apps/web/package.json` (add `katex` dependency)
 - Create: `apps/web/src/editors/visual/nodes/math.ts`
 - Modify: `apps/web/src/editors/visual/schema.ts` (register math plugin)
 
 **Interfaces:**
+
 - Consumes: Milkdown plugin system, KaTeX library, math CSS from Task 8
 - Produces: `visualMathSchema` and `visualMathView` Milkdown plugins for inline `$...$` and display `$$...$$` math rendering
 
@@ -2982,9 +3194,11 @@ git commit -m "feat: add KaTeX math block rendering in visual editor"
 ### Task 12: E2E Tests — Theme Switching and Visual Verification
 
 **Files:**
+
 - Create: `tests/e2e/theme.spec.ts`
 
 **Interfaces:**
+
 - Consumes: running dev server with theme routes, theme editor UI, visual editor
 - Produces: Playwright E2E tests for theme workflow
 
@@ -3067,9 +3281,11 @@ git commit -m "test: add E2E tests for theme editor, live preview, and reduced-m
 ### Task 13: Quality Gate — Typecheck, Lint, Build, All Tests
 
 **Files:**
+
 - No new files. Verify entire project passes all quality gates.
 
 **Interfaces:**
+
 - Consumes: everything from Tasks 1–12
 - Produces: clean typecheck, lint, build, and test run across all packages
 
@@ -3102,9 +3318,11 @@ git commit -m "fix: resolve quality gate issues for phase 3"
 ### Task 14: Final Security Review and Spec Verification
 
 **Files:**
+
 - No new files. Read-only verification pass.
 
 **Interfaces:**
+
 - Consumes: all Phase 3 code from Tasks 1–13
 - Produces: verified security posture and spec compliance report
 
@@ -3125,16 +3343,16 @@ Check each security constraint from the spec:
 
 Map each spec section to its implementing task:
 
-| Spec Section | Task |
-|---|---|
-| §1 Design Tokens and Theme Resolution | Task 1 |
-| §2 Built-in Component Visual Rendering | Tasks 8, 9, 11 |
-| §3 Theme Persistence and API | Tasks 3, 4, 5, 6 |
-| §4 Theme Editor UI | Task 10 |
-| §5 Plugin Manifest Foundation | Task 2 |
-| §6 Package Layout | Tasks 1, 2, 3, 4, 5, 6, 7, 8, 10 |
-| §7 Security Constraints | Task 14 (this task) |
-| §8 Testing Strategy | Tasks 1–12 |
+| Spec Section                           | Task                             |
+| -------------------------------------- | -------------------------------- |
+| §1 Design Tokens and Theme Resolution  | Task 1                           |
+| §2 Built-in Component Visual Rendering | Tasks 8, 9, 11                   |
+| §3 Theme Persistence and API           | Tasks 3, 4, 5, 6                 |
+| §4 Theme Editor UI                     | Task 10                          |
+| §5 Plugin Manifest Foundation          | Task 2                           |
+| §6 Package Layout                      | Tasks 1, 2, 3, 4, 5, 6, 7, 8, 10 |
+| §7 Security Constraints                | Task 14 (this task)              |
+| §8 Testing Strategy                    | Tasks 1–12                       |
 
 - [ ] **Step 3: Run E2E and accessibility tests**
 

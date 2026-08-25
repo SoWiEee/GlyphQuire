@@ -255,7 +255,9 @@ describeWithPostgres("NoteWriter", () => {
           }),
         ).rejects.toThrow(`injected ${point} failure`);
 
-        const current = await db.query.notes.findFirst({ where: (t, { eq: e }) => e(t.id, note.id) });
+        const current = await db.query.notes.findFirst({
+          where: (t, { eq: e }) => e(t.id, note.id),
+        });
         expect(current?.revision).toBe(note.revision);
         expect(current?.contentMarkdown).toBe(note.contentMarkdown);
         expect(await snapshotRowsFor(db, note.id)).toHaveLength(0);
@@ -341,8 +343,13 @@ describeWithPostgres("NoteWriter", () => {
       expect(fulfilled).toHaveLength(1);
       expect(rejected).toHaveLength(1);
 
-      const winnerValue = (fulfilled[0] as PromiseFulfilledResult<{ contentMarkdown: string; revision: number; updatedAt: string }>)
-        .value;
+      const winnerValue = (
+        fulfilled[0] as PromiseFulfilledResult<{
+          contentMarkdown: string;
+          revision: number;
+          updatedAt: string;
+        }>
+      ).value;
       const conflictError = (rejected[0] as PromiseRejectedResult).reason;
       expect(conflictError).toBeInstanceOf(NoteSaveConflictError);
       const conflict = (conflictError as NoteSaveConflictError).conflict;
@@ -452,10 +459,15 @@ describeWithPostgres("NoteWriter", () => {
         const failingWriter = new NoteWriter(db, undefined, failingHooks);
 
         await expect(
-          failingWriter.checkpoint(fixture.owner, note.id, { operationId, baseRevision: note.revision }),
+          failingWriter.checkpoint(fixture.owner, note.id, {
+            operationId,
+            baseRevision: note.revision,
+          }),
         ).rejects.toThrow(`injected ${point} failure`);
 
-        const current = await db.query.notes.findFirst({ where: (t, { eq: e }) => e(t.id, note.id) });
+        const current = await db.query.notes.findFirst({
+          where: (t, { eq: e }) => e(t.id, note.id),
+        });
         expect(current?.revision).toBe(note.revision);
         expect(await snapshotRowsFor(db, note.id)).toHaveLength(0);
         expect(await operationRowsFor(db, note.id)).toHaveLength(0);
@@ -549,7 +561,9 @@ describeWithPostgres("NoteWriter", () => {
           }),
         ).rejects.toThrow(`injected ${point} failure`);
 
-        const current = await db.query.notes.findFirst({ where: (t, { eq: e }) => e(t.id, note.id) });
+        const current = await db.query.notes.findFirst({
+          where: (t, { eq: e }) => e(t.id, note.id),
+        });
         expect(current?.revision).toBe(checkpointed.note.revision);
         // Only the original checkpoint version must exist; no pre-restore
         // safety snapshot or restore version leaked from the rolled-back tx.

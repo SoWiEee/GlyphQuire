@@ -81,7 +81,11 @@ export function createVersionRoutes(noteService: NoteService) {
       if (!params.success) invalidRequest();
 
       const { actorId } = getRequestContext(context);
-      const result = await noteService.getVersion(actorId, params.data.noteId, params.data.versionId);
+      const result = await noteService.getVersion(
+        actorId,
+        params.data.noteId,
+        params.data.versionId,
+      );
       return context.json(result, 200);
     })
     .post("/notes/:noteId/versions/:versionId/restore", async (context) => {

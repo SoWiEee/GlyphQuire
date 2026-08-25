@@ -1,5 +1,8 @@
 <template>
-  <nav class="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-gray-50" aria-label="Notes explorer">
+  <nav
+    class="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-gray-50"
+    aria-label="Notes explorer"
+  >
     <div class="flex items-center justify-between px-3 pt-3 pb-2">
       <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Notes</h2>
       <button
@@ -36,8 +39,14 @@
 
     <ul class="pb-2" aria-label="Active notes">
       <li v-for="note in store.activeNotes" :key="note.id">
-        <form v-if="renamingId === note.id" class="flex items-center gap-1 px-2 py-1" @submit.prevent="submitRename(note.id)">
-          <label :for="`note-explorer-rename-${note.id}`" class="sr-only">Rename "{{ note.title }}"</label>
+        <form
+          v-if="renamingId === note.id"
+          class="flex items-center gap-1 px-2 py-1"
+          @submit.prevent="submitRename(note.id)"
+        >
+          <label :for="`note-explorer-rename-${note.id}`" class="sr-only"
+            >Rename "{{ note.title }}"</label
+          >
           <input
             :id="`note-explorer-rename-${note.id}`"
             ref="renameInputRef"
@@ -46,8 +55,15 @@
             class="w-full rounded border border-gray-300 px-2 py-1 text-sm"
             @keydown.escape="cancelRename"
           />
-          <button type="submit" class="shrink-0 text-xs text-gray-600" aria-label="Save name">✓</button>
-          <button type="button" class="shrink-0 text-xs text-gray-400" aria-label="Cancel rename" @click="cancelRename">
+          <button type="submit" class="shrink-0 text-xs text-gray-600" aria-label="Save name">
+            ✓
+          </button>
+          <button
+            type="button"
+            class="shrink-0 text-xs text-gray-400"
+            aria-label="Cancel rename"
+            @click="cancelRename"
+          >
             ✕
           </button>
         </form>
@@ -83,7 +99,10 @@
           </button>
         </div>
       </li>
-      <li v-if="store.activeNotes.length === 0 && !store.loading" class="px-3 py-2 text-xs text-gray-400">
+      <li
+        v-if="store.activeNotes.length === 0 && !store.loading"
+        class="px-3 py-2 text-xs text-gray-400"
+      >
         No notes yet.
       </li>
     </ul>
@@ -113,7 +132,9 @@
           Restore
         </button>
       </li>
-      <li v-if="store.trashedNotes.length === 0" class="px-3 py-1.5 text-xs text-gray-400">Trash is empty.</li>
+      <li v-if="store.trashedNotes.length === 0" class="px-3 py-1.5 text-xs text-gray-400">
+        Trash is empty.
+      </li>
     </ul>
   </nav>
 

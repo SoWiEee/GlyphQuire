@@ -102,7 +102,11 @@ describeWithPostgres("version and save routes", () => {
     return { owner, editor, viewer, outsider, workspaceId: ownerWorkspace.id };
   }
 
-  async function createNote(app: AppType, cookie: string, workspaceId: string): Promise<CreatedNote> {
+  async function createNote(
+    app: AppType,
+    cookie: string,
+    workspaceId: string,
+  ): Promise<CreatedNote> {
     const response = await v1(app, `/workspaces/${workspaceId}/notes`, cookie, {
       method: "POST",
       body: JSON.stringify({
@@ -138,7 +142,10 @@ describeWithPostgres("version and save routes", () => {
       app,
       `/notes/${note.id}/versions/checkpoint`,
       fixture.owner.cookie,
-      { method: "POST", body: JSON.stringify({ operationId: randomUUID(), baseRevision: saved.revision }) },
+      {
+        method: "POST",
+        body: JSON.stringify({ operationId: randomUUID(), baseRevision: saved.revision }),
+      },
     );
     expect(checkpointResponse.status).toBe(200);
     const checkpointed = (await checkpointResponse.json()) as {
@@ -169,7 +176,10 @@ describeWithPostgres("version and save routes", () => {
       fixture.owner.cookie,
       {
         method: "POST",
-        body: JSON.stringify({ operationId: randomUUID(), baseRevision: checkpointed.note.revision }),
+        body: JSON.stringify({
+          operationId: randomUUID(),
+          baseRevision: checkpointed.note.revision,
+        }),
       },
     );
     expect(restoreResponse.status).toBe(200);
@@ -250,7 +260,10 @@ describeWithPostgres("version and save routes", () => {
       app,
       `/notes/${note.id}/versions/checkpoint`,
       fixture.viewer.cookie,
-      { method: "POST", body: JSON.stringify({ operationId: randomUUID(), baseRevision: note.revision }) },
+      {
+        method: "POST",
+        body: JSON.stringify({ operationId: randomUUID(), baseRevision: note.revision }),
+      },
     );
     expect(viewerCheckpoint.status).toBe(404);
     const viewerBody = (await viewerCheckpoint.json()) as { error: { code: string } };
@@ -285,7 +298,10 @@ describeWithPostgres("version and save routes", () => {
       app,
       `/notes/${noteB.id}/versions/checkpoint`,
       fixture.owner.cookie,
-      { method: "POST", body: JSON.stringify({ operationId: randomUUID(), baseRevision: noteB.revision }) },
+      {
+        method: "POST",
+        body: JSON.stringify({ operationId: randomUUID(), baseRevision: noteB.revision }),
+      },
     );
     const checkpointed = (await checkpointResponse.json()) as { version: { id: string } };
 

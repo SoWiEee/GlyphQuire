@@ -9,8 +9,18 @@ import {
 describe("themeTokensSchema", () => {
   it("accepts valid complete tokens", () => {
     const result = themeTokensSchema.safeParse({
-      color: { background: "#fff", foreground: "#000", muted: "#999", accent: "#00f", border: "#ccc" },
-      typography: { bodyFont: "Inter, sans-serif", headingFont: "Inter, sans-serif", monoFont: "monospace" },
+      color: {
+        background: "#fff",
+        foreground: "#000",
+        muted: "#999",
+        accent: "#00f",
+        border: "#ccc",
+      },
+      typography: {
+        bodyFont: "Inter, sans-serif",
+        headingFont: "Inter, sans-serif",
+        monoFont: "monospace",
+      },
       radius: { sm: "0.25rem", md: "0.5rem", lg: "1rem" },
       spacing: { xs: "0.25rem", sm: "0.5rem" },
     });
@@ -19,7 +29,13 @@ describe("themeTokensSchema", () => {
 
   it("rejects color values containing url()", () => {
     const result = themeTokensSchema.safeParse({
-      color: { background: "url(evil)", foreground: "#000", muted: "#999", accent: "#00f", border: "#ccc" },
+      color: {
+        background: "url(evil)",
+        foreground: "#000",
+        muted: "#999",
+        accent: "#00f",
+        border: "#ccc",
+      },
       typography: { bodyFont: "sans-serif", headingFont: "sans-serif", monoFont: "monospace" },
       radius: { sm: "0.25rem", md: "0.5rem", lg: "1rem" },
       spacing: {},
@@ -29,7 +45,13 @@ describe("themeTokensSchema", () => {
 
   it("rejects font values containing url()", () => {
     const result = themeTokensSchema.safeParse({
-      color: { background: "#fff", foreground: "#000", muted: "#999", accent: "#00f", border: "#ccc" },
+      color: {
+        background: "#fff",
+        foreground: "#000",
+        muted: "#999",
+        accent: "#00f",
+        border: "#ccc",
+      },
       typography: { bodyFont: "url(evil)", headingFont: "sans-serif", monoFont: "monospace" },
       radius: { sm: "0.25rem", md: "0.5rem", lg: "1rem" },
       spacing: {},
@@ -71,10 +93,22 @@ describe("themeManifestSchema", () => {
       name: "My Theme",
       version: "1.0.0",
       tokens: {
-        color: { background: "#111", foreground: "#eee", muted: "#888", accent: "#00f", border: "#444" },
+        color: {
+          background: "#111",
+          foreground: "#eee",
+          muted: "#888",
+          accent: "#00f",
+          border: "#444",
+        },
       },
       darkTokens: {
-        color: { background: "#000", foreground: "#fff", muted: "#aaa", accent: "#0af", border: "#333" },
+        color: {
+          background: "#000",
+          foreground: "#fff",
+          muted: "#aaa",
+          accent: "#0af",
+          border: "#333",
+        },
       },
       components: {
         heading: { decoration: "line" },

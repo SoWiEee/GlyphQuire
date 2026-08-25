@@ -43,7 +43,13 @@ async function insertWorkspace(db: Database, ownerId: string) {
 async function insertNote(db: Database, workspaceId: string, ownerId: string) {
   const [note] = await db
     .insert(notes)
-    .values({ workspaceId, title: "Untitled", contentMarkdown: "# Body", contentHash: "h", ownerId })
+    .values({
+      workspaceId,
+      title: "Untitled",
+      contentMarkdown: "# Body",
+      contentHash: "h",
+      ownerId,
+    })
     .returning();
   return note!;
 }
@@ -104,7 +110,13 @@ async function insertJob(
   }> = {},
 ) {
   const revision = overrides.revision ?? 1;
-  const operation = await insertOperation(fixture.db, fixture.workspaceId, fixture.noteId, fixture.ownerId, revision);
+  const operation = await insertOperation(
+    fixture.db,
+    fixture.workspaceId,
+    fixture.noteId,
+    fixture.ownerId,
+    revision,
+  );
   const [job] = await fixture.db
     .insert(documentJobs)
     .values({
@@ -373,7 +385,10 @@ describeWithPostgres("isCurrentRevision", () => {
     expect(await isCurrentRevision(db, note.id, note.revision)).toBe(true);
     expect(await isCurrentRevision(db, note.id, note.revision + 1)).toBe(false);
 
-    await db.update(notes).set({ revision: note.revision + 1 }).where(eq(notes.id, note.id));
+    await db
+      .update(notes)
+      .set({ revision: note.revision + 1 })
+      .where(eq(notes.id, note.id));
     expect(await isCurrentRevision(db, note.id, note.revision)).toBe(false);
     expect(await isCurrentRevision(db, note.id, note.revision + 1)).toBe(true);
   });

@@ -2,7 +2,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createDb, type Database } from "@glyphquire/database";
 import { ThemeServiceImpl, type ThemeService } from "./ThemeService.js";
 
-const TEST_DATABASE_URL = process.env.DATABASE_URL ?? "postgres://gq_app:gq_app_dev@localhost:5432/glyphquire_dev";
+const TEST_DATABASE_URL =
+  process.env.DATABASE_URL ?? "postgres://gq_app:gq_app_dev@localhost:5432/glyphquire_dev";
 
 describe("ThemeService", () => {
   let db: Database;
@@ -50,7 +51,15 @@ describe("ThemeService", () => {
       operationId: crypto.randomUUID(),
       name: "Custom Theme",
       version: "1.0.0",
-      tokens: { color: { background: "#111", foreground: "#eee", muted: "#888", accent: "#00f", border: "#444" } },
+      tokens: {
+        color: {
+          background: "#111",
+          foreground: "#eee",
+          muted: "#888",
+          accent: "#00f",
+          border: "#444",
+        },
+      },
     });
     expect(created.name).toBe("Custom Theme");
     expect(created.isSystem).toBe(false);
@@ -91,7 +100,15 @@ describe("ThemeService", () => {
 
     await service.setUserTheme(testUserId, testWorkspaceId, {
       themeId: defaultLight.id,
-      customOverrides: { color: { background: "#fafafa", foreground: "#1a1a1a", muted: "#6b7280", accent: "#2563eb", border: "#e5e7eb" } },
+      customOverrides: {
+        color: {
+          background: "#fafafa",
+          foreground: "#1a1a1a",
+          muted: "#6b7280",
+          accent: "#2563eb",
+          border: "#e5e7eb",
+        },
+      },
     });
 
     const userTheme = await service.getUserTheme(testUserId, testWorkspaceId);

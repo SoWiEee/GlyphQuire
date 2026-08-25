@@ -29,9 +29,9 @@ function toSummary(result: NoteResult): NoteSummary {
  * can list them; `activeNotes`/`trashedNotes` split on `deletedAt`.
  */
 export const useNotesStore = defineStore("notes", () => {
-  const client = shallowRef<Pick<NoteClient, "listNotes" | "createNote" | "renameNote" | "deleteNote" | "restoreNote">>(
-    new NoteClient(),
-  );
+  const client = shallowRef<
+    Pick<NoteClient, "listNotes" | "createNote" | "renameNote" | "deleteNote" | "restoreNote">
+  >(new NoteClient());
   const workspaceId = ref<string | null>(null);
   const items = ref<NoteSummary[]>([]);
   const loading = ref(false);

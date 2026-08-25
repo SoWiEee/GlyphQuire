@@ -26,14 +26,18 @@ async function parseJsonBody(request: Request): Promise<unknown> {
 export function createThemeRoutes(themeService: ThemeService) {
   return new Hono<{ Variables: SecurityVariables }>()
     .get("/workspaces/:workspaceId/themes", async (context) => {
-      const params = workspaceIdParamsSchema.safeParse({ workspaceId: context.req.param("workspaceId") });
+      const params = workspaceIdParamsSchema.safeParse({
+        workspaceId: context.req.param("workspaceId"),
+      });
       if (!params.success) invalidRequest();
       const { actorId } = getRequestContext(context);
       const result = await themeService.list(actorId, params.data.workspaceId);
       return context.json(result, 200);
     })
     .post("/workspaces/:workspaceId/themes", async (context) => {
-      const params = workspaceIdParamsSchema.safeParse({ workspaceId: context.req.param("workspaceId") });
+      const params = workspaceIdParamsSchema.safeParse({
+        workspaceId: context.req.param("workspaceId"),
+      });
       if (!params.success) invalidRequest();
       const body = createThemeInputSchema.safeParse(await parseJsonBody(context.req.raw));
       if (!body.success) invalidRequest();

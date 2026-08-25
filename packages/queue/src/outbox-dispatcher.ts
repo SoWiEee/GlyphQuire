@@ -142,7 +142,12 @@ export class PostgresDocumentJobDispatcher implements DocumentJobDispatcher {
   private async markCompleted(job: DocumentJob): Promise<void> {
     await this.db
       .update(documentJobs)
-      .set({ status: "completed", lockedAt: null, lockedBy: null, completedAt: new Date(this.clock()) })
+      .set({
+        status: "completed",
+        lockedAt: null,
+        lockedBy: null,
+        completedAt: new Date(this.clock()),
+      })
       .where(this.ownedProcessingRow(job.id));
   }
 

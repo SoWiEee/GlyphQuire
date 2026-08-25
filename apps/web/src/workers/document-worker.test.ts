@@ -186,11 +186,13 @@ describe("document worker contract", () => {
 
     await expect(pending).resolves.toMatchObject({ result: { ok: true, source: overBoundary } });
     expect(factory).toHaveBeenCalledOnce();
-    expect(worker.requests.map(({ requestId, operation, markdown }) => ({
-      requestId,
-      operation,
-      bytes: new TextEncoder().encode(markdown).byteLength,
-    }))).toEqual([
+    expect(
+      worker.requests.map(({ requestId, operation, markdown }) => ({
+        requestId,
+        operation,
+        bytes: new TextEncoder().encode(markdown).byteLength,
+      })),
+    ).toEqual([
       { requestId: parseRequest.requestId, operation: "parse", bytes: 102_401 },
       { requestId: validationRequest.requestId, operation: "validate", bytes: 102_401 },
     ]);
@@ -262,11 +264,13 @@ describe("document worker contract", () => {
     async (failure) => {
       const worker = new ControlledWorker();
       const client = new DocumentWorkerClient({ workerFactory: () => worker });
-      const pending = client.parseAndValidate(
-        markdownOfBytes(DOCUMENT_WORKER_THRESHOLD_BYTES + 1),
-      );
+      const pending = client.parseAndValidate(markdownOfBytes(DOCUMENT_WORKER_THRESHOLD_BYTES + 1));
 
-      if (failure === "error") { worker.fail(); } else { worker.failClone(); }
+      if (failure === "error") {
+        worker.fail();
+      } else {
+        worker.failClone();
+      }
 
       await expect(pending).rejects.toMatchObject({ code: "WORKER_FAILED" });
       expect(worker.terminateCalls).toBe(1);

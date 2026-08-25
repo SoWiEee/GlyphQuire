@@ -54,7 +54,9 @@ class MemoryDraftStore implements DraftStore {
   }
 }
 
-function fakeNoteClient(impl?: Partial<ConflictNoteClient>): ConflictNoteClient & { save: ReturnType<typeof vi.fn> } {
+function fakeNoteClient(
+  impl?: Partial<ConflictNoteClient>,
+): ConflictNoteClient & { save: ReturnType<typeof vi.fn> } {
   return {
     save: vi.fn(async (): Promise<NoteResult> => {
       throw new Error("save() was not stubbed for this test");
@@ -79,13 +81,15 @@ function noteResult(overrides: Partial<NoteResult> = {}): NoteResult {
   };
 }
 
-function mountWorkspace(overrides: {
-  noteClient?: ConflictNoteClient;
-  draftStore?: DraftStore;
-  conflict?: NoteConflict;
-  localMarkdown?: string;
-  attachTo?: HTMLElement;
-} = {}) {
+function mountWorkspace(
+  overrides: {
+    noteClient?: ConflictNoteClient;
+    draftStore?: DraftStore;
+    conflict?: NoteConflict;
+    localMarkdown?: string;
+    attachTo?: HTMLElement;
+  } = {},
+) {
   return mount(ConflictWorkspace, {
     props: {
       noteId: NOTE_ID,
@@ -198,7 +202,9 @@ describe("ConflictWorkspace — resubmit uses the displayed server revision and 
     expect(noteId).toBe(NOTE_ID);
     expect(input.baseRevision).toBe(5); // the conflict's serverRevision, not any earlier local revision
     expect(input.contentMarkdown).toBe("merged content");
-    expect(input.operationId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(input.operationId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
 
     expect(wrapper.emitted("resolved")).toBeTruthy();
     const [resolved] = wrapper.emitted("resolved")![0] as [NoteResult];
@@ -212,7 +218,9 @@ describe("ConflictWorkspace — resubmit uses the displayed server revision and 
     const save = vi.fn(async (_noteId: string, input: SaveNoteInput) => {
       seenOperationIds.push(input.operationId);
       if (seenOperationIds.length === 1) {
-        throw new NoteConflictError(conflict({ serverRevision: 6, serverMarkdown: "server moved again" }));
+        throw new NoteConflictError(
+          conflict({ serverRevision: 6, serverMarkdown: "server moved again" }),
+        );
       }
       return noteResult({ revision: input.baseRevision + 1 });
     });
@@ -236,7 +244,11 @@ describe("ConflictWorkspace — a second conflict is shown, never silently resol
   it("updates the displayed server pane and does not auto-retry the save", async () => {
     const save = vi.fn(async () => {
       throw new NoteConflictError(
-        conflict({ serverRevision: 9, serverMarkdown: "even newer server content", requestId: "req-2" }),
+        conflict({
+          serverRevision: 9,
+          serverMarkdown: "even newer server content",
+          requestId: "req-2",
+        }),
       );
     });
     const wrapper = mountWorkspace({ noteClient: fakeNoteClient({ save }) });
@@ -246,8 +258,12 @@ describe("ConflictWorkspace — a second conflict is shown, never silently resol
     await flushPromises();
 
     expect(save).toHaveBeenCalledTimes(1); // no automatic retry
-    expect(wrapper.get('[data-testid="server-pane"]').text()).toContain("even newer server content");
-    expect(wrapper.get('[data-testid="conflict-status-badge"]').text()).toContain("Needs attention");
+    expect(wrapper.get('[data-testid="server-pane"]').text()).toContain(
+      "even newer server content",
+    );
+    expect(wrapper.get('[data-testid="conflict-status-badge"]').text()).toContain(
+      "Needs attention",
+    );
     expect(wrapper.emitted("resolved")).toBeFalsy();
 
     wrapper.unmount();
@@ -285,7 +301,9 @@ describe("ConflictWorkspace — no last-write-wins path exists", () => {
     await local.setValue("changed again, still not resubmitted");
     await flushPromises();
 
-    const dismissButton = wrapper.findAll("button").find((b) => b.text() === "Keep working elsewhere");
+    const dismissButton = wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Keep working elsewhere");
     expect(dismissButton).toBeTruthy();
     await dismissButton!.trigger("click");
     expect(wrapper.emitted("dismiss")).toBeTruthy();
@@ -347,16 +365,25 @@ describe("ConflictWorkspace — draft durability across reload", () => {
   it("clears the persisted draft once the conflict is resolved", async () => {
     const sharedDraftStore = new MemoryDraftStore();
     const save = vi.fn(async () => noteResult());
-    const wrapper = mountWorkspace({ draftStore: sharedDraftStore, noteClient: fakeNoteClient({ save }) });
+    const wrapper = mountWorkspace({
+      draftStore: sharedDraftStore,
+      noteClient: fakeNoteClient({ save }),
+    });
     await flushPromises();
 
-    await wrapper.get<HTMLTextAreaElement>('[data-testid="local-pane"]').setValue("about to resolve");
+    await wrapper
+      .get<HTMLTextAreaElement>('[data-testid="local-pane"]')
+      .setValue("about to resolve");
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     await wrapper.get('[data-testid="resubmit-button"]').trigger("click");
     await flushPromises();
 
-    const remaining = await sharedDraftStore.get({ userId: USER_ID, workspaceId: WORKSPACE_ID, noteId: NOTE_ID });
+    const remaining = await sharedDraftStore.get({
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      noteId: NOTE_ID,
+    });
     expect(remaining).toBeUndefined();
 
     wrapper.unmount();

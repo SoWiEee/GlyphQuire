@@ -14,8 +14,8 @@
       <div>
         <h1 class="text-sm font-semibold text-gray-900">Someone else saved changes to this note</h1>
         <p class="text-xs text-gray-500">
-          Your edits were never sent — the server still has its own version. Merge the two below, then
-          resubmit.
+          Your edits were never sent — the server still has its own version. Merge the two below,
+          then resubmit.
         </p>
       </div>
       <span
@@ -27,11 +27,18 @@
       </span>
     </header>
 
-    <p v-if="errorMessage" role="alert" class="border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
+    <p
+      v-if="errorMessage"
+      role="alert"
+      class="border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700"
+    >
       {{ errorMessage }}
     </p>
 
-    <section aria-label="Line differences between your version and the server version" class="border-b border-gray-200">
+    <section
+      aria-label="Line differences between your version and the server version"
+      class="border-b border-gray-200"
+    >
       <div class="flex items-center justify-between px-4 py-1.5">
         <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500">What changed</h2>
         <span class="text-xs text-gray-500">{{ diffSummary }}</span>
@@ -41,8 +48,13 @@
         class="max-h-36 overflow-auto px-4 pb-2 font-mono text-xs leading-5"
         data-testid="diff-view"
       >
-        <div v-for="(segment, index) in diffSegments" :key="index" :class="diffLineClass(segment.kind)">
-          <span aria-hidden="true">{{ diffMarker(segment.kind) }}</span>{{ segment.text.length > 0 ? segment.text : " " }}
+        <div
+          v-for="(segment, index) in diffSegments"
+          :key="index"
+          :class="diffLineClass(segment.kind)"
+        >
+          <span aria-hidden="true">{{ diffMarker(segment.kind) }}</span
+          >{{ segment.text.length > 0 ? segment.text : " " }}
         </div>
       </div>
       <p v-else class="px-4 pb-2 text-xs text-gray-500">
@@ -51,9 +63,15 @@
     </section>
 
     <div class="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2">
-      <section aria-labelledby="conflict-local-heading" class="flex min-h-0 flex-col border-b border-gray-200 md:border-b-0 md:border-r">
+      <section
+        aria-labelledby="conflict-local-heading"
+        class="flex min-h-0 flex-col border-b border-gray-200 md:border-b-0 md:border-r"
+      >
         <div class="flex items-center justify-between px-3 py-2">
-          <h2 id="conflict-local-heading" class="text-xs font-semibold uppercase tracking-wide text-gray-500">
+          <h2
+            id="conflict-local-heading"
+            class="text-xs font-semibold uppercase tracking-wide text-gray-500"
+          >
             Your version (editable)
           </h2>
           <div class="flex gap-2">
@@ -73,7 +91,9 @@
             </button>
           </div>
         </div>
-        <label for="conflict-local-textarea" class="sr-only">Your version — editable, this is what will be resubmitted</label>
+        <label for="conflict-local-textarea" class="sr-only"
+          >Your version — editable, this is what will be resubmitted</label
+        >
         <textarea
           id="conflict-local-textarea"
           ref="localTextareaRef"
@@ -87,7 +107,10 @@
 
       <section aria-labelledby="conflict-server-heading" class="flex min-h-0 flex-col">
         <div class="flex items-center justify-between px-3 py-2">
-          <h2 id="conflict-server-heading" class="text-xs font-semibold uppercase tracking-wide text-gray-500">
+          <h2
+            id="conflict-server-heading"
+            class="text-xs font-semibold uppercase tracking-wide text-gray-500"
+          >
             Server version (read-only)
           </h2>
           <button
@@ -100,7 +123,9 @@
         </div>
         <p class="px-3 pb-1 text-xs text-gray-500">
           Revision {{ currentConflict.serverRevision }} · saved {{ formattedServerUpdatedAt
-          }}<template v-if="currentConflict.lastEditedBy"> by {{ currentConflict.lastEditedBy.displayName }}</template>
+          }}<template v-if="currentConflict.lastEditedBy">
+            by {{ currentConflict.lastEditedBy.displayName }}</template
+          >
         </p>
         <!--
           Strictly read-only: a <pre> element with no contenteditable
@@ -113,8 +138,7 @@
           aria-readonly="true"
           tabindex="0"
           class="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-sm text-gray-800"
-          >{{ currentConflict.serverMarkdown }}</pre
-        >
+          >{{ currentConflict.serverMarkdown }}</pre>
       </section>
     </div>
 

@@ -236,12 +236,24 @@ export class NoteWriter {
       });
     } catch (error) {
       if (error instanceof OperationConflict) {
-        const raced = await this.findOperation(actorId, workspaceId, noteId, "save", input.operationId);
+        const raced = await this.findOperation(
+          actorId,
+          workspaceId,
+          noteId,
+          "save",
+          input.operationId,
+        );
         if (raced) return resolveOperationReplay<NoteResult>(raced, canonicalHash);
         throw error;
       }
       if (error instanceof CasMiss) {
-        const raced = await this.findOperation(actorId, workspaceId, noteId, "save", input.operationId);
+        const raced = await this.findOperation(
+          actorId,
+          workspaceId,
+          noteId,
+          "save",
+          input.operationId,
+        );
         if (raced) return resolveOperationReplay<NoteResult>(raced, canonicalHash);
         throw await this.buildSaveConflict(actorId, workspaceId, noteId);
       }
@@ -523,7 +535,9 @@ export class NoteWriter {
       throw new PublicApiError("DOCUMENT_INVALID", 400);
     }
     const parsed = this.documentValidator.parse(markdown);
-    const hasErrorDiagnostic = parsed.diagnostics.some((diagnostic) => diagnostic.severity === "error");
+    const hasErrorDiagnostic = parsed.diagnostics.some(
+      (diagnostic) => diagnostic.severity === "error",
+    );
     if (hasErrorDiagnostic) {
       throw new PublicApiError("DOCUMENT_INVALID", 400);
     }
@@ -661,7 +675,10 @@ export class NoteWriter {
       .from(notes)
       .innerJoin(
         workspaceMembers,
-        and(eq(workspaceMembers.workspaceId, notes.workspaceId), eq(workspaceMembers.userId, actorId)),
+        and(
+          eq(workspaceMembers.workspaceId, notes.workspaceId),
+          eq(workspaceMembers.userId, actorId),
+        ),
       )
       .where(and(eq(notes.id, noteId), isNull(notes.deletedAt)))
       .limit(1);
@@ -711,7 +728,10 @@ export class NoteWriter {
       .from(notes)
       .innerJoin(
         workspaceMembers,
-        and(eq(workspaceMembers.workspaceId, notes.workspaceId), eq(workspaceMembers.userId, actorId)),
+        and(
+          eq(workspaceMembers.workspaceId, notes.workspaceId),
+          eq(workspaceMembers.userId, actorId),
+        ),
       )
       .where(and(eq(notes.workspaceId, workspaceId), eq(notes.id, noteId), isNull(notes.deletedAt)))
       .limit(1);
@@ -730,7 +750,10 @@ export class NoteWriter {
       .from(notes)
       .innerJoin(
         workspaceMembers,
-        and(eq(workspaceMembers.workspaceId, notes.workspaceId), eq(workspaceMembers.userId, actorId)),
+        and(
+          eq(workspaceMembers.workspaceId, notes.workspaceId),
+          eq(workspaceMembers.userId, actorId),
+        ),
       )
       .where(and(eq(notes.workspaceId, workspaceId), eq(notes.id, noteId), isNull(notes.deletedAt)))
       .limit(1);

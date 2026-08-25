@@ -1,6 +1,10 @@
 [data-glyphquire-node="heading"],
-.ProseMirror h1, .ProseMirror h2, .ProseMirror h3,
-.ProseMirror h4, .ProseMirror h5, .ProseMirror h6 {
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3,
+.ProseMirror h4,
+.ProseMirror h5,
+.ProseMirror h6 {
   font-family: var(--gq-typography-heading-font);
   color: var(--gq-color-foreground);
   line-height: 1.3;
