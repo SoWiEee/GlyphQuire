@@ -1,0 +1,17 @@
+[data-glyphquire-node="toggle"] {
+  font-family: var(--gq-typography-body-font);
+  margin: var(--gq-spacing-sm) 0;
+}
+
+[data-glyphquire-node="toggle"][data-variant="plain"] {
+  border-bottom: 1px solid var(--gq-color-border);
+  padding: var(--gq-spacing-sm) 0;
+}
+
+[data-glyphquire-node="toggle"][data-variant="card"] {
+  background: var(--gq-color-background);
+  border: 1px solid var(--gq-color-border);
+  border-radius: var(--gq-radius-md);
+  padding: var(--gq-spacing-sm) var(--gq-spacing-md);
+  box-shadow: 0 1px 2px oklch(0% 0 0 / 0.05);
+}

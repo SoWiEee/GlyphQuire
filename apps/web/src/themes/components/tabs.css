@@ -1,0 +1,36 @@
+[data-glyphquire-node="tabs"] {
+  font-family: var(--gq-typography-body-font);
+  margin: var(--gq-spacing-md) 0;
+}
+
+[data-glyphquire-node="tabs"][data-variant="plain"] [data-tab-trigger] {
+  border-bottom: 2px solid transparent;
+  padding: var(--gq-spacing-xs) var(--gq-spacing-sm);
+  color: var(--gq-color-muted);
+}
+
+[data-glyphquire-node="tabs"][data-variant="plain"] [data-tab-trigger][aria-selected="true"] {
+  border-bottom-color: var(--gq-color-accent);
+  color: var(--gq-color-foreground);
+}
+
+[data-glyphquire-node="tabs"][data-variant="pill"] [data-tab-trigger] {
+  border-radius: var(--gq-radius-lg);
+  padding: var(--gq-spacing-xs) var(--gq-spacing-md);
+  color: var(--gq-color-muted);
+}
+
+[data-glyphquire-node="tabs"][data-variant="pill"] [data-tab-trigger][aria-selected="true"] {
+  background: var(--gq-color-accent);
+  color: var(--gq-color-background);
+}
+
+[data-glyphquire-node="tabs"][data-variant="underline"] [data-tab-trigger] {
+  border-bottom: 1px solid var(--gq-color-border);
+  padding: var(--gq-spacing-xs) var(--gq-spacing-sm);
+}
+
+[data-glyphquire-node="tabs"][data-variant="underline"] [data-tab-trigger][aria-selected="true"] {
+  border-bottom: 2px solid var(--gq-color-foreground);
+  font-weight: 600;
+}

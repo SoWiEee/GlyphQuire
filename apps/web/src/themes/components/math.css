@@ -1,0 +1,11 @@
+.ProseMirror .katex-display,
+.ProseMirror .katex {
+  color: var(--gq-color-foreground);
+  font-size: 1em;
+}
+
+.ProseMirror .katex-display {
+  margin: var(--gq-spacing-md) 0;
+  padding: var(--gq-spacing-sm);
+  overflow-x: auto;
+}

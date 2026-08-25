@@ -1,0 +1,25 @@
+[data-glyphquire-node="sticky"] {
+  font-family: var(--gq-typography-body-font);
+  padding: var(--gq-spacing-md);
+  margin: var(--gq-spacing-md) 0;
+  border-radius: var(--gq-radius-md);
+}
+
+[data-glyphquire-node="sticky"][data-variant="plain"] {
+  background: oklch(92% 0.06 90);
+  border: 1px solid oklch(85% 0.06 90);
+}
+
+[data-glyphquire-node="sticky"][data-variant="paper"] {
+  background: oklch(95% 0.04 85);
+  border: none;
+  box-shadow: 2px 3px 8px oklch(0% 0 0 / 0.12);
+  transform: rotate(-1deg);
+}
+
+[data-glyphquire-node="sticky"][data-variant="neon"] {
+  background: oklch(15% 0 0);
+  color: oklch(85% 0.2 160);
+  border: 1px solid oklch(60% 0.2 160);
+  box-shadow: 0 0 8px oklch(60% 0.2 160 / 0.3);
+}

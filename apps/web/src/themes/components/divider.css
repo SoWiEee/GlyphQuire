@@ -1,0 +1,5 @@
+.ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--gq-color-border);
+  margin: var(--gq-spacing-lg) 0;
+}
