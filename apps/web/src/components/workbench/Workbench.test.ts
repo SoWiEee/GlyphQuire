@@ -1,8 +1,9 @@
-import { flushPromises, mount } from "@vue/test-utils";
+import { config, flushPromises, mount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
 import { StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { defineComponent, h, nextTick } from "vue";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import Workbench from "./Workbench.vue";
 import type { EditorSession, EditorSessionState } from "../../editors/editor-session.types.js";
 
@@ -99,6 +100,11 @@ const SourceEditorStub = defineComponent({
 const notes = [{ id: NOTE_ID, title: "Authorized", markdown: "untrusted seed" }];
 
 describe("Workbench EditorSession composition", () => {
+  beforeEach(() => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    config.global.plugins = [pinia];
+  });
   it("keeps reachable source content non-editable when no live session factory grants authority", async () => {
     const wrapper = mount(Workbench, {
       props: { initialNotes: notes },

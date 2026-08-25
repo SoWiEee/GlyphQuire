@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   defaultVariants,
   resolveVariants,
-  type ThemeComponentVariants,
 } from "../src/index.js";
 
 describe("defaultVariants", () => {
