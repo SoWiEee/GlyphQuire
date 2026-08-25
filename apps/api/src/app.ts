@@ -14,6 +14,7 @@ import { PostgresRateLimitAdapter } from "./middleware/PostgresRateLimitAdapter.
 import {
   InMemoryRateLimitAdapter,
   createAuthRateLimitMiddleware,
+  createNoteRateLimitMiddleware,
   type Clock,
   type RateLimitPort,
 } from "./middleware/rate-limit.js";
@@ -154,6 +155,13 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
       }),
     )
     .use("/api/v1/*", createRequestContextMiddleware(auth.api))
+    .use(
+      "/api/v1/*",
+      createNoteRateLimitMiddleware({
+        rateLimit,
+        keySecret: env.BETTER_AUTH_SECRET,
+      }),
+    )
     .use("/api/v1/*", ensurePersonalWorkspace)
     .onError(createErrorHandler(logger as SecurityLogger))
     .route("/api", healthRoutes)

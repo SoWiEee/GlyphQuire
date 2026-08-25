@@ -369,15 +369,15 @@ class EditorSessionImpl implements EditorSession {
       ) {
         throw new Error("Source adapter did not accept authoritative Markdown");
       }
-      let binding!: AdapterBinding;
-      binding = {
+      const binding: AdapterBinding = {
         version,
         adapters,
-        unsubscribe: [
-          adapters.source.onChange((markdown) => this.onAdapterChange(binding, "source", markdown)),
-          adapters.visual.onChange((markdown) => this.onAdapterChange(binding, "visual", markdown)),
-        ],
+        unsubscribe: [],
       };
+      binding.unsubscribe = [
+        adapters.source.onChange((markdown) => this.onAdapterChange(binding, "source", markdown)),
+        adapters.visual.onChange((markdown) => this.onAdapterChange(binding, "visual", markdown)),
+      ];
       this.adapterBinding = binding;
       this.applyAdapterPolicy(binding);
       return () => {

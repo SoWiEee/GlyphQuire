@@ -297,6 +297,42 @@ function rateLimitedResponse(
   return response;
 }
 
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const AUTOSAVE_CONTENT_PATTERN = /\/notes\/[^/]+\/content$/;
+
+export function createNoteRateLimitMiddleware(options: {
+  rateLimit: RateLimitPort;
+  keySecret: string;
+}): MiddlewareHandler<{ Variables: SecurityVariables }> {
+  return async (context, next) => {
+    if (SAFE_METHODS.has(context.req.method)) {
+      await next();
+      return;
+    }
+
+    const rc = context.get("requestContext");
+    if (!rc) {
+      await next();
+      return;
+    }
+
+    const clientIp = context.get("clientIp") || "unknown";
+    const isAutosave =
+      context.req.method === "PUT" && AUTOSAVE_CONTENT_PATTERN.test(context.req.path);
+
+    const decision = await enforceNoteRateLimits(options.rateLimit, {
+      kind: isAutosave ? "autosave" : "mutation",
+      actorId: rc.actorId,
+      workspaceId: rc.actorId,
+      clientIp,
+      keySecret: options.keySecret,
+    });
+
+    if (!decision.allowed) return rateLimitedResponse(context, decision);
+    await next();
+  };
+}
+
 export function createAuthRateLimitMiddleware(options: {
   rateLimit: RateLimitPort;
   keySecret: string;

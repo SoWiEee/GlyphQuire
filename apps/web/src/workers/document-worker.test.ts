@@ -266,7 +266,7 @@ describe("document worker contract", () => {
         markdownOfBytes(DOCUMENT_WORKER_THRESHOLD_BYTES + 1),
       );
 
-      failure === "error" ? worker.fail() : worker.failClone();
+      if (failure === "error") { worker.fail(); } else { worker.failClone(); }
 
       await expect(pending).rejects.toMatchObject({ code: "WORKER_FAILED" });
       expect(worker.terminateCalls).toBe(1);
