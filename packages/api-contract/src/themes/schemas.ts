@@ -12,7 +12,7 @@ export const createThemeInputSchema = z.object({
   version: z.string().min(1).max(50),
   tokens: partialThemeTokensSchema.optional(),
   darkTokens: partialThemeTokensSchema.optional(),
-  components: themeComponentVariantsSchema,
+  components: themeComponentVariantsSchema.optional(),
 }).strict();
 
 export const updateThemeInputSchema = z.object({
@@ -22,7 +22,7 @@ export const updateThemeInputSchema = z.object({
   version: z.string().min(1).max(50).optional(),
   tokens: partialThemeTokensSchema.optional(),
   darkTokens: partialThemeTokensSchema.optional(),
-  components: themeComponentVariantsSchema,
+  components: themeComponentVariantsSchema.optional(),
 }).strict();
 
 export const setUserThemeInputSchema = z.object({

@@ -74,6 +74,9 @@ importers:
       '@glyphquire/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@glyphquire/theme-engine':
+        specifier: workspace:*
+        version: link:../../packages/theme-engine
       '@hono/node-server':
         specifier: ^1.14.0
         version: 1.19.17(hono@4.13.3)
