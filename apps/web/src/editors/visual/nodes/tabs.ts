@@ -13,7 +13,7 @@ export const visualTabsSchema = $nodeSchema("gq_tabs", () => ({
   defining: true,
   isolating: true,
   parseDOM: [{ tag: "section[data-glyphquire-node='tabs']" }],
-  toDOM: () => ["section", { "data-glyphquire-node": "tabs" }, 0],
+  toDOM: () => ["section", { "data-glyphquire-node": "tabs", "data-variant": "plain" }, 0],
   parseMarkdown: {
     match: (node) => annotatedVisualKind(node) === "tabs",
     runner: (state, markdownNode, type) => {

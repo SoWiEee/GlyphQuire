@@ -18,7 +18,7 @@ export const visualStickySchema = $nodeSchema("gq_sticky", () => ({
     title: { default: null, validate: "string|null" },
   },
   parseDOM: [{ tag: "section[data-glyphquire-node='sticky']" }],
-  toDOM: () => ["section", { "data-glyphquire-node": "sticky" }, 0],
+  toDOM: () => ["section", { "data-glyphquire-node": "sticky", "data-variant": "plain" }, 0],
   parseMarkdown: {
     match: (node) => annotatedVisualKind(node) === "sticky",
     runner: (state, markdownNode, type) => {

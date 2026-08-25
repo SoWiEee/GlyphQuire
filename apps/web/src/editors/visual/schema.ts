@@ -837,3 +837,22 @@ export function setVisualControlsReadOnly(host: HTMLElement, readOnly: boolean):
     control.disabled = readOnly;
   }
 }
+
+export function themeVariantAttrs(
+  componentKey: string,
+  variants: Record<string, Record<string, string>>,
+): Record<string, string> {
+  const componentVariants = variants[componentKey];
+  if (!componentVariants) return {};
+  const attrs: Record<string, string> = {};
+  for (const [key, value] of Object.entries(componentVariants)) {
+    if (key === "variant") {
+      attrs["data-variant"] = value;
+    } else if (key === "decoration") {
+      attrs["data-decoration"] = value;
+    } else if (key === "animation") {
+      attrs["data-animation"] = value;
+    }
+  }
+  return attrs;
+}

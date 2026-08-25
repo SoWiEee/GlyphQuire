@@ -17,7 +17,7 @@ export const visualToggleSchema = $nodeSchema("gq_toggle", () => ({
     open: { default: false, validate: "boolean" },
   },
   parseDOM: [{ tag: "section[data-glyphquire-node='toggle']" }],
-  toDOM: () => ["section", { "data-glyphquire-node": "toggle" }, 0],
+  toDOM: () => ["section", { "data-glyphquire-node": "toggle", "data-variant": "plain" }, 0],
   parseMarkdown: {
     match: (node) => annotatedVisualKind(node) === "toggle",
     runner: (state, markdownNode, type) => {
