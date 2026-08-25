@@ -54,6 +54,9 @@ jobs:
       - name: Unit tests
         run: pnpm -r test
 
+      - name: Integration tests
+        run: pnpm test:integration
+
       - name: Cross-package scaffold
         run: pnpm test:cross-package
 
