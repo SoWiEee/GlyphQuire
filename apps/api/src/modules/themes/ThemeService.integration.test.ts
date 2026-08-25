@@ -1,18 +1,18 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createDb, type Database } from "@glyphquire/database";
+import { createDb, user, workspaces, workspaceMembers, type Database } from "@glyphquire/database";
 import { ThemeServiceImpl, type ThemeService } from "./ThemeService.js";
 
-const TEST_DATABASE_URL =
-  process.env.DATABASE_URL ?? "postgres://gq_app:gq_app_dev@localhost:5432/glyphquire_dev";
+const databaseUrl = process.env.TEST_DATABASE_URL;
+const describeWithPostgres = databaseUrl ? describe : describe.skip;
 
-describe("ThemeService", () => {
+describeWithPostgres("ThemeService", () => {
   let db: Database;
   let service: ThemeService;
   let testUserId: string;
   let testWorkspaceId: string;
 
   beforeAll(async () => {
-    db = createDb(TEST_DATABASE_URL);
+    db = createDb(databaseUrl!);
     service = new ThemeServiceImpl(db);
   });
 
@@ -21,21 +21,17 @@ describe("ThemeService", () => {
   });
 
   beforeEach(async () => {
-    const userResult = await db.execute(
-      `INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
-       VALUES (gen_random_uuid(), 'Test User', 'theme-test-' || gen_random_uuid() || '@test.com', true, now(), now())
-       RETURNING id`,
-    );
-    testUserId = (userResult[0] as { id: string }).id;
-    const wsResult = await db.execute(
-      `INSERT INTO workspaces (id, name, owner_id, created_at, updated_at)
-       VALUES (gen_random_uuid(), 'Test WS', '${testUserId}', now(), now()) RETURNING id`,
-    );
-    testWorkspaceId = (wsResult[0] as { id: string }).id;
-    await db.execute(
-      `INSERT INTO workspace_members (workspace_id, user_id, role, created_at, updated_at)
-       VALUES ('${testWorkspaceId}', '${testUserId}', 'owner', now(), now())`,
-    );
+    const id = `theme-test-${crypto.randomUUID()}`;
+    await db.insert(user).values({ id, name: "Test User", email: `${id}@test.com` });
+    testUserId = id;
+    const [ws] = await db
+      .insert(workspaces)
+      .values({ personalOwnerId: testUserId })
+      .returning({ id: workspaces.id });
+    testWorkspaceId = ws!.id;
+    await db
+      .insert(workspaceMembers)
+      .values({ workspaceId: testWorkspaceId, userId: testUserId, role: "owner" });
   });
 
   it("list returns system themes plus workspace themes", async () => {
