@@ -35,6 +35,8 @@ import { createAuthRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { createNoteRoutes } from "./routes/v1/notes.js";
 import { createVersionRoutes } from "./routes/v1/versions.js";
+import { ThemeServiceImpl, type ThemeService } from "./modules/themes/ThemeService.js";
+import { createThemeRoutes } from "./routes/v1/themes.js";
 
 type AuthErrorLogger = NonNullable<AuthOptions["errorLogger"]>;
 type AuthErrorLogEntry = Parameters<AuthErrorLogger["error"]>[0];
@@ -53,6 +55,7 @@ export interface AppDependencies {
   db?: Database;
   workspaceService?: PersonalWorkspaceProvisioner;
   noteService?: NoteService;
+  themeService?: ThemeService;
   rateLimit?: RateLimitPort;
   clock?: Clock;
   logger?: AppSecurityLogger;
@@ -83,6 +86,7 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
   const db = dependencies.db ?? createDb(env.DATABASE_URL);
   const workspaceService = dependencies.workspaceService ?? new WorkspaceService(db);
   const noteService = dependencies.noteService ?? new NoteServiceImpl(db);
+  const themeService = dependencies.themeService ?? new ThemeServiceImpl(db);
   const logger = dependencies.logger ?? defaultAppLogger;
   const rateLimit =
     dependencies.rateLimit ??
@@ -167,7 +171,8 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
     .route("/api", healthRoutes)
     .route("/api", authRoutes)
     .route("/api/v1", createNoteRoutes(noteService))
-    .route("/api/v1", createVersionRoutes(noteService));
+    .route("/api/v1", createVersionRoutes(noteService))
+    .route("/api/v1", createThemeRoutes(themeService));
 
   return {
     app,
