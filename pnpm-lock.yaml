@@ -129,6 +129,9 @@ importers:
       '@glyphquire/document-engine':
         specifier: workspace:*
         version: link:../../packages/document-engine
+      '@glyphquire/theme-engine':
+        specifier: workspace:*
+        version: link:../../packages/theme-engine
       '@milkdown/kit':
         specifier: 7.22.1
         version: 7.22.1(@codemirror/language@6.12.4)(@codemirror/state@6.7.1)(@codemirror/view@6.43.9)(typescript@5.9.3)
