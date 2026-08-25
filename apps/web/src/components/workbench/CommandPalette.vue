@@ -14,7 +14,7 @@
         ref="inputRef"
         v-model="query"
         type="text"
-        class="w-full rounded-t-lg border-b border-gray-200 px-4 py-3 text-sm outline-none"
+        class="w-full rounded-t-lg border-b border-gray-200 px-4 py-3 text-sm"
         placeholder="Type a command…"
         aria-label="Filter commands"
         @keydown.down.prevent="move(1)"
@@ -34,10 +34,10 @@
         >
           <div class="flex items-center justify-between">
             <span>{{ command.label }}</span>
-            <span v-if="command.hint" class="text-xs text-gray-400">{{ command.hint }}</span>
+            <span v-if="command.hint" class="text-xs text-gray-600">{{ command.hint }}</span>
           </div>
         </li>
-        <li v-if="filtered.length === 0" class="px-4 py-2 text-sm text-gray-400">
+        <li v-if="filtered.length === 0" class="px-4 py-2 text-sm text-gray-600">
           No matching commands.
         </li>
       </ul>

@@ -22,7 +22,7 @@
       <span class="max-w-[10rem] truncate">{{ tab.title }}</span>
       <button
         type="button"
-        class="rounded text-gray-400 opacity-0 group-hover:opacity-100 hover:text-gray-700 focus-visible:opacity-100"
+        class="rounded text-gray-500 opacity-0 group-hover:opacity-100 hover:text-gray-700 focus-visible:opacity-100"
         :aria-label="`Close ${tab.title}`"
         @click.stop="emit('close', tab.id)"
       >

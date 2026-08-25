@@ -1,0 +1,92 @@
+name: Provenance
+
+# SLSA 1.2 Build Level 1 evidence for the Phase 2 web and API build
+# artifacts, via GitHub artifact attestation
+# (https://github.com/actions/attest-build-provenance). This satisfies
+# Build Level 1: a scripted build (this workflow), with provenance
+# available and distributed by the build platform (GitHub's attestation
+# API + `gh attestation verify`).
+#
+# This workflow does not, by itself, complete the compliance-matrix SLSA
+# claim — docs/evidence/phase2/README.md must be updated with this run's
+# URL, source commit, and subject digest after the first real run on
+# `main`. Fabricating those values instead of recording a real run would
+# be a false compliance claim, not evidence.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build immutable Phase 2 artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # Each build output is packaged into one immutable, content-addressed
+      # tarball so the subject GitHub attests is the exact artifact a
+      # deployment would ship, not the mutable `dist/` directory tree.
+      - name: Package build artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p provenance-artifacts
+          tar czf provenance-artifacts/glyphquire-web-dist.tar.gz -C apps/web dist
+          tar czf provenance-artifacts/glyphquire-api-dist.tar.gz -C apps/api dist
+          sha256sum provenance-artifacts/*.tar.gz | tee provenance-artifacts/SHA256SUMS
+
+      - name: Upload packaged artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: glyphquire-phase2-build-${{ github.sha }}
+          path: provenance-artifacts/
+          retention-days: 90
+
+      # Generates and attaches SLSA provenance for each subject, signed via
+      # GitHub's OIDC-backed Sigstore identity (the "builder identity" the
+      # compliance matrix asks Task 13 to record is
+      # `https://github.com/actions/runner` acting under this workflow's
+      # `workflow_ref`, visible in the attestation's certificate).
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "provenance-artifacts/*.tar.gz"
+
+      - name: Record verification command
+        run: |
+          echo "## SLSA provenance recorded" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Source commit: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Attestation: ${{ steps.attest.outputs.attestation-url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Verify locally after downloading an artifact from this run:" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "gh attestation verify provenance-artifacts/glyphquire-web-dist.tar.gz --owner ${{ github.repository_owner }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "gh attestation verify provenance-artifacts/glyphquire-api-dist.tar.gz --owner ${{ github.repository_owner }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Record this run's URL, the commit above, and the digests from" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`provenance-artifacts/SHA256SUMS\` in docs/evidence/phase2/README.md." >> "$GITHUB_STEP_SUMMARY"

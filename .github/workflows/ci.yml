@@ -60,5 +60,22 @@ jobs:
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Chrome scaffold
-        run: pnpm exec playwright test tests/e2e/scaffold.spec.ts
+      - name: Chrome E2E, accessibility, security, and performance evidence
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+      # Phase 2 load test (tests/load/autosave-conflict.ts): this CI job has
+      # no running `apps/api` service and no seeded workspace ids, so the
+      # script's own preflight check prints exactly what's missing and
+      # exits 0 rather than failing the gate on infrastructure this job
+      # does not stand up. See docs/evidence/phase2/README.md — this is not
+      # the deferred P0-08 thirty-minute workload.
+      - name: Phase 2 autosave/conflict load profile
+        run: pnpm test:load:phase2

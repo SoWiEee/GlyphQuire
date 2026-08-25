@@ -68,6 +68,11 @@ export class CodeMirrorSourceAdapter implements EditorAdapter {
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         markdown({ base: markdownLanguage, codeLanguages: [] }),
         placeholder("Start writing…"),
+        // CodeMirror renders its content as an implicit `role="textbox"`
+        // with no accessible name of its own (WCAG 4.1.2 / axe
+        // aria-input-field-name); this is the one workbench text field
+        // that needs one supplied explicitly.
+        EditorView.contentAttributes.of({ "aria-label": "Note source markdown" }),
         this.readOnlyCompartment.of([EditorView.editable.of(true), EditorState.readOnly.of(false)]),
         // Belt-and-suspenders: the readOnly facet above governs the built-in
         // commands, but a caller can still dispatch a raw transaction

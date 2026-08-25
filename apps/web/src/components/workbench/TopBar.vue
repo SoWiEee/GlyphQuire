@@ -51,7 +51,7 @@
         @click="emit('open-palette')"
       >
         Commands
-        <kbd class="ml-1 rounded bg-gray-100 px-1 text-[10px] text-gray-500">⌘K</kbd>
+        <kbd class="ml-1 rounded bg-gray-100 px-1 text-[10px] text-gray-600">⌘K</kbd>
       </button>
     </div>
   </header>
