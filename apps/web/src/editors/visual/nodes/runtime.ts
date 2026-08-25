@@ -3,6 +3,8 @@ import type { MilkdownPlugin } from "@milkdown/kit/ctx";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import type { NodeViewConstructor } from "@milkdown/kit/prose/view";
 import { $nodeSchema, $view } from "@milkdown/kit/utils";
+import { createApp, h, ref as vueRef } from "vue";
+import RuntimeHost from "../../../runtime/RuntimeHost.vue";
 import {
   addSemanticNodeToMarkdown,
   annotatedVisualKind,
@@ -71,7 +73,7 @@ function runtimeNodeView(runtime: "p5" | "canvas"): NodeViewConstructor {
     dom.contentEditable = "false";
 
     const heading = document.createElement("strong");
-    heading.append(document.createTextNode(`${runtime} (static preview)`));
+    heading.append(document.createTextNode(`${runtime} runtime`));
     dom.append(heading);
 
     const controls: Array<{
@@ -100,7 +102,7 @@ function runtimeNodeView(runtime: "p5" | "canvas"): NodeViewConstructor {
     addInput("autoplay", "Autoplay declaration (inert)", "checkbox");
 
     const sourceLabel = document.createElement("label");
-    sourceLabel.append(document.createTextNode("Source (never executed)"));
+    sourceLabel.append(document.createTextNode("Source"));
     const source = document.createElement("textarea");
     source.dataset.glyphquireControl = "source";
     source.dataset.glyphquireRuntimeSource = "";
@@ -108,10 +110,25 @@ function runtimeNodeView(runtime: "p5" | "canvas"): NodeViewConstructor {
     dom.append(sourceLabel);
     controls.push({ attribute: "source", element: source });
 
-    const placeholder = document.createElement("div");
-    placeholder.dataset.glyphquireRuntimePlaceholder = runtime;
-    placeholder.append(document.createTextNode(`${runtime} execution is disabled in Visual Mode.`));
-    dom.append(placeholder);
+    // -- Vue RuntimeHost mount --
+    const hostContainer = document.createElement("div");
+    hostContainer.dataset.glyphquireRuntimeHost = "";
+    dom.append(hostContainer);
+
+    const sourceRef = vueRef(String(currentNode.attrs.source));
+    const heightRef = vueRef(Number(currentNode.attrs.height) || 400);
+    const autoplayRef = vueRef(currentNode.attrs.autoplay === true);
+
+    const app = createApp({
+      render: () =>
+        h(RuntimeHost, {
+          runtime,
+          source: sourceRef.value,
+          height: heightRef.value,
+          autoplay: autoplayRef.value,
+        }),
+    });
+    app.mount(hostContainer);
 
     const sync = (): void => {
       for (const { attribute, element } of controls) {
@@ -123,6 +140,9 @@ function runtimeNodeView(runtime: "p5" | "canvas"): NodeViewConstructor {
           if (element instanceof HTMLInputElement) element.setAttribute("value", element.value);
         }
       }
+      sourceRef.value = String(currentNode.attrs.source);
+      heightRef.value = Number(currentNode.attrs.height) || 400;
+      autoplayRef.value = currentNode.attrs.autoplay === true;
     };
 
     const read = (element: HTMLInputElement | HTMLTextAreaElement): string | boolean =>
@@ -163,6 +183,9 @@ function runtimeNodeView(runtime: "p5" | "canvas"): NodeViewConstructor {
         currentNode = nextNode;
         sync();
         return true;
+      },
+      destroy(): void {
+        app.unmount();
       },
       stopEvent: () => true,
       ignoreMutation: () => true,

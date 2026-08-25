@@ -116,7 +116,12 @@ onUnmounted(() => {
 <template>
   <div class="runtime-host" :data-runtime="runtime">
     <!-- Not yet started: static placeholder -->
-    <div v-if="!started" data-testid="runtime-placeholder" class="runtime-placeholder">
+    <div
+      v-if="!started"
+      data-testid="runtime-placeholder"
+      :data-glyphquire-runtime-placeholder="runtime"
+      class="runtime-placeholder"
+    >
       <pre class="runtime-code-preview">{{ codePreview }}</pre>
       <button v-if="!isAtLimit" data-testid="runtime-play" class="runtime-play-btn" @click="play">
         ▶ Run
