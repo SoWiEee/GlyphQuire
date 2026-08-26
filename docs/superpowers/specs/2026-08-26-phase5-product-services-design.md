@@ -1,6 +1,6 @@
 # Phase 5 — Product Services Design Spec
 
-**Status:** Design sections approved in conversation; implementation pending written-spec and plan approval.
+**Status:** Design sections approved in conversation; implementation contract clarified for existing auth-id types, durable imports, and workspace-scoped jobs; implementation pending plan execution.
 
 **Goal:** Complete the product-service layer for assets, full-text search, import/export, share links, and durable background jobs while preserving the existing note/version-history contracts. This is a production-oriented Phase 5, not a reduced MVP. Availability and horizontal scale are explicitly out of scope; the expected deployment has at most five concurrent users.
 
@@ -20,15 +20,17 @@ Each slice owns its migration, API contract, authorization, scrubbed errors/logg
 
 ## 2. Data Model and Contracts
 
-All identifiers are UUIDs, all workspace scope is server-derived, and soft deletion follows existing database conventions.
+Resource identifiers (workspace, note, asset, job, and transfer ids) are UUIDs; authenticated user/actor identifiers remain opaque `text` values to match the existing auth schema. All workspace scope is server-derived, and soft deletion follows existing database conventions.
 
 ### 2.1 Tables
 
 - **`assets`**: `id`, `workspace_id`, `owner_id`, `object_key`, `original_name`, `mime_type`, `size`, `sha256`, timestamps, and `deleted_at`. The server alone creates keys as `workspace/{workspaceId}/assets/{assetId}/original`.
 - **`search_documents`**: one row per note with indexed revision, title, headings, body, tags, normalized text, and PostgreSQL `tsvector`; `pg_trgm` supports CJK/fuzzy matching.
 - **`exports`**: requester/scope, format, status, idempotency key, object key, expiry, and sanitized failure summary.
+- **`imports`**: requester/workspace/target-note scope, staged source object key, status, idempotency key, expiry, progress manifest, and compensation status for crash-safe ingestion.
 - **`share_links`**: note/workspace scope, token hash, creator, expiry, and `revoked_at`; the plaintext token is never persisted.
-- **`jobs`**: versioned type/payload, attempts, lock timestamps, next-attempt time, status, error summary, and DLQ state. Payloads are schema-validated before dispatch.
+- **`jobs`**: nullable workspace routing scope (`ON DELETE SET NULL`), versioned type/payload, attempts, lock timestamps, next-attempt time, status, error summary, and DLQ state. Lifecycle/global payloads retain their deletion or backup target so the claimed job survives workspace removal. Payloads are schema-validated before dispatch.
+- **`workspace_deletions` / `account_deletions`**: confirmed deletion intent, execute-after grace, idempotency key, bounded cleanup manifest, status, and sanitized failure state. Workspace/requester references use `ON DELETE SET NULL` so lifecycle evidence survives the final purge.
 
 ### 2.2 Shared interfaces
 
@@ -44,7 +46,7 @@ interface SearchPort {
 }
 ```
 
-Every job is a `JobEnvelope` containing `{ id, type, version, attempts, createdAt, payload }`. Handlers are idempotent and must reject stale note revisions.
+Every job is a `JobEnvelope` containing `{ id, workspaceId: UUID | null, type, version, attempts, createdAt, payload }`; `workspaceId` is a nullable routing hint for lifecycle/global jobs whose payload retains the durable target. Handlers are idempotent and must reject stale note revisions.
 
 ## 3. API and Data Flows
 
@@ -87,11 +89,11 @@ Each slice must pass unit/schema tests, API and contract tests, real PostgreSQL/
 
 Deployment is ordered: forward-compatible schema and bucket policy, then API contracts/handlers, then worker consumers and feature flags. Migrations are forward-only and journal/hash verified; failure stops feature activation rather than deleting tables. The runbook documents environment variables, migration and worker commands, DLQ/rebuild operations, backup/restore, and incident rollback.
 
-**P0 (release required):** asset upload/download/delete; search visible within 60 seconds; Markdown/ZIP import; Markdown/ZIP/HTML export; read-only share links with immediate revoke; generic retry/DLQ; complete authorization and scrubbed audit logs.
+**P0 (release required):** asset upload/download/delete; search visible within 60 seconds; Markdown/ZIP import; Markdown/ZIP/HTML export; read-only share links with immediate revoke; generic retry/DLQ; complete authorization and scrubbed audit logs; encrypted daily PostgreSQL/object-storage backups with 30-day retention and monthly restore evidence; pre-destructive-migration backup; and confirmed account/workspace deletion that removes primary records, versions, assets, search records, share links, pending jobs, and sessions within 30 days.
 
-**P1 (same Phase, schedulable after P0):** thumbnail/metadata enrichment, full workspace index rebuild, advanced ranking, retention/orphan cleanup automation, extra export formats, and administrative UI.
+**P1 (same Phase, schedulable after P0):** thumbnail/metadata enrichment, full workspace index rebuild, orphan cleanup automation, advanced ranking, extra export formats, and administrative UI. Retention, backup/restore, and account/workspace deletion are not P1 because SPEC §33 makes them release-critical lifecycle guarantees.
 
-Release acceptance requires green root typecheck/lint/format/build/test, package integrations, cross-package contracts, Chrome E2E, fresh and upgraded migrations, no secrets or note contents in logs, and a success/denial/retry/consistency case for every P0 feature.
+Release acceptance requires green root typecheck/lint/format/build/test, package integrations, cross-package contracts, the existing Chrome E2E plus the repository's browser/accessibility evidence matrix, fresh and upgraded migrations, the reproducible five-user 30-minute workload, alert delivery within five minutes, a maintained security compliance matrix with file-upload controls, no secrets or note contents in logs, and a success/denial/retry/consistency case for every P0 feature.
 
 ## 6. Non-goals and Compatibility
 
