@@ -27,19 +27,39 @@ export {
   themesRelations,
   userThemes,
   userThemesRelations,
+  jobs,
+  jobsRelations,
+  idempotencyRecords,
+  idempotencyRecordsRelations,
   type WorkspaceRole,
   type NoteVisibility,
   type SnapshotReason,
   type NoteOperationKind,
   type DocumentJobKind,
   type DocumentJobStatus,
+  type JobStatus,
 } from "./schema/index.js";
+
+export {
+  IdempotencyStore,
+  PostgresIdempotencyBackend,
+  decodeEncryptionKey,
+  type IdempotencyBackend,
+  type IdempotencyBackendBeginInput,
+  type IdempotencyBackendBeginResult,
+  type IdempotencyBackendCompleteInput,
+  type IdempotencyBeginInput,
+  type IdempotencyBeginResult,
+  type IdempotencyStoreOptions,
+} from "./idempotency.js";
 
 export type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import type {
   documentJobs,
+  idempotencyRecords,
+  jobs,
   noteOperations,
   notes,
   noteVersions,
@@ -65,3 +85,7 @@ export type Theme = InferSelectModel<typeof themes>;
 export type NewTheme = InferInsertModel<typeof themes>;
 export type UserTheme = InferSelectModel<typeof userThemes>;
 export type NewUserTheme = InferInsertModel<typeof userThemes>;
+export type Job = InferSelectModel<typeof jobs>;
+export type NewJob = InferInsertModel<typeof jobs>;
+export type IdempotencyRecord = InferSelectModel<typeof idempotencyRecords>;
+export type NewIdempotencyRecord = InferInsertModel<typeof idempotencyRecords>;

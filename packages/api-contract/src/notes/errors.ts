@@ -17,6 +17,13 @@ export const API_ERROR_CODES = [
   "OPERATION_REUSED",
   "RATE_LIMITED",
   "SERVICE_UNAVAILABLE",
+  "ASSET_INVALID",
+  "SEARCH_UNAVAILABLE",
+  "IMPORT_INVALID",
+  "EXPORT_FAILED",
+  "SHARE_NOT_FOUND",
+  "JOB_INVALID",
+  "JOB_FAILED",
 ] as const;
 
 export const apiErrorCodeSchema = z.enum(API_ERROR_CODES);

@@ -18,3 +18,4 @@ export {
   PostgresDocumentJobDispatcher,
   type PostgresDocumentJobDispatcherOptions,
 } from "./outbox-dispatcher.js";
+export * from "./jobs.js";

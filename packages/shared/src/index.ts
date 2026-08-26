@@ -5,5 +5,7 @@ export {
   s3EnvSchema,
   authEnvSchema,
   appEnvSchema,
+  phase5EnvSchema,
   webOriginSchema,
+  type Phase5Env,
 } from "./env.js";

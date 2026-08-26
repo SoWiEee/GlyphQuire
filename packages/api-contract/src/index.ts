@@ -12,6 +12,16 @@ export * from "./notes/schemas.js";
 export * from "./notes/types.js";
 export * from "./themes/schemas.js";
 export * from "./themes/types.js";
+export * from "./jobs/schemas.js";
+export * from "./jobs/types.js";
+export * from "./assets/schemas.js";
+export * from "./assets/types.js";
+export * from "./search/schemas.js";
+export * from "./search/types.js";
+export * from "./transfer/schemas.js";
+export * from "./transfer/types.js";
+export * from "./share-links/schemas.js";
+export * from "./share-links/types.js";
 
 export function createApiClient(transport: ApiClientTransport): ApiClient {
   return {

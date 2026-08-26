@@ -17,8 +17,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@glyphquire/api-contract": "workspace:*",
     "@glyphquire/database": "workspace:*",
-    "drizzle-orm": "^0.44.0"
+    "drizzle-orm": "^0.44.0",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "typescript": "^5.8.0"

@@ -404,6 +404,13 @@ describe("note API schemas", () => {
       "OPERATION_REUSED",
       "RATE_LIMITED",
       "SERVICE_UNAVAILABLE",
+      "ASSET_INVALID",
+      "SEARCH_UNAVAILABLE",
+      "IMPORT_INVALID",
+      "EXPORT_FAILED",
+      "SHARE_NOT_FOUND",
+      "JOB_INVALID",
+      "JOB_FAILED",
     ]);
     expect(apiErrorEnvelopeSchema.parse(notFound)).toEqual(notFound);
     expect(
@@ -590,6 +597,13 @@ describe("note API schemas", () => {
       | "OPERATION_REUSED"
       | "RATE_LIMITED"
       | "SERVICE_UNAVAILABLE"
+      | "ASSET_INVALID"
+      | "SEARCH_UNAVAILABLE"
+      | "IMPORT_INVALID"
+      | "EXPORT_FAILED"
+      | "SHARE_NOT_FOUND"
+      | "JOB_INVALID"
+      | "JOB_FAILED"
     >();
     expectTypeOf<ApiErrorEnvelope>().toEqualTypeOf<{
       error: { code: ApiErrorCode; message: string; requestId: string };

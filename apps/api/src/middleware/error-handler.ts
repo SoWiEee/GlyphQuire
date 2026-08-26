@@ -13,6 +13,13 @@ const defaultMessages: Record<ApiErrorCode, string> = {
   OPERATION_REUSED: "The operation identifier was already used",
   RATE_LIMITED: "Too many requests",
   SERVICE_UNAVAILABLE: "The service is temporarily unavailable",
+  ASSET_INVALID: "The asset request is invalid",
+  SEARCH_UNAVAILABLE: "Search is temporarily unavailable",
+  IMPORT_INVALID: "The import is invalid",
+  EXPORT_FAILED: "The export failed",
+  SHARE_NOT_FOUND: "Share link not found",
+  JOB_INVALID: "The job is invalid",
+  JOB_FAILED: "The job failed",
 };
 
 export type PublicErrorMessage =
@@ -23,7 +30,14 @@ export type PublicErrorMessage =
   | "The note has changed"
   | "The operation identifier was already used"
   | "Too many requests"
-  | "The service is temporarily unavailable";
+  | "The service is temporarily unavailable"
+  | "The asset request is invalid"
+  | "Search is temporarily unavailable"
+  | "The import is invalid"
+  | "The export failed"
+  | "Share link not found"
+  | "The job is invalid"
+  | "The job failed";
 
 export interface SecurityLogEntry {
   event: "api_request_failed";
