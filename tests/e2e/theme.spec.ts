@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test.describe("Theme System", () => {
   test("theme editor panel opens and closes from TopBar", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/workspace");
 
     const themeButton = page.getByRole("button", { name: "Open theme editor" });
     await expect(themeButton).toBeVisible();
@@ -16,7 +16,7 @@ test.describe("Theme System", () => {
   });
 
   test("theme editor panel closes via backdrop click", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/workspace");
 
     await page.getByRole("button", { name: "Open theme editor" }).click();
     const panel = page.getByRole("dialog", { name: /theme/i });
@@ -27,7 +27,7 @@ test.describe("Theme System", () => {
   });
 
   test("dark mode toggle updates isDark state", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/workspace");
     await page.getByRole("button", { name: "Open theme editor" }).click();
 
     const darkCheckbox = page.getByRole("checkbox", { name: /dark/i });

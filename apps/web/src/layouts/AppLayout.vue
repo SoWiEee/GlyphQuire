@@ -10,9 +10,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, provide } from "vue";
 import { RouterView, useRoute } from "vue-router";
+import { THEME_INJECTION_KEY, useTheme } from "../themes/ThemeProvider.js";
 
 const route = useRoute();
 const isFullBleed = computed(() => route.meta.fullBleed === true);
+
+// ThemeEditorPanel is rendered from the workbench (and teleports its DOM to
+// body), but it still relies on Vue's logical component ancestry for its
+// ThemeContext.  Provide one application-scoped context here so every page
+// beneath AppLayout observes the same tokens, variants, and dark-mode state.
+provide(THEME_INJECTION_KEY, useTheme());
 </script>
