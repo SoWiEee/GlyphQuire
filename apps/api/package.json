@@ -31,7 +31,8 @@
     "drizzle-orm": "^0.44.0",
     "@glyphquire/document-engine": "workspace:*",
     "@glyphquire/queue": "workspace:*",
-    "@glyphquire/shared": "workspace:*"
+    "@glyphquire/shared": "workspace:*",
+    "@glyphquire/storage": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

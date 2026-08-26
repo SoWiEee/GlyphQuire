@@ -1440,7 +1440,10 @@ describe("rate-limit persistence contract", () => {
 
   it("commits the frozen 0000-0003 prefix followed by the Phase 3 themes migration", async () => {
     const migrations = await readRepositoryMigrations(migrationsDirectory);
-    expect(migrations.map(({ idx, tag, hash }) => ({ idx, tag, hash }))).toEqual([
+    // This asserts the frozen 0000-0004 prefix only; later phases append
+    // further migrations after it, so only the prefix is checked here, not
+    // the full repository list.
+    expect(migrations.slice(0, 5).map(({ idx, tag, hash }) => ({ idx, tag, hash }))).toEqual([
       {
         idx: 0,
         tag: "0000_phase0_auth",
@@ -1468,7 +1471,7 @@ describe("rate-limit persistence contract", () => {
       },
     ]);
     expect(migrations.every(({ hash }) => /^[a-f0-9]{64}$/.test(hash))).toBe(true);
-    expect(new Set(migrations.map(({ when }) => when)).size).toBe(5);
+    expect(new Set(migrations.slice(0, 5).map(({ when }) => when)).size).toBe(5);
 
     const sql = await readFile(
       new URL(

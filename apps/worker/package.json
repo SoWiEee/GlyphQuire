@@ -13,9 +13,13 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@glyphquire/api-contract": "workspace:*",
     "@glyphquire/database": "workspace:*",
     "@glyphquire/queue": "workspace:*",
-    "@glyphquire/shared": "workspace:*"
+    "@glyphquire/shared": "workspace:*",
+    "@glyphquire/storage": "workspace:*",
+    "drizzle-orm": "^0.44.0",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

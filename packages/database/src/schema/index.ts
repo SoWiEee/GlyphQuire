@@ -31,3 +31,4 @@ export { rateLimitBuckets, rateLimitReservations } from "./rate-limit-buckets.js
 export { themes, themesRelations, userThemes, userThemesRelations } from "./themes.js";
 export { jobs, jobsRelations, type JobStatus } from "./jobs.js";
 export { idempotencyRecords, idempotencyRecordsRelations } from "./idempotency-records.js";
+export { assets, assetsRelations, type AssetThumbnailStatus } from "./assets.js";

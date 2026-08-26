@@ -43,6 +43,13 @@
       "when": 1787745332389,
       "tag": "0005_phase5_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787753766749,
+      "tag": "0006_phase5_assets",
+      "breakpoints": true
     }
   ]
 }

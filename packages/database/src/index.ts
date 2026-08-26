@@ -31,6 +31,8 @@ export {
   jobsRelations,
   idempotencyRecords,
   idempotencyRecordsRelations,
+  assets,
+  assetsRelations,
   type WorkspaceRole,
   type NoteVisibility,
   type SnapshotReason,
@@ -38,6 +40,7 @@ export {
   type DocumentJobKind,
   type DocumentJobStatus,
   type JobStatus,
+  type AssetThumbnailStatus,
 } from "./schema/index.js";
 
 export {
@@ -57,6 +60,7 @@ export type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import type {
+  assets,
   documentJobs,
   idempotencyRecords,
   jobs,
@@ -89,3 +93,5 @@ export type Job = InferSelectModel<typeof jobs>;
 export type NewJob = InferInsertModel<typeof jobs>;
 export type IdempotencyRecord = InferSelectModel<typeof idempotencyRecords>;
 export type NewIdempotencyRecord = InferInsertModel<typeof idempotencyRecords>;
+export type Asset = InferSelectModel<typeof assets>;
+export type NewAsset = InferInsertModel<typeof assets>;
