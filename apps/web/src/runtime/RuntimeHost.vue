@@ -89,24 +89,27 @@ function onIframeLoad(): void {
 // Single consolidated watcher: tracks how many runtimes on this page are
 // currently active (for the MAX_IFRAMES_PER_PAGE guard) and triggers
 // autoplay once the sandbox reports it is ready.
-watch(() => bridge.state.value, (newState, oldState) => {
-  const wasActive = oldState === "executing" || oldState === "initializing";
-  const isNowActive = newState === "executing" || newState === "initializing";
-  if (isNowActive && !wasActive) {
-    activeCount.value++;
-  } else if (!isNowActive && wasActive) {
-    activeCount.value = Math.max(0, activeCount.value - 1);
-  }
+watch(
+  () => bridge.state.value,
+  (newState, oldState) => {
+    const wasActive = oldState === "executing" || oldState === "initializing";
+    const isNowActive = newState === "executing" || newState === "initializing";
+    if (isNowActive && !wasActive) {
+      activeCount.value++;
+    } else if (!isNowActive && wasActive) {
+      activeCount.value = Math.max(0, activeCount.value - 1);
+    }
 
-  if (newState === "ready" && props.autoplay) {
-    if (!checkCodeSize()) return;
-    bridge.execute(props.source, {
-      height: props.height,
-      network: [],
-      autoplay: props.autoplay,
-    });
-  }
-});
+    if (newState === "ready" && props.autoplay) {
+      if (!checkCodeSize()) return;
+      bridge.execute(props.source, {
+        height: props.height,
+        network: [],
+        autoplay: props.autoplay,
+      });
+    }
+  },
+);
 
 onUnmounted(() => {
   bridge.cleanup();
@@ -149,14 +152,12 @@ onUnmounted(() => {
         <div class="runtime-spinner">Loading…</div>
       </div>
 
-      <div v-else-if="bridge.state.value === 'ready' || bridge.state.value === 'stopped'" class="runtime-placeholder">
+      <div
+        v-else-if="bridge.state.value === 'ready' || bridge.state.value === 'stopped'"
+        class="runtime-placeholder"
+      >
         <pre class="runtime-code-preview">{{ codePreview }}</pre>
-        <button
-          v-if="!isAtLimit"
-          data-testid="runtime-play"
-          class="runtime-play-btn"
-          @click="play"
-        >
+        <button v-if="!isAtLimit" data-testid="runtime-play" class="runtime-play-btn" @click="play">
           ▶ Run
         </button>
         <p v-else class="runtime-limit-msg">

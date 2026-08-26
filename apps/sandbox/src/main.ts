@@ -55,7 +55,9 @@ function handleInit(msg: Extract<HostMessage, { type: "runtime:init" }>): void {
   });
 }
 
-async function handleExecute(msg: Extract<HostMessage, { type: "runtime:execute" }>): Promise<void> {
+async function handleExecute(
+  msg: Extract<HostMessage, { type: "runtime:execute" }>,
+): Promise<void> {
   if (!activeRunner || !hostOrigin || !sessionId) return;
 
   const { startGuard } = await import("./resource-guard.js");

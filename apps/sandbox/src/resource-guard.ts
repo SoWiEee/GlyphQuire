@@ -5,11 +5,7 @@ let timeoutId: ReturnType<typeof setTimeout> | null = null;
 let errorHandler: ((event: ErrorEvent) => void) | null = null;
 let rejectionHandler: ((event: PromiseRejectionEvent) => void) | null = null;
 
-export function startGuard(
-  hostOrigin: string,
-  sessionId: string,
-  runner: { stop(): void },
-): void {
+export function startGuard(hostOrigin: string, sessionId: string, runner: { stop(): void }): void {
   stopGuard();
 
   timeoutId = setTimeout(() => {

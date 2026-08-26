@@ -94,20 +94,20 @@ All messages carry `v: 1` (protocol version) and `id` (runtime instance UUID).
 
 **Host → Sandbox:**
 
-| Type | Payload | Purpose |
-|------|---------|---------|
-| `runtime:init` | `{ runtime: "p5" \| "canvas"; origin: string }` | Initialize sandbox for a specific runtime type; `origin` is the allowed host origin |
-| `runtime:execute` | `{ source: string; props: RuntimeProps }` | Execute user code with parsed props (height, network, autoplay) |
-| `runtime:stop` | — | Stop execution immediately |
+| Type              | Payload                                         | Purpose                                                                             |
+| ----------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `runtime:init`    | `{ runtime: "p5" \| "canvas"; origin: string }` | Initialize sandbox for a specific runtime type; `origin` is the allowed host origin |
+| `runtime:execute` | `{ source: string; props: RuntimeProps }`       | Execute user code with parsed props (height, network, autoplay)                     |
+| `runtime:stop`    | —                                               | Stop execution immediately                                                          |
 
 **Sandbox → Host:**
 
-| Type | Payload | Purpose |
-|------|---------|---------|
-| `runtime:ready` | — | Sandbox initialized and ready to receive code |
-| `runtime:resize` | `{ height: number }` | Request iframe height change (canvas auto-size) |
-| `runtime:error` | `{ message: string; line?: number }` | Runtime error (syntax, runtime, or timeout) |
-| `runtime:stopped` | — | Execution stopped (ack for stop, or timeout self-stop) |
+| Type              | Payload                              | Purpose                                                |
+| ----------------- | ------------------------------------ | ------------------------------------------------------ |
+| `runtime:ready`   | —                                    | Sandbox initialized and ready to receive code          |
+| `runtime:resize`  | `{ height: number }`                 | Request iframe height change (canvas auto-size)        |
+| `runtime:error`   | `{ message: string; line?: number }` | Runtime error (syntax, runtime, or timeout)            |
+| `runtime:stopped` | —                                    | Execution stopped (ack for stop, or timeout self-stop) |
 
 ### 2.2 Validation Rules (per SPEC §14.3)
 
@@ -206,6 +206,7 @@ export const SANDBOX_ORIGIN = import.meta.env.VITE_SANDBOX_ORIGIN ?? "http://loc
 ```
 
 Added to `.env.example`:
+
 ```
 VITE_SANDBOX_ORIGIN=http://localhost:5174
 ```
@@ -239,6 +240,7 @@ function useRuntimeBridge(
 ```
 
 **Responsibilities:**
+
 - On iframe load: send `runtime:init` with runtime type and `SANDBOX_ORIGIN`.
 - Validate all incoming messages: `event.origin`, schema, instance `id`.
 - Sliding-window rate limiter: track message timestamps in a circular buffer; if count exceeds `MAX_MESSAGE_RATE` in any 1-second window, send `runtime:stop` and transition to error state.
@@ -249,6 +251,7 @@ function useRuntimeBridge(
 ### 4.3 `RuntimeHost.vue`
 
 **Props:**
+
 - `runtime: "p5" | "canvas"` (required)
 - `source: string` (required)
 - `height: number` (default 400)
@@ -256,19 +259,21 @@ function useRuntimeBridge(
 
 **Rendering states:**
 
-| State | Display |
-|-------|---------|
+| State          | Display                                                                              |
+| -------------- | ------------------------------------------------------------------------------------ |
 | idle / stopped | Placeholder: code preview (first 5 lines, syntax highlighted) + centered play button |
-| initializing | Placeholder + spinner overlay |
-| ready | Same as idle (auto-transitions to executing if autoplay) |
-| executing | Live iframe + stop button overlay (top-right) |
-| error | Error panel: red border, error message, line number if available, reset button |
+| initializing   | Placeholder + spinner overlay                                                        |
+| ready          | Same as idle (auto-transitions to executing if autoplay)                             |
+| executing      | Live iframe + stop button overlay (top-right)                                        |
+| error          | Error panel: red border, error message, line number if available, reset button       |
 
 **Max iframe limit:**
+
 - Module-level reactive counter tracks active `RuntimeHost` instances with state `executing` or `initializing`.
 - When counter reaches `MAX_IFRAMES_PER_PAGE` (8), additional instances show a disabled placeholder: "Maximum active runtimes reached. Stop another runtime to start this one."
 
 **Code size check:**
+
 - Before calling `bridge.execute()`, check `new TextEncoder().encode(source).byteLength <= MAX_CODE_SIZE_BYTES` (64KB).
 - If exceeded, show error state with "Code exceeds maximum size (64KB)".
 
@@ -290,20 +295,20 @@ All constants defined in `packages/runtime-protocol/src/constants.ts`:
 export const PROTOCOL_VERSION = 1;
 export const EXECUTION_TIMEOUT_MS = 30_000;
 export const MAX_IFRAMES_PER_PAGE = 8;
-export const MAX_MESSAGE_RATE = 60;          // messages per second
-export const MAX_CODE_SIZE_BYTES = 65_536;   // 64KB
+export const MAX_MESSAGE_RATE = 60; // messages per second
+export const MAX_CODE_SIZE_BYTES = 65_536; // 64KB
 export const RESIZE_MIN_HEIGHT = 100;
 export const RESIZE_MAX_HEIGHT = 2000;
 ```
 
-| Control | Location | Mechanism |
-|---------|----------|-----------|
-| Execution timeout | Sandbox `resource-guard.ts` | `setTimeout(EXECUTION_TIMEOUT_MS)` — auto-stop + error |
-| Max iframes per page | Host `RuntimeHost.vue` | Module-level reactive counter; blocks new executions at limit |
-| Message rate limit | Host `useRuntimeBridge.ts` | Sliding-window counter; exceeding sends `runtime:stop` |
-| Max code size | Host `RuntimeHost.vue` | `TextEncoder.encode().byteLength` check before execute |
-| Crash recovery | Host `useRuntimeBridge.ts` | iframe `error` event detection → transition to error state, offer reset (full iframe rebuild) |
-| Resize bounds | Host `useRuntimeBridge.ts` | Clamp incoming height to `[RESIZE_MIN_HEIGHT, RESIZE_MAX_HEIGHT]` |
+| Control              | Location                    | Mechanism                                                                                     |
+| -------------------- | --------------------------- | --------------------------------------------------------------------------------------------- |
+| Execution timeout    | Sandbox `resource-guard.ts` | `setTimeout(EXECUTION_TIMEOUT_MS)` — auto-stop + error                                        |
+| Max iframes per page | Host `RuntimeHost.vue`      | Module-level reactive counter; blocks new executions at limit                                 |
+| Message rate limit   | Host `useRuntimeBridge.ts`  | Sliding-window counter; exceeding sends `runtime:stop`                                        |
+| Max code size        | Host `RuntimeHost.vue`      | `TextEncoder.encode().byteLength` check before execute                                        |
+| Crash recovery       | Host `useRuntimeBridge.ts`  | iframe `error` event detection → transition to error state, offer reset (full iframe rebuild) |
+| Resize bounds        | Host `useRuntimeBridge.ts`  | Clamp incoming height to `[RESIZE_MIN_HEIGHT, RESIZE_MAX_HEIGHT]`                             |
 
 **Stop flow:** Host sends `runtime:stop` → Sandbox calls runner `stop()` (p5: `sketch.remove()`; canvas: `cancelAnimationFrame` + clear) → Sandbox sends `runtime:stopped` → Host transitions to stopped state.
 
@@ -350,16 +355,19 @@ Production: Caddy reverse proxy routes `sandbox.localhost` to the sandbox servic
 ### 7.1 Unit Tests
 
 **`packages/runtime-protocol/tests/`:**
+
 - `messages.test.ts` — Zod schema validation: valid messages parse, invalid rejected, unknown types rejected, missing fields rejected, `v` must be 1.
 - `constants.test.ts` — Constants are positive integers, `PROTOCOL_VERSION` is 1.
 
 **`apps/sandbox/src/` (co-located tests):**
+
 - `protocol.test.ts` — Origin validation accepts/rejects correctly, message sending specifies target origin.
 - `runners/p5-runner.test.ts` — Execution produces canvas element, stop removes it, syntax error caught and reported.
 - `runners/canvas-runner.test.ts` — Canvas created with correct dimensions, draw loop runs, stop cancels animation frame.
 - `resource-guard.test.ts` — Timeout fires after configured duration, cleanup cancels timeout, uncaught errors forwarded.
 
 **`apps/web/src/runtime/` (co-located tests):**
+
 - `useRuntimeBridge.test.ts` — State machine transitions, origin validation rejects spoofed messages, rate limiter triggers stop at threshold, cleanup removes listener.
 - `RuntimeHost.test.ts` — Renders placeholder when idle, shows error overlay on error state, respects max iframe limit, rejects oversized code.
 
@@ -389,47 +397,47 @@ Per SPEC acceptance criteria #21:
 
 ### New packages/apps
 
-| Path | Type | Purpose |
-|------|------|---------|
+| Path                         | Type    | Purpose                                      |
+| ---------------------------- | ------- | -------------------------------------------- |
 | `packages/runtime-protocol/` | package | Shared message types, Zod schemas, constants |
-| `apps/sandbox/` | app | Isolated runtime host (Vite static build) |
+| `apps/sandbox/`              | app     | Isolated runtime host (Vite static build)    |
 
 ### New files in existing packages
 
-| Path | Purpose |
-|------|---------|
-| `apps/web/src/runtime/RuntimeHost.vue` | iframe manager + controls UI |
-| `apps/web/src/runtime/useRuntimeBridge.ts` | postMessage composable |
-| `apps/web/src/runtime/runtime-config.ts` | Sandbox origin config |
+| Path                                           | Purpose                                 |
+| ---------------------------------------------- | --------------------------------------- |
+| `apps/web/src/runtime/RuntimeHost.vue`         | iframe manager + controls UI            |
+| `apps/web/src/runtime/useRuntimeBridge.ts`     | postMessage composable                  |
+| `apps/web/src/runtime/runtime-config.ts`       | Sandbox origin config                   |
 | `apps/web/src/editors/visual/nodes/runtime.ts` | Milkdown node view for p5/canvas blocks |
-| `tests/e2e/runtime.spec.ts` | E2E functional tests |
-| `tests/e2e/runtime-security.spec.ts` | E2E security tests |
+| `tests/e2e/runtime.spec.ts`                    | E2E functional tests                    |
+| `tests/e2e/runtime-security.spec.ts`           | E2E security tests                      |
 
 ### Modified files
 
-| Path | Change |
-|------|--------|
-| `pnpm-workspace.yaml` | Already includes `apps/*` — no change needed |
-| `docker-compose.yml` | Add `sandbox` service |
-| `.env.example` | Add `VITE_SANDBOX_ORIGIN` |
-| `apps/web/package.json` | Add `@glyphquire/runtime-protocol` dependency |
-| `apps/web/src/editors/visual/index.ts` | Register `runtimePlugins` |
+| Path                                   | Change                                        |
+| -------------------------------------- | --------------------------------------------- |
+| `pnpm-workspace.yaml`                  | Already includes `apps/*` — no change needed  |
+| `docker-compose.yml`                   | Add `sandbox` service                         |
+| `.env.example`                         | Add `VITE_SANDBOX_ORIGIN`                     |
+| `apps/web/package.json`                | Add `@glyphquire/runtime-protocol` dependency |
+| `apps/web/src/editors/visual/index.ts` | Register `runtimePlugins`                     |
 
 ---
 
 ## 9. Security Summary
 
-| Threat | Mitigation |
-|--------|-----------|
+| Threat                                      | Mitigation                                                           |
+| ------------------------------------------- | -------------------------------------------------------------------- |
 | User code accesses host cookies/auth tokens | Separate origin + `sandbox="allow-scripts"` (no `allow-same-origin`) |
-| User code exfiltrates data via network | CSP `connect-src 'none'` blocks fetch/XHR/WebSocket |
-| User code runs indefinitely | 30s execution timeout in sandbox resource guard |
-| Message flood from sandbox | Host rate-limiter (60 msg/s) with auto-stop |
-| Spoofed postMessage from third party | Origin validation on every message (both sides) |
-| Oversized code payload | 64KB size check before execute |
-| Too many concurrent runtimes | Max 8 active iframes per page |
-| Sandbox code injects into host DOM | iframe sandbox attribute prevents parent document access |
-| p5.js CDN supply chain attack | p5.js bundled locally, `script-src 'self'` blocks external scripts |
+| User code exfiltrates data via network      | CSP `connect-src 'none'` blocks fetch/XHR/WebSocket                  |
+| User code runs indefinitely                 | 30s execution timeout in sandbox resource guard                      |
+| Message flood from sandbox                  | Host rate-limiter (60 msg/s) with auto-stop                          |
+| Spoofed postMessage from third party        | Origin validation on every message (both sides)                      |
+| Oversized code payload                      | 64KB size check before execute                                       |
+| Too many concurrent runtimes                | Max 8 active iframes per page                                        |
+| Sandbox code injects into host DOM          | iframe sandbox attribute prevents parent document access             |
+| p5.js CDN supply chain attack               | p5.js bundled locally, `script-src 'self'` blocks external scripts   |
 
 ---
 

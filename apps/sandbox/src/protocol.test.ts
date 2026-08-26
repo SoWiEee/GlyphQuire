@@ -23,11 +23,7 @@ describe("sendToHost", () => {
     const mockPostMessage = vi.fn();
     vi.stubGlobal("parent", { postMessage: mockPostMessage });
 
-    sendToHost(
-      { type: "runtime:ready" },
-      "http://localhost:5173",
-      "session-1",
-    );
+    sendToHost({ type: "runtime:ready" }, "http://localhost:5173", "session-1");
 
     expect(mockPostMessage).toHaveBeenCalledWith(
       { v: 1, id: "session-1", type: "runtime:ready" },
@@ -41,11 +37,7 @@ describe("sendToHost", () => {
     const mockPostMessage = vi.fn();
     vi.stubGlobal("parent", { postMessage: mockPostMessage });
 
-    sendToHost(
-      { type: "runtime:stopped" },
-      "http://localhost:5173",
-      "session-1",
-    );
+    sendToHost({ type: "runtime:stopped" }, "http://localhost:5173", "session-1");
 
     const [, targetOrigin] = mockPostMessage.mock.calls[0] as [unknown, string];
     expect(targetOrigin).not.toBe("*");

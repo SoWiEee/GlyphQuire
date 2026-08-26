@@ -28,29 +28,29 @@
 
 ### New packages/apps
 
-| Path | Type | Purpose |
-|------|------|---------|
+| Path                         | Type    | Purpose                                      |
+| ---------------------------- | ------- | -------------------------------------------- |
 | `packages/runtime-protocol/` | package | Shared message types, Zod schemas, constants |
-| `apps/sandbox/` | app | Isolated runtime host (Vite static build) |
+| `apps/sandbox/`              | app     | Isolated runtime host (Vite static build)    |
 
 ### New files in existing packages
 
-| Path | Purpose |
-|------|---------|
-| `apps/web/src/runtime/RuntimeHost.vue` | iframe manager + controls UI |
-| `apps/web/src/runtime/useRuntimeBridge.ts` | postMessage composable |
-| `apps/web/src/runtime/runtime-config.ts` | Sandbox origin config |
-| `tests/e2e/runtime.spec.ts` | E2E functional tests |
-| `tests/e2e/runtime-security.spec.ts` | E2E security tests |
+| Path                                       | Purpose                      |
+| ------------------------------------------ | ---------------------------- |
+| `apps/web/src/runtime/RuntimeHost.vue`     | iframe manager + controls UI |
+| `apps/web/src/runtime/useRuntimeBridge.ts` | postMessage composable       |
+| `apps/web/src/runtime/runtime-config.ts`   | Sandbox origin config        |
+| `tests/e2e/runtime.spec.ts`                | E2E functional tests         |
+| `tests/e2e/runtime-security.spec.ts`       | E2E security tests           |
 
 ### Modified files
 
-| Path | Change |
-|------|--------|
-| `docker-compose.yml` | Add `sandbox` service |
-| `.env.example` | Add `VITE_SANDBOX_ORIGIN` |
-| `apps/web/package.json` | Add `@glyphquire/runtime-protocol` dependency |
-| `apps/web/src/editors/visual/nodes/runtime.ts` | Replace static placeholder with RuntimeHost.vue |
+| Path                                                   | Change                                                    |
+| ------------------------------------------------------ | --------------------------------------------------------- |
+| `docker-compose.yml`                                   | Add `sandbox` service                                     |
+| `.env.example`                                         | Add `VITE_SANDBOX_ORIGIN`                                 |
+| `apps/web/package.json`                                | Add `@glyphquire/runtime-protocol` dependency             |
+| `apps/web/src/editors/visual/nodes/runtime.ts`         | Replace static placeholder with RuntimeHost.vue           |
 | `apps/web/src/editors/visual/MilkdownVisualAdapter.ts` | No change needed — already imports `visualRuntimePlugins` |
 
 ---
@@ -58,6 +58,7 @@
 ### Task 1: runtime-protocol Package — Scaffold, Constants, and Message Schemas
 
 **Files:**
+
 - Create: `packages/runtime-protocol/package.json`
 - Create: `packages/runtime-protocol/tsconfig.json`
 - Create: `packages/runtime-protocol/vitest.config.ts`
@@ -68,6 +69,7 @@
 - Create: `packages/runtime-protocol/tests/messages.test.ts`
 
 **Interfaces:**
+
 - Consumes: Nothing (first task).
 - Produces:
   - `PROTOCOL_VERSION = 1`, `EXECUTION_TIMEOUT_MS = 30_000`, `MAX_IFRAMES_PER_PAGE = 8`, `MAX_MESSAGE_RATE = 60`, `MAX_CODE_SIZE_BYTES = 65_536`, `RESIZE_MIN_HEIGHT = 100`, `RESIZE_MAX_HEIGHT = 2000`
@@ -517,6 +519,7 @@ git commit -m "feat: add runtime-protocol package with message schemas and const
 ### Task 2: Sandbox App — Scaffold, Entry, Protocol Helpers
 
 **Files:**
+
 - Create: `apps/sandbox/package.json`
 - Create: `apps/sandbox/tsconfig.json`
 - Create: `apps/sandbox/vite.config.ts`
@@ -526,6 +529,7 @@ git commit -m "feat: add runtime-protocol package with message schemas and const
 - Create: `apps/sandbox/src/main.ts`
 
 **Interfaces:**
+
 - Consumes: `@glyphquire/runtime-protocol` — `parseHostMessage`, `HostMessage`, `SandboxMessage`, `PROTOCOL_VERSION`, `EXECUTION_TIMEOUT_MS`
 - Produces:
   - `sendToHost(message: Omit<SandboxMessage, "v" | "id">, targetOrigin: string): void`
@@ -590,17 +594,19 @@ export default defineConfig({
 ```html
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy"
-    content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; frame-ancestors *;" />
-  <title>GlyphQuire Sandbox</title>
-</head>
-<body>
-  <div id="runtime-root"></div>
-  <script type="module" src="/src/main.ts"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; frame-ancestors *;"
+    />
+    <title>GlyphQuire Sandbox</title>
+  </head>
+  <body>
+    <div id="runtime-root"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>
 ```
 
@@ -634,11 +640,7 @@ describe("sendToHost", () => {
     const mockPostMessage = vi.fn();
     vi.stubGlobal("parent", { postMessage: mockPostMessage });
 
-    sendToHost(
-      { type: "runtime:ready" },
-      "http://localhost:5173",
-      "session-1",
-    );
+    sendToHost({ type: "runtime:ready" }, "http://localhost:5173", "session-1");
 
     expect(mockPostMessage).toHaveBeenCalledWith(
       { v: 1, id: "session-1", type: "runtime:ready" },
@@ -652,11 +654,7 @@ describe("sendToHost", () => {
     const mockPostMessage = vi.fn();
     vi.stubGlobal("parent", { postMessage: mockPostMessage });
 
-    sendToHost(
-      { type: "runtime:stopped" },
-      "http://localhost:5173",
-      "session-1",
-    );
+    sendToHost({ type: "runtime:stopped" }, "http://localhost:5173", "session-1");
 
     const [, targetOrigin] = mockPostMessage.mock.calls[0] as [unknown, string];
     expect(targetOrigin).not.toBe("*");
@@ -794,12 +792,14 @@ git commit -m "feat: scaffold sandbox app with entry, protocol helpers, and CSP"
 ### Task 3: Sandbox Runners — p5 Runner and Canvas Runner
 
 **Files:**
+
 - Create: `apps/sandbox/src/runners/p5-runner.ts`
 - Create: `apps/sandbox/src/runners/p5-runner.test.ts`
 - Create: `apps/sandbox/src/runners/canvas-runner.ts`
 - Create: `apps/sandbox/src/runners/canvas-runner.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Runner` interface from `main.ts` (duck-typed: `execute(source, props)` + `stop()`).
 - Produces:
   - `createP5Runner(container: HTMLElement): Runner`
@@ -1032,10 +1032,12 @@ git commit -m "feat: add p5 and canvas runners for sandbox execution"
 ### Task 4: Sandbox Resource Guard
 
 **Files:**
+
 - Create: `apps/sandbox/src/resource-guard.ts`
 - Create: `apps/sandbox/src/resource-guard.test.ts`
 
 **Interfaces:**
+
 - Consumes: `sendToHost` from `./protocol.js`, `EXECUTION_TIMEOUT_MS` from `@glyphquire/runtime-protocol`, `Runner` interface (duck-typed `stop()`).
 - Produces:
   - `startGuard(hostOrigin: string, sessionId: string, runner: { stop(): void }): void`
@@ -1118,11 +1120,7 @@ let timeoutId: ReturnType<typeof setTimeout> | null = null;
 let errorHandler: ((event: ErrorEvent) => void) | null = null;
 let rejectionHandler: ((event: PromiseRejectionEvent) => void) | null = null;
 
-export function startGuard(
-  hostOrigin: string,
-  sessionId: string,
-  runner: { stop(): void },
-): void {
+export function startGuard(hostOrigin: string, sessionId: string, runner: { stop(): void }): void {
   stopGuard();
 
   timeoutId = setTimeout(() => {
@@ -1201,12 +1199,14 @@ git commit -m "feat: add sandbox resource guard with timeout and error forwardin
 ### Task 5: Host — runtime-config, useRuntimeBridge Composable
 
 **Files:**
+
 - Create: `apps/web/src/runtime/runtime-config.ts`
 - Create: `apps/web/src/runtime/useRuntimeBridge.ts`
 - Create: `apps/web/src/runtime/useRuntimeBridge.test.ts`
 - Modify: `apps/web/package.json` (add `@glyphquire/runtime-protocol` dependency)
 
 **Interfaces:**
+
 - Consumes: `@glyphquire/runtime-protocol` — `parseSandboxMessage`, `PROTOCOL_VERSION`, `MAX_MESSAGE_RATE`, `RESIZE_MIN_HEIGHT`, `RESIZE_MAX_HEIGHT`.
 - Produces:
   - `SANDBOX_ORIGIN: string` (from env or default `http://localhost:5174`)
@@ -1280,10 +1280,12 @@ describe("useRuntimeBridge", () => {
     )?.[1] as ((event: MessageEvent) => void) | undefined;
 
     if (handler) {
-      handler(new MessageEvent("message", {
-        origin: "http://evil.com",
-        data: { v: 1, id: "x", type: "runtime:ready" },
-      }));
+      handler(
+        new MessageEvent("message", {
+          origin: "http://evil.com",
+          data: { v: 1, id: "x", type: "runtime:ready" },
+        }),
+      );
     }
 
     expect(bridge.state.value).not.toBe("ready");
@@ -1295,10 +1297,7 @@ describe("useRuntimeBridge", () => {
     const bridge = useRuntimeBridge(iframeRef, "p5");
     bridge.cleanup();
 
-    expect(globalThis.removeEventListener).toHaveBeenCalledWith(
-      "message",
-      expect.any(Function),
-    );
+    expect(globalThis.removeEventListener).toHaveBeenCalledWith("message", expect.any(Function));
   });
 });
 ```
@@ -1466,10 +1465,12 @@ git commit -m "feat: add useRuntimeBridge composable and runtime config"
 ### Task 6: Host — RuntimeHost.vue Component
 
 **Files:**
+
 - Create: `apps/web/src/runtime/RuntimeHost.vue`
 - Create: `apps/web/src/runtime/RuntimeHost.test.ts`
 
 **Interfaces:**
+
 - Consumes: `useRuntimeBridge` (Task 5), `SANDBOX_ORIGIN` from `runtime-config.ts`, `MAX_IFRAMES_PER_PAGE`, `MAX_CODE_SIZE_BYTES` from `@glyphquire/runtime-protocol`.
 - Produces: `RuntimeHost` Vue component with props: `runtime`, `source`, `height`, `autoplay`.
 
@@ -1542,23 +1543,26 @@ import { useRuntimeBridge } from "./useRuntimeBridge.js";
 import { SANDBOX_ORIGIN } from "./runtime-config.js";
 import { MAX_IFRAMES_PER_PAGE, MAX_CODE_SIZE_BYTES } from "@glyphquire/runtime-protocol";
 
-const props = withDefaults(defineProps<{
-  runtime: "p5" | "canvas";
-  source: string;
-  height?: number;
-  autoplay?: boolean;
-}>(), {
-  height: 400,
-  autoplay: false,
-});
+const props = withDefaults(
+  defineProps<{
+    runtime: "p5" | "canvas";
+    source: string;
+    height?: number;
+    autoplay?: boolean;
+  }>(),
+  {
+    height: 400,
+    autoplay: false,
+  },
+);
 
 const activeCount = ref(0);
 const iframeRef = ref<HTMLIFrameElement | null>(null);
 const codeSizeError = ref<string | null>(null);
 const bridge = useRuntimeBridge(iframeRef, props.runtime);
 
-const isActive = computed(() =>
-  bridge.state.value === "executing" || bridge.state.value === "initializing",
+const isActive = computed(
+  () => bridge.state.value === "executing" || bridge.state.value === "initializing",
 );
 
 const isAtLimit = computed(() => activeCount.value >= MAX_IFRAMES_PER_PAGE && !isActive.value);
@@ -1604,7 +1608,8 @@ watch(bridge.state, (newState, oldState) => {
     activeCount.value++;
   }
   if (
-    (newState !== "executing" && newState !== "initializing") &&
+    newState !== "executing" &&
+    newState !== "initializing" &&
     (oldState === "executing" || oldState === "initializing")
   ) {
     activeCount.value = Math.max(0, activeCount.value - 1);
@@ -1640,12 +1645,7 @@ onUnmounted(() => {
       class="runtime-placeholder"
     >
       <pre class="runtime-code-preview">{{ codePreview }}</pre>
-      <button
-        v-if="!isAtLimit"
-        data-testid="runtime-play"
-        class="runtime-play-btn"
-        @click="play"
-      >
+      <button v-if="!isAtLimit" data-testid="runtime-play" class="runtime-play-btn" @click="play">
         ▶ Run
       </button>
       <p v-else class="runtime-limit-msg">
@@ -1668,11 +1668,7 @@ onUnmounted(() => {
         sandbox="allow-scripts"
         @load="onIframeLoad"
       />
-      <button
-        data-testid="runtime-stop"
-        class="runtime-stop-btn"
-        @click="handleStop"
-      >
+      <button data-testid="runtime-stop" class="runtime-stop-btn" @click="handleStop">
         ■ Stop
       </button>
     </div>
@@ -1686,8 +1682,12 @@ onUnmounted(() => {
     <!-- Error -->
     <div v-else-if="bridge.state.value === 'error'" class="runtime-error">
       <p class="runtime-error-msg">{{ bridge.error.value?.message }}</p>
-      <p v-if="bridge.error.value?.line" class="runtime-error-line">Line {{ bridge.error.value.line }}</p>
-      <button data-testid="runtime-reset" class="runtime-reset-btn" @click="handleReset">Reset</button>
+      <p v-if="bridge.error.value?.line" class="runtime-error-line">
+        Line {{ bridge.error.value.line }}
+      </p>
+      <button data-testid="runtime-reset" class="runtime-reset-btn" @click="handleReset">
+        Reset
+      </button>
     </div>
 
     <!-- Code size error -->
@@ -1715,15 +1715,18 @@ git commit -m "feat: add RuntimeHost.vue component with state machine and resour
 ### Task 7: Milkdown Node View — Wire RuntimeHost into Visual Editor
 
 **Files:**
+
 - Modify: `apps/web/src/editors/visual/nodes/runtime.ts`
 
 **Interfaces:**
+
 - Consumes: `RuntimeHost` Vue component (Task 6), existing `makeRuntimeSchema` and ProseMirror schema definitions.
 - Produces: Updated `runtimeNodeView` that mounts `RuntimeHost.vue` instead of static placeholder, while keeping `makeRuntimeSchema` unchanged.
 
 - [ ] **Step 1: Read current `runtime.ts` to understand existing code**
 
 The current file at `apps/web/src/editors/visual/nodes/runtime.ts` contains:
+
 - `makeRuntimeSchema()` — ProseMirror node schema with parseMarkdown/toMarkdown. **Do not modify.**
 - `runtimeNodeView()` — NodeViewConstructor that renders a static form with height/network/autoplay inputs and a "never executed" placeholder.
 - `visualP5Schema`, `visualCanvasSchema`, `visualP5View`, `visualCanvasView`, `visualRuntimePlugins`.
@@ -1733,6 +1736,7 @@ The goal: replace `runtimeNodeView` with a version that mounts `RuntimeHost.vue`
 - [ ] **Step 2: Modify `runtimeNodeView` to mount RuntimeHost.vue**
 
 Replace the `runtimeNodeView` function body. The new version:
+
 1. Keeps the `dom` container and `controls` for editing node attributes.
 2. Replaces the static `placeholder` div with a Vue app mounting `RuntimeHost.vue`.
 3. On `update`, passes updated attrs to the Vue instance via reactive refs.
@@ -1897,10 +1901,12 @@ git commit -m "feat: wire RuntimeHost.vue into Milkdown runtime node view"
 ### Task 8: Development Setup — .env, Docker Compose, pnpm install
 
 **Files:**
+
 - Modify: `.env.example` (add `VITE_SANDBOX_ORIGIN`)
 - Modify: `docker-compose.yml` (add sandbox service)
 
 **Interfaces:**
+
 - Consumes: Nothing.
 - Produces: Working `pnpm dev` that starts both web (5173) and sandbox (5174).
 
@@ -1918,12 +1924,12 @@ VITE_SANDBOX_ORIGIN=http://localhost:5174
 Add the following after the existing services (before the `volumes:` block):
 
 ```yaml
-  sandbox:
-    build:
-      context: .
-      dockerfile: apps/sandbox/Dockerfile
-    ports:
-      - "5174:80"
+sandbox:
+  build:
+    context: .
+    dockerfile: apps/sandbox/Dockerfile
+  ports:
+    - "5174:80"
 ```
 
 Note: The Dockerfile itself is out of scope per spec §10. This service definition enables future deployment.
@@ -1936,6 +1942,7 @@ Expected: Lockfile updated with new workspace dependencies.
 - [ ] **Step 4: Verify `pnpm dev` starts both apps**
 
 Run: `pnpm dev` and verify:
+
 - `apps/web` starts on `http://localhost:5173`
 - `apps/sandbox` starts on `http://localhost:5174`
 
@@ -1951,9 +1958,11 @@ git commit -m "chore: add sandbox dev setup, env config, and docker compose serv
 ### Task 9: E2E Tests — Functional Runtime Tests
 
 **Files:**
+
 - Create: `tests/e2e/runtime.spec.ts`
 
 **Interfaces:**
+
 - Consumes: Running `apps/web` (5173) and `apps/sandbox` (5174) dev servers, `RuntimeHost.vue` component rendered in the visual editor.
 - Produces: Playwright E2E tests for p5/canvas play-stop cycle, timeout error, max iframe limit, and code size limit.
 
@@ -2000,9 +2009,9 @@ test.describe("Runtime execution", () => {
     await playButton.click();
 
     // Wait for the timeout error (30s + buffer)
-    await expect(
-      page.locator(".runtime-error-msg").filter({ hasText: /timed out/i }),
-    ).toBeVisible({ timeout: 35_000 });
+    await expect(page.locator(".runtime-error-msg").filter({ hasText: /timed out/i })).toBeVisible({
+      timeout: 35_000,
+    });
   });
 
   test("code size limit blocks execution of >64KB", async ({ page }) => {
@@ -2033,9 +2042,11 @@ git commit -m "test: add E2E functional tests for runtime execution"
 ### Task 10: E2E Tests — Security Tests
 
 **Files:**
+
 - Create: `tests/e2e/runtime-security.spec.ts`
 
 **Interfaces:**
+
 - Consumes: Running `apps/sandbox` (5174), Playwright.
 - Produces: Security E2E tests per SPEC acceptance criteria #21.
 
@@ -2113,12 +2124,14 @@ test.describe("Runtime security", () => {
 
   test("sandbox cannot access host cookies", async ({ page, context }) => {
     // Set a cookie on the host origin
-    await context.addCookies([{
-      name: "host-secret",
-      value: "sensitive-data",
-      domain: "localhost",
-      path: "/",
-    }]);
+    await context.addCookies([
+      {
+        name: "host-secret",
+        value: "sensitive-data",
+        domain: "localhost",
+        path: "/",
+      },
+    ]);
 
     // Navigate to sandbox and check cookies
     await page.goto("http://localhost:5174/index.html");
@@ -2145,7 +2158,12 @@ test.describe("Runtime security", () => {
         // Send init message — sandbox should reject because message listener
         // checks stored hostOrigin, which hasn't been set yet by a valid init
         window.postMessage(
-          { v: 1, id: "test", type: "runtime:init", payload: { runtime: "p5", origin: "http://evil.com" } },
+          {
+            v: 1,
+            id: "test",
+            type: "runtime:init",
+            payload: { runtime: "p5", origin: "http://evil.com" },
+          },
           "*",
         );
 
@@ -2181,9 +2199,11 @@ git commit -m "test: add E2E security tests for runtime sandbox isolation"
 ### Task 11: Quality Gate — Typecheck, Lint, Build, All Tests
 
 **Files:**
+
 - No new files. This task verifies the entire Phase 4 implementation.
 
 **Interfaces:**
+
 - Consumes: All Tasks 1–10.
 - Produces: Clean CI-equivalent quality gate pass.
 

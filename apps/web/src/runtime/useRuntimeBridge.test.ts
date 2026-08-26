@@ -66,9 +66,6 @@ describe("useRuntimeBridge", () => {
     const bridge = useRuntimeBridge(iframeRef, "p5");
     bridge.cleanup();
 
-    expect(globalThis.removeEventListener).toHaveBeenCalledWith(
-      "message",
-      expect.any(Function),
-    );
+    expect(globalThis.removeEventListener).toHaveBeenCalledWith("message", expect.any(Function));
   });
 });
