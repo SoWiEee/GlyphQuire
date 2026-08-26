@@ -25,14 +25,17 @@ export const assetResponseSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    const metadata = [
+    const requiredMetadata = [
       value.thumbnailMimeType,
       value.thumbnailWidth,
       value.thumbnailHeight,
       value.thumbnailBytes,
-      value.thumbnailUrl,
     ];
-    if (value.thumbnailStatus === "ready" && metadata.some((field) => field === undefined)) {
+    const allMetadata = [...requiredMetadata, value.thumbnailUrl];
+    if (
+      value.thumbnailStatus === "ready" &&
+      requiredMetadata.some((field) => field === undefined)
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["thumbnailStatus"],
@@ -41,7 +44,7 @@ export const assetResponseSchema = z
     }
     if (
       (value.thumbnailStatus === "metadata_only" || value.thumbnailStatus === "failed") &&
-      metadata.some((field) => field !== undefined)
+      allMetadata.some((field) => field !== undefined)
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,

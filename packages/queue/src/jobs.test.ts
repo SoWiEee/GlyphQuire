@@ -180,6 +180,23 @@ describe("PostgresJobDispatcher policy", () => {
     expect(store.enqueued).toHaveLength(1);
   });
 
+  it("uses the configured default maximum attempts for enqueue", async () => {
+    const store = new MemoryJobStore();
+    const dispatcher = new PostgresJobDispatcher(store, {
+      dispatcherId: "dispatcher-test",
+      maxAttempts: 7,
+    });
+    const workspaceId = randomUUID();
+
+    await dispatcher.enqueue({
+      workspaceId,
+      type: "asset.cleanup",
+      payload: { workspaceId, assetId: randomUUID() },
+    });
+
+    expect(store.enqueued[0]).toMatchObject({ maxAttempts: 7 });
+  });
+
   it("claims with the injected five-minute lock boundary and marks owned success", async () => {
     const store = new MemoryJobStore();
     store.claimed = [storedAssetJob()];
@@ -203,7 +220,63 @@ describe("PostgresJobDispatcher policy", () => {
       lockBefore: new Date(now - 300_000),
     });
     expect(store.completed).toEqual([
-      { jobId: expect.any(String), dispatcherId: "dispatcher-test", now: new Date(now) },
+      {
+        jobId: expect.any(String),
+        dispatcherId: "dispatcher-test",
+        claimGeneration: 1,
+        now: new Date(now),
+      },
+    ]);
+  });
+
+  it("prevents a stale claim from completing a reclaimed job under the same dispatcher id", async () => {
+    const original = storedAssetJob(1, 5);
+    let generation = 0;
+    const acceptedCompletions: number[] = [];
+    const attemptedCompletions: unknown[] = [];
+    const store: JobStore = {
+      enqueue: vi.fn(),
+      claimBatch: vi.fn(async () => {
+        generation += 1;
+        return [{ ...original, attempts: generation }];
+      }),
+      markCompleted: vi.fn(async (input) => {
+        attemptedCompletions.push(input);
+        const claimGeneration = (input as unknown as { claimGeneration?: number }).claimGeneration;
+        if (claimGeneration !== generation) return false;
+        acceptedCompletions.push(claimGeneration);
+        return true;
+      }),
+      markRetry: vi.fn(),
+      markDeadLetter: vi.fn(),
+    };
+    let releaseFirst!: () => void;
+    const firstMayFinish = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let firstStarted!: () => void;
+    const firstDidStart = new Promise<void>((resolve) => {
+      firstStarted = resolve;
+    });
+    const handler = vi.fn(async (job: JobEnvelope<"asset.cleanup">) => {
+      if (job.attempts !== 1) return;
+      firstStarted();
+      await firstMayFinish;
+    });
+    const dispatcher = new PostgresJobDispatcher(store, { dispatcherId: "reused-dispatcher" });
+
+    const staleDispatch = dispatcher.dispatchBatch({ "asset.cleanup": handler });
+    await firstDidStart;
+    await expect(dispatcher.dispatchBatch({ "asset.cleanup": handler })).resolves.toMatchObject({
+      succeeded: 1,
+    });
+    releaseFirst();
+    await expect(staleDispatch).resolves.toMatchObject({ succeeded: 0 });
+
+    expect(acceptedCompletions).toEqual([2]);
+    expect(attemptedCompletions).toEqual([
+      expect.objectContaining({ claimGeneration: 2 }),
+      expect.objectContaining({ claimGeneration: 1 }),
     ]);
   });
 

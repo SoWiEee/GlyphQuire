@@ -276,6 +276,35 @@ describe("Phase 5 public contracts", () => {
       }).success,
     ).toBe(false);
 
+    const readyThumbnail = {
+      id: uuid(),
+      workspaceId,
+      originalName: "diagram.png",
+      mimeType: "image/png",
+      size: 123,
+      sha256: "a".repeat(64),
+      createdAt: now,
+      deletedAt: null,
+      thumbnailStatus: "ready",
+      thumbnailMimeType: "image/webp",
+      thumbnailWidth: 320,
+      thumbnailHeight: 200,
+      thumbnailBytes: 12_345,
+    };
+    expect(assetResponseSchema.safeParse(readyThumbnail).success).toBe(true);
+    expect(
+      assetResponseSchema.safeParse({
+        ...readyThumbnail,
+        thumbnailUrl: "https://example.test/authorized-thumbnail",
+      }).success,
+    ).toBe(true);
+    expect(
+      assetResponseSchema.safeParse({
+        ...readyThumbnail,
+        thumbnailMimeType: undefined,
+      }).success,
+    ).toBe(false);
+
     expect(
       searchQuerySchema.safeParse({ workspaceId, q: "GlyphQuire", pageSize: 100 }).success,
     ).toBe(true);

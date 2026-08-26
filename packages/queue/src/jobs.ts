@@ -8,7 +8,7 @@ import {
   type JobEnvelope,
   type JobPayload,
   type JobType,
-} from "@glyphquire/api-contract";
+} from "@glyphquire/api-contract/jobs";
 import { jobs, type Database, type JobStatus } from "@glyphquire/database";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { DispatchSummary } from "./document-jobs.js";
@@ -141,6 +141,7 @@ export interface ClaimJobsInput {
 export interface CompleteJobInput {
   jobId: string;
   dispatcherId: string;
+  claimGeneration: number;
   now: Date;
 }
 
@@ -201,14 +202,16 @@ class PostgresJobStore implements JobStore {
   }
 
   async claimBatch(input: ClaimJobsInput): Promise<StoredJob[]> {
+    const now = input.now.toISOString();
+    const lockBefore = input.lockBefore.toISOString();
     const result = await this.db.execute<StoredJob>(sql`
       WITH due AS (
         SELECT id
         FROM jobs
-        WHERE available_at <= ${input.now}
+        WHERE available_at <= ${now}
           AND (
             status = 'pending'
-            OR (status = 'processing' AND locked_at < ${input.lockBefore})
+            OR (status = 'processing' AND locked_at < ${lockBefore})
           )
         ORDER BY available_at, created_at, id
         LIMIT ${input.batchSize}
@@ -218,9 +221,9 @@ class PostgresJobStore implements JobStore {
       SET
         status = 'processing',
         attempts = queued.attempts + 1,
-        locked_at = ${input.now},
+        locked_at = ${now},
         locked_by = ${input.dispatcherId},
-        updated_at = ${input.now}
+        updated_at = ${now}
       FROM due
       WHERE queued.id = due.id
       RETURNING
@@ -245,8 +248,13 @@ class PostgresJobStore implements JobStore {
     return Array.from(result);
   }
 
-  private owned(jobId: string, dispatcherId: string) {
-    return and(eq(jobs.id, jobId), eq(jobs.status, "processing"), eq(jobs.lockedBy, dispatcherId));
+  private owned(input: CompleteJobInput) {
+    return and(
+      eq(jobs.id, input.jobId),
+      eq(jobs.status, "processing"),
+      eq(jobs.lockedBy, input.dispatcherId),
+      eq(jobs.attempts, input.claimGeneration),
+    );
   }
 
   async markCompleted(input: CompleteJobInput): Promise<boolean> {
@@ -260,7 +268,7 @@ class PostgresJobStore implements JobStore {
         lastError: null,
         updatedAt: input.now,
       })
-      .where(this.owned(input.jobId, input.dispatcherId))
+      .where(this.owned(input))
       .returning({ id: jobs.id });
     return result.length === 1;
   }
@@ -276,7 +284,7 @@ class PostgresJobStore implements JobStore {
         lastError: input.lastError.slice(0, 4000),
         updatedAt: input.now,
       })
-      .where(this.owned(input.jobId, input.dispatcherId))
+      .where(this.owned(input))
       .returning({ id: jobs.id });
     return result.length === 1;
   }
@@ -292,7 +300,7 @@ class PostgresJobStore implements JobStore {
         lastError: input.lastError.slice(0, 4000),
         updatedAt: input.now,
       })
-      .where(this.owned(input.jobId, input.dispatcherId))
+      .where(this.owned(input))
       .returning({ id: jobs.id });
     return result.length === 1;
   }
@@ -302,6 +310,7 @@ export interface PostgresJobDispatcherOptions {
   dispatcherId?: string;
   batchSize?: number;
   lockTimeoutSeconds?: number;
+  maxAttempts?: number;
   backoffBaseSeconds?: number;
   backoffCapSeconds?: number;
   clock?: () => number;
@@ -329,6 +338,7 @@ export class PostgresJobDispatcher implements JobDispatcher {
   private readonly dispatcherId: string;
   private readonly batchSize: number;
   private readonly lockTimeoutSeconds: number;
+  private readonly maxAttempts: number;
   private readonly backoffBaseSeconds: number;
   private readonly backoffCapSeconds: number;
   private readonly clock: () => number;
@@ -351,6 +361,7 @@ export class PostgresJobDispatcher implements JobDispatcher {
       3_600,
       "job lock timeout",
     );
+    this.maxAttempts = boundedInteger(options.maxAttempts ?? 5, 1, 20, "job max attempts");
     this.backoffBaseSeconds = boundedInteger(
       options.backoffBaseSeconds ?? 5,
       1,
@@ -405,7 +416,12 @@ export class PostgresJobDispatcher implements JobDispatcher {
     if (!(availableAt instanceof Date) || Number.isNaN(availableAt.getTime())) {
       throw new Error("JOB_INVALID: invalid runAt");
     }
-    const maxAttempts = boundedInteger(input.maxAttempts ?? 5, 1, 20, "job max attempts");
+    const maxAttempts = boundedInteger(
+      input.maxAttempts ?? this.maxAttempts,
+      1,
+      20,
+      "job max attempts",
+    );
     return this.store.enqueue({
       workspaceId: input.workspaceId,
       type: input.type,
@@ -439,6 +455,7 @@ export class PostgresJobDispatcher implements JobDispatcher {
           await this.store.markDeadLetter({
             jobId: job.id,
             dispatcherId: this.dispatcherId,
+            claimGeneration: job.attempts,
             now: new Date(this.clock()),
             lastError: "JOB_FAILED",
           })
@@ -465,6 +482,7 @@ export class PostgresJobDispatcher implements JobDispatcher {
           await this.store.markCompleted({
             jobId: job.id,
             dispatcherId: this.dispatcherId,
+            claimGeneration: job.attempts,
             now: new Date(this.clock()),
           })
         ) {
@@ -479,6 +497,7 @@ export class PostgresJobDispatcher implements JobDispatcher {
             await this.store.markDeadLetter({
               jobId: job.id,
               dispatcherId: this.dispatcherId,
+              claimGeneration: job.attempts,
               now: transitionNow,
               lastError,
             })
@@ -494,6 +513,7 @@ export class PostgresJobDispatcher implements JobDispatcher {
             await this.store.markRetry({
               jobId: job.id,
               dispatcherId: this.dispatcherId,
+              claimGeneration: job.attempts,
               now: transitionNow,
               availableAt: new Date(transitionNowMs + delaySeconds * 1_000),
               lastError,
