@@ -77,6 +77,13 @@ services:
       timeout: 3s
       retries: 5
 
+  sandbox:
+    build:
+      context: .
+      dockerfile: apps/sandbox/Dockerfile
+    ports:
+      - "5174:80"
+
 volumes:
   pgdata:
   minio_data:
