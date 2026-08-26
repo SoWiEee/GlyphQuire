@@ -31,24 +31,9 @@ import { expect, test, type Page } from "@playwright/test";
  * p5/canvas runner code and the actual `resource-guard.ts` timeout —
  * not a mock of the protocol.
  *
- * Known-failing today (real bug, not a test-authoring issue): the sandbox
- * CSP in apps/sandbox/public/index.html sets `script-src 'self'` with no
- * `'unsafe-eval'`, but both `apps/sandbox/src/runners/canvas-runner.ts`
- * and `p5-runner.ts` execute user source via `new Function(...)`, which
- * requires `'unsafe-eval'`. Every `runtime:execute` currently throws
- * `EvalError: ... 'unsafe-eval' is not an allowed source of script`
- * synchronously inside the sandbox, before `resource-guard.ts`'s error
- * listener is even attached (that attachment races a `.then()` on an
- * un-awaited dynamic `import()` against the synchronous throw, and always
- * loses) — so the tests below correctly fail against the current
- * implementation. See this task's report for full reproduction and a
- * second, independent bug this uncovered (loading the sandbox the way
- * `RuntimeHost.vue` actually does — via a `sandbox="allow-scripts"`
- * iframe hosted from a different origin — makes its own
- * `<script type="module" src="/src/main.ts">` entrypoint fail to load at
- * all, via CORS, because the framed document's opaque origin can never
- * satisfy a same-origin module fetch and the dev server sends no CORS
- * headers).
+ * CSP note: `script-src 'self' 'unsafe-eval'` is required because the
+ * runners use `new Function(...)`. The sandbox Vite dev server sends CORS
+ * headers (`cors: true`) so the opaque-origin iframe can load modules.
  */
 
 const SANDBOX_ORIGIN = "http://127.0.0.1:5174";

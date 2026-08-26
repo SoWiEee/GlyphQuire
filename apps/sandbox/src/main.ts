@@ -55,12 +55,11 @@ function handleInit(msg: Extract<HostMessage, { type: "runtime:init" }>): void {
   });
 }
 
-function handleExecute(msg: Extract<HostMessage, { type: "runtime:execute" }>): void {
+async function handleExecute(msg: Extract<HostMessage, { type: "runtime:execute" }>): Promise<void> {
   if (!activeRunner || !hostOrigin || !sessionId) return;
 
-  import("./resource-guard.js").then(({ startGuard }) => {
-    startGuard(hostOrigin!, sessionId!, activeRunner!);
-  });
+  const { startGuard } = await import("./resource-guard.js");
+  startGuard(hostOrigin, sessionId, activeRunner);
 
   activeRunner.execute(msg.payload.source, msg.payload.props);
 }
