@@ -31,6 +31,7 @@
     "drizzle-orm": "^0.44.0",
     "@glyphquire/document-engine": "workspace:*",
     "@glyphquire/queue": "workspace:*",
+    "@glyphquire/search": "workspace:*",
     "@glyphquire/shared": "workspace:*",
     "@glyphquire/storage": "workspace:*"
   },

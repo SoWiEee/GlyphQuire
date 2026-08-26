@@ -33,6 +33,9 @@ export {
   idempotencyRecordsRelations,
   assets,
   assetsRelations,
+  searchDocuments,
+  searchDocumentsRelations,
+  MAX_SEARCH_TEXT_BYTES,
   type WorkspaceRole,
   type NoteVisibility,
   type SnapshotReason,
@@ -67,6 +70,7 @@ import type {
   noteOperations,
   notes,
   noteVersions,
+  searchDocuments,
   themes,
   userThemes,
   workspaceMembers,
@@ -95,3 +99,5 @@ export type IdempotencyRecord = InferSelectModel<typeof idempotencyRecords>;
 export type NewIdempotencyRecord = InferInsertModel<typeof idempotencyRecords>;
 export type Asset = InferSelectModel<typeof assets>;
 export type NewAsset = InferInsertModel<typeof assets>;
+export type SearchDocument = InferSelectModel<typeof searchDocuments>;
+export type NewSearchDocument = InferInsertModel<typeof searchDocuments>;

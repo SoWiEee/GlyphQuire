@@ -32,3 +32,8 @@ export { themes, themesRelations, userThemes, userThemesRelations } from "./them
 export { jobs, jobsRelations, type JobStatus } from "./jobs.js";
 export { idempotencyRecords, idempotencyRecordsRelations } from "./idempotency-records.js";
 export { assets, assetsRelations, type AssetThumbnailStatus } from "./assets.js";
+export {
+  searchDocuments,
+  searchDocumentsRelations,
+  MAX_SEARCH_TEXT_BYTES,
+} from "./search-documents.js";

@@ -16,6 +16,7 @@
     "@glyphquire/api-contract": "workspace:*",
     "@glyphquire/database": "workspace:*",
     "@glyphquire/queue": "workspace:*",
+    "@glyphquire/search": "workspace:*",
     "@glyphquire/shared": "workspace:*",
     "@glyphquire/storage": "workspace:*",
     "drizzle-orm": "^0.44.0",

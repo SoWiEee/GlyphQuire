@@ -77,6 +77,31 @@ async function migrateThroughPhase3(databaseUrl: string): Promise<void> {
   }
 }
 
+/**
+ * Advances a phase-3-frozen database through the frozen 0005 and 0006
+ * migrations, leaving it positioned exactly before 0007_phase5_search so
+ * tests can exercise the search migration's own DDL and rollback behavior
+ * against real predecessor tables (workspaces, notes).
+ */
+async function migrateThroughPhase5Assets(databaseUrl: string): Promise<void> {
+  const migrations = await readRepositoryMigrations(migrationsDirectory);
+  const client = postgres(databaseUrl, { max: 1, onnotice() {} });
+  try {
+    for (const migration of migrations.slice(5, 7)) {
+      const source = await readFile(new URL(`./${migration.tag}.sql`, import.meta.url), "utf8");
+      await client.begin(async (transaction) => {
+        await applySql(transaction, source);
+        await transaction`
+          insert into drizzle.__drizzle_migrations (hash, created_at)
+          values (${migration.hash}, ${migration.when})
+        `;
+      });
+    }
+  } finally {
+    await client.end();
+  }
+}
+
 async function journalRows(databaseUrl: string) {
   const client = postgres(databaseUrl, { max: 1 });
   try {
@@ -90,22 +115,20 @@ async function journalRows(databaseUrl: string) {
   }
 }
 
-describe("Phase 5 assets migration artifacts", () => {
-  it("records exactly 0006_phase5_assets after the frozen 0005 migration", async () => {
+describe("Phase 5 search migration artifacts", () => {
+  it("records exactly 0007_phase5_search after the frozen 0006 migration", async () => {
     const migrations = await readRepositoryMigrations(migrationsDirectory);
-    const tags = migrations.map((entry) => entry.tag);
-    const index = tags.indexOf("0006_phase5_assets");
-    expect(tags.slice(Math.max(0, index - 1), index + 1)).toEqual([
-      "0005_phase5_jobs",
+    expect(migrations.map((entry) => entry.tag).slice(-2)).toEqual([
       "0006_phase5_assets",
+      "0007_phase5_search",
     ]);
     expect(
-      await readFile(new URL("./meta/0006_snapshot.json", import.meta.url), "utf8"),
-    ).toContain('"public.assets"');
+      await readFile(new URL("./meta/0007_snapshot.json", import.meta.url), "utf8"),
+    ).toContain('"public.search_documents"');
   });
 });
 
-describeWithPostgres("Phase 5 assets PostgreSQL migration", () => {
+describeWithPostgres("Phase 5 search PostgreSQL migration", () => {
   let admin: Sql;
   const databases = new Set<string>();
 
@@ -137,7 +160,7 @@ describeWithPostgres("Phase 5 assets PostgreSQL migration", () => {
   }, 60_000);
 
   async function createTestDatabase(): Promise<{ databaseName: string; migrationUrl: string }> {
-    const databaseName = `glyphquire_p5_assets_${randomUUID().replaceAll("-", "")}`;
+    const databaseName = `glyphquire_p5_search_${randomUUID().replaceAll("-", "")}`;
     expect(databaseName).toMatch(/^[a-z0-9_]+$/);
     await admin.unsafe(`create database "${databaseName}"`);
     databases.add(databaseName);
@@ -147,7 +170,7 @@ describeWithPostgres("Phase 5 assets PostgreSQL migration", () => {
     };
   }
 
-  it("migrates fresh, upgrades exact 0005, and reruns without journal drift", async () => {
+  it("migrates fresh, upgrades exact 0004, and reruns without journal drift", async () => {
     const repository = await readRepositoryMigrations(migrationsDirectory);
 
     const fresh = await createTestDatabase();
@@ -160,23 +183,8 @@ describeWithPostgres("Phase 5 assets PostgreSQL migration", () => {
 
     const upgraded = await createTestDatabase();
     await migrateThroughPhase3(upgraded.migrationUrl);
-    // Upgrade through the frozen 0005_phase5_jobs migration before the new one.
-    const jobsSource = await readFile(new URL("./0005_phase5_jobs.sql", import.meta.url), "utf8");
-    const jobsMigration = repository[5]!;
-    const upgradeClient = postgres(upgraded.migrationUrl, { max: 1, onnotice() {} });
-    try {
-      await upgradeClient.begin(async (transaction) => {
-        await applySql(transaction, jobsSource);
-        await transaction`
-          insert into drizzle.__drizzle_migrations (hash, created_at)
-          values (${jobsMigration.hash}, ${jobsMigration.when})
-        `;
-      });
-    } finally {
-      await upgradeClient.end();
-    }
     expect((await journalRows(upgraded.migrationUrl)).map((row) => row.hash)).toEqual(
-      repository.slice(0, 6).map((entry) => entry.hash),
+      repository.slice(0, 5).map((entry) => entry.hash),
     );
     await migrateDatabase(upgraded.migrationUrl);
     expect(await journalRows(upgraded.migrationUrl)).toEqual(
@@ -184,26 +192,36 @@ describeWithPostgres("Phase 5 assets PostgreSQL migration", () => {
     );
   }, 120_000);
 
-  it("rolls the 0006 DDL back atomically before a clean upgrade", async () => {
+  it("rolls the 0007 DDL back atomically before a clean upgrade, preserving existing notes", async () => {
+    const repository = await readRepositoryMigrations(migrationsDirectory);
     const database = await createTestDatabase();
     await migrateThroughPhase3(database.migrationUrl);
-    const jobsSource = await readFile(new URL("./0005_phase5_jobs.sql", import.meta.url), "utf8");
-    const repository = await readRepositoryMigrations(migrationsDirectory);
-    const jobsMigration = repository[5]!;
-    const jobsClient = postgres(database.migrationUrl, { max: 1, onnotice() {} });
+    await migrateThroughPhase5Assets(database.migrationUrl);
+
+    const actorId = `phase5-search-rollback-${randomUUID()}`;
+    const seedClient = postgres(database.migrationUrl, { max: 1, onnotice() {} });
+    let noteId: string;
     try {
-      await jobsClient.begin(async (transaction) => {
-        await applySql(transaction, jobsSource);
-        await transaction`
-          insert into drizzle.__drizzle_migrations (hash, created_at)
-          values (${jobsMigration.hash}, ${jobsMigration.when})
-        `;
-      });
+      await seedClient`
+        insert into "user" (id, name, email)
+        values (${actorId}, 'Phase 5 Search', ${`${actorId}@example.test`})
+      `;
+      const [workspace] = await seedClient<{ id: string }[]>`
+        insert into workspaces (personal_owner_id)
+        values (${actorId})
+        returning id
+      `;
+      const [note] = await seedClient<{ id: string }[]>`
+        insert into notes (workspace_id, title, content_markdown, content_hash, owner_id)
+        values (${workspace!.id}, 'Rollback note', 'body', 'hash', ${actorId})
+        returning id
+      `;
+      noteId = note!.id;
     } finally {
-      await jobsClient.end();
+      await seedClient.end();
     }
 
-    const source = await readFile(new URL("./0006_phase5_assets.sql", import.meta.url), "utf8");
+    const source = await readFile(new URL("./0007_phase5_search.sql", import.meta.url), "utf8");
     const client = postgres(database.migrationUrl, { max: 1, onnotice() {} });
     try {
       await expect(
@@ -213,97 +231,115 @@ describeWithPostgres("Phase 5 assets PostgreSQL migration", () => {
         }),
       ).rejects.toThrow("force migration rollback");
       expect(
-        await client<{ assets: string | null }[]>`
-          select pg_catalog.to_regclass('public.assets')::text as assets
+        await client<{ search_documents: string | null }[]>`
+          select pg_catalog.to_regclass('public.search_documents')::text as search_documents
         `,
-      ).toEqual([{ assets: null }]);
-      expect(await journalRows(database.migrationUrl)).toHaveLength(6);
+      ).toEqual([{ search_documents: null }]);
+      expect(await journalRows(database.migrationUrl)).toHaveLength(repository.length - 1);
+      expect(await client<{ id: string }[]>`select id from notes where id = ${noteId}`).toEqual([
+        { id: noteId },
+      ]);
     } finally {
       await client.end();
     }
 
     await migrateDatabase(database.migrationUrl);
     expect(await journalRows(database.migrationUrl)).toHaveLength(repository.length);
+    const verifyClient = postgres(database.migrationUrl, { max: 1, onnotice() {} });
+    try {
+      expect(
+        await verifyClient<{ id: string }[]>`select id from notes where id = ${noteId}`,
+      ).toEqual([{ id: noteId }]);
+    } finally {
+      await verifyClient.end();
+    }
   }, 120_000);
 
-  it("enforces byte, hash, uniqueness, and thumbnail-shape constraints and preserves rows through cascades", async () => {
+  it("enforces revision and size constraints, upserts on stale revision, and cascades with the source note", async () => {
     const database = await createTestDatabase();
     await migrateDatabase(database.migrationUrl);
     const client = postgres(database.migrationUrl, { max: 1, onnotice() {} });
-    const actorId = `phase5-assets-${randomUUID()}`;
-    const email = `${actorId}@example.test`;
+    const actorId = `phase5-search-${randomUUID()}`;
     try {
       await client`
         insert into "user" (id, name, email)
-        values (${actorId}, 'Phase 5 Assets', ${email})
+        values (${actorId}, 'Phase 5 Search', ${`${actorId}@example.test`})
       `;
       const [workspace] = await client<{ id: string }[]>`
         insert into workspaces (personal_owner_id)
         values (${actorId})
         returning id
       `;
-      const objectKey = `workspace/${workspace!.id}/assets/${randomUUID()}/original`;
-      const sha = "a".repeat(64);
-
-      await expect(
-        client`
-          insert into assets (workspace_id, owner_id, object_key, original_name, mime_type, size_bytes, sha256)
-          values (${workspace!.id}, ${actorId}, ${objectKey}, 'file.png', 'image/png', 0, ${sha})
-        `,
-      ).rejects.toMatchObject({ code: "23514", constraint_name: "assets_size_bytes_positive_check" });
-
-      await expect(
-        client`
-          insert into assets (workspace_id, owner_id, object_key, original_name, mime_type, size_bytes, sha256)
-          values (${workspace!.id}, ${actorId}, ${objectKey}, 'file.png', 'image/png', 10, 'not-a-hash')
-        `,
-      ).rejects.toMatchObject({ code: "23514", constraint_name: "assets_sha256_check" });
-
-      await expect(
-        client`
-          insert into assets (
-            workspace_id, owner_id, object_key, original_name, mime_type, size_bytes, sha256, thumbnail_status
-          )
-          values (
-            ${workspace!.id}, ${actorId}, ${objectKey}, 'file.png', 'image/png', 10, ${sha}, 'ready'
-          )
-        `,
-      ).rejects.toMatchObject({ code: "23514", constraint_name: "assets_thumbnail_shape_check" });
-
-      const [asset] = await client<{ id: string }[]>`
-        insert into assets (workspace_id, owner_id, object_key, original_name, mime_type, size_bytes, sha256)
-        values (${workspace!.id}, ${actorId}, ${objectKey}, 'file.png', 'image/png', 10, ${sha})
+      const [note] = await client<{ id: string }[]>`
+        insert into notes (workspace_id, title, content_markdown, content_hash, owner_id)
+        values (${workspace!.id}, 'Searchable note', 'body', 'hash', ${actorId})
         returning id
       `;
 
       await expect(
         client`
-          insert into assets (workspace_id, owner_id, object_key, original_name, mime_type, size_bytes, sha256)
-          values (${workspace!.id}, ${actorId}, ${objectKey}, 'other.png', 'image/png', 20, ${sha})
+          insert into search_documents (workspace_id, note_id, revision, title, body)
+          values (${workspace!.id}, ${note!.id}, 0, 'Title', 'Body')
+        `,
+      ).rejects.toMatchObject({
+        code: "23514",
+        constraint_name: "search_documents_revision_positive_check",
+      });
+
+      const [row] = await client<{ id: string; revision: number; title: string }[]>`
+        insert into search_documents (workspace_id, note_id, revision, title, body)
+        values (${workspace!.id}, ${note!.id}, 3, 'Title v3', 'Body v3')
+        returning id, revision, title
+      `;
+      expect(row).toMatchObject({ revision: 3, title: "Title v3" });
+
+      // Stale-revision upsert is a no-op: revision 1 must not overwrite revision 3.
+      await client`
+        insert into search_documents (workspace_id, note_id, revision, title, body)
+        values (${workspace!.id}, ${note!.id}, 1, 'Stale title', 'Stale body')
+        on conflict (note_id) do update
+          set revision = excluded.revision, title = excluded.title, body = excluded.body
+          where search_documents.revision < excluded.revision
+      `;
+      expect(
+        await client<{ revision: number; title: string }[]>`
+          select revision, title from search_documents where note_id = ${note!.id}
+        `,
+      ).toEqual([{ revision: 3, title: "Title v3" }]);
+
+      // A newer revision does overwrite.
+      await client`
+        insert into search_documents (workspace_id, note_id, revision, title, body)
+        values (${workspace!.id}, ${note!.id}, 5, 'Title v5', 'Body v5')
+        on conflict (note_id) do update
+          set revision = excluded.revision, title = excluded.title, body = excluded.body
+          where search_documents.revision < excluded.revision
+      `;
+      expect(
+        await client<{ revision: number; title: string }[]>`
+          select revision, title from search_documents where note_id = ${note!.id}
+        `,
+      ).toEqual([{ revision: 5, title: "Title v5" }]);
+
+      const duplicateNoteId = randomUUID();
+      await expect(
+        client`
+          insert into search_documents (workspace_id, note_id, revision, title, body)
+          values (${workspace!.id}, ${note!.id}, 6, 'Duplicate', 'Body')
         `,
       ).rejects.toMatchObject({ code: "23505" });
+      void duplicateNoteId;
 
-      await client`
-        update assets
-        set thumbnail_status = 'ready',
-            thumbnail_object_key = ${`workspace/${workspace!.id}/assets/${asset!.id}/thumbnail.webp`},
-            thumbnail_mime_type = 'image/webp',
-            thumbnail_width = 256,
-            thumbnail_height = 256,
-            thumbnail_bytes = 1000
-        where id = ${asset!.id}
+      const generated = await client<{ has_vector: boolean }[]>`
+        select (search_vector is not null) as has_vector
+        from search_documents where note_id = ${note!.id}
       `;
+      expect(generated).toEqual([{ has_vector: true }]);
 
-      // A workspace cascade removes assets; a user cascade removes assets too.
-      const [rowBefore] = await client<{ id: string }[]>`
-        select id from assets where id = ${asset!.id}
-      `;
-      expect(rowBefore).toBeDefined();
-
-      await client`delete from workspaces where id = ${workspace!.id}`;
-      expect(await client<{ id: string }[]>`select id from assets where id = ${asset!.id}`).toEqual(
-        [],
-      );
+      await client`delete from notes where id = ${note!.id}`;
+      expect(
+        await client<{ id: string }[]>`select id from search_documents where note_id = ${note!.id}`,
+      ).toEqual([]);
     } finally {
       await client.end();
     }
@@ -336,32 +372,36 @@ describeWithPostgres("Phase 5 assets PostgreSQL migration", () => {
 
     runtimeBase.pathname = `/${database.databaseName}`;
     const runtime = postgres(runtimeBase.toString(), { max: 1, onnotice() {} });
-    const actorId = `phase5-assets-runtime-${randomUUID()}`;
+    const actorId = `phase5-search-runtime-${randomUUID()}`;
     try {
       await runtime`
         insert into "user" (id, name, email)
-        values (${actorId}, 'Runtime Asset', ${`${actorId}@example.test`})
+        values (${actorId}, 'Runtime Search', ${`${actorId}@example.test`})
       `;
       const [workspace] = await runtime<{ id: string }[]>`
         insert into workspaces (personal_owner_id)
         values (${actorId})
         returning id
       `;
-      const objectKey = `workspace/${workspace!.id}/assets/${randomUUID()}/original`;
-      const [asset] = await runtime<{ id: string }[]>`
-        insert into assets (workspace_id, owner_id, object_key, original_name, mime_type, size_bytes, sha256)
-        values (${workspace!.id}, ${actorId}, ${objectKey}, 'file.png', 'image/png', 10, ${"b".repeat(64)})
+      const [note] = await runtime<{ id: string }[]>`
+        insert into notes (workspace_id, title, content_markdown, content_hash, owner_id)
+        values (${workspace!.id}, 'Runtime note', 'body', 'hash', ${actorId})
+        returning id
+      `;
+      const [row] = await runtime<{ id: string }[]>`
+        insert into search_documents (workspace_id, note_id, revision, title, body)
+        values (${workspace!.id}, ${note!.id}, 1, 'Runtime title', 'Runtime body')
         returning id
       `;
       expect(
-        await runtime<{ id: string }[]>`select id from assets where id = ${asset!.id}`,
-      ).toEqual([{ id: asset!.id }]);
+        await runtime<{ id: string }[]>`select id from search_documents where id = ${row!.id}`,
+      ).toEqual([{ id: row!.id }]);
 
       await expect(runtime.unsafe(`set role "${migrationRole}"`)).rejects.toMatchObject({
         code: "42501",
       });
       await expect(
-        runtime.unsafe("create table public.phase5_assets_runtime_forbidden (id integer)"),
+        runtime.unsafe("create table public.phase5_search_runtime_forbidden (id integer)"),
       ).rejects.toMatchObject({ code: "42501" });
       await expect(
         runtime`

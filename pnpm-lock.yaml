@@ -77,6 +77,9 @@ importers:
       '@glyphquire/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@glyphquire/search':
+        specifier: workspace:*
+        version: link:../../packages/search
       '@glyphquire/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -236,6 +239,9 @@ importers:
       '@glyphquire/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@glyphquire/search':
+        specifier: workspace:*
+        version: link:../../packages/search
       '@glyphquire/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -389,6 +395,28 @@ importers:
       zod:
         specifier: ^3.24.0
         version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.20.1)(happy-dom@20.11.6)(lightningcss@1.32.0)
+
+  packages/search:
+    dependencies:
+      '@glyphquire/database':
+        specifier: workspace:*
+        version: link:../database
+      '@glyphquire/document-engine':
+        specifier: workspace:*
+        version: link:../document-engine
+      '@glyphquire/shared':
+        specifier: workspace:*
+        version: link:../shared
+      drizzle-orm:
+        specifier: ^0.44.0
+        version: 0.44.7(kysely@0.29.5)(postgres@3.4.9)
     devDependencies:
       typescript:
         specifier: ^5.8.0
