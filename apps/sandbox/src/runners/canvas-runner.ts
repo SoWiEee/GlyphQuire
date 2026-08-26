@@ -1,7 +1,4 @@
-interface Runner {
-  execute(source: string, props: { height: number; network: string[]; autoplay: boolean }): void;
-  stop(): void;
-}
+import type { Runner } from "../types.js";
 
 export function createCanvasRunner(container: HTMLElement): Runner {
   let animationId: number | null = null;

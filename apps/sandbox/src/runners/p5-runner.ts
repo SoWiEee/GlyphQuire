@@ -1,9 +1,5 @@
 import p5 from "p5";
-
-interface Runner {
-  execute(source: string, props: { height: number; network: string[]; autoplay: boolean }): void;
-  stop(): void;
-}
+import type { Runner } from "../types.js";
 
 export function createP5Runner(container: HTMLElement): Runner {
   let instance: p5 | null = null;

@@ -61,7 +61,7 @@ const errorMessage = z.object({
   type: z.literal("runtime:error"),
   payload: z.object({
     message: z.string(),
-    line: z.number().int().optional(),
+    line: z.number().int().nonnegative().optional(),
   }),
 });
 

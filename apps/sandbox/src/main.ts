@@ -1,17 +1,14 @@
 import { parseHostMessage, type HostMessage } from "@glyphquire/runtime-protocol";
 import { sendToHost, validateOrigin } from "./protocol.js";
+import type { Runner } from "./types.js";
+import type { startGuard, stopGuard } from "./resource-guard.js";
 
 let hostOrigin: string | null = null;
 let sessionId: string | null = null;
-let runtimeType: "p5" | "canvas" | null = null;
 let initialized = false;
 
-interface Runner {
-  execute(source: string, props: { height: number; network: string[]; autoplay: boolean }): void;
-  stop(): void;
-}
-
 let activeRunner: Runner | null = null;
+let guardModule: { startGuard: typeof startGuard; stopGuard: typeof stopGuard } | null = null;
 
 async function loadRunner(type: "p5" | "canvas"): Promise<Runner> {
   if (type === "p5") {
@@ -31,7 +28,7 @@ function handleMessage(event: MessageEvent): void {
 
   switch (msg.type) {
     case "runtime:init":
-      handleInit(msg);
+      handleInit(msg, event);
       break;
     case "runtime:execute":
       handleExecute(msg);
@@ -42,14 +39,17 @@ function handleMessage(event: MessageEvent): void {
   }
 }
 
-function handleInit(msg: Extract<HostMessage, { type: "runtime:init" }>): void {
+function handleInit(
+  msg: Extract<HostMessage, { type: "runtime:init" }>,
+  event: MessageEvent,
+): void {
   if (initialized) return;
+  if (event.origin !== msg.payload.origin) return;
   initialized = true;
   hostOrigin = msg.payload.origin;
   sessionId = msg.id;
-  runtimeType = msg.payload.runtime;
 
-  loadRunner(runtimeType).then((runner) => {
+  loadRunner(msg.payload.runtime).then((runner) => {
     activeRunner = runner;
     sendToHost({ type: "runtime:ready" }, hostOrigin!, sessionId!);
   });
@@ -60,19 +60,26 @@ async function handleExecute(
 ): Promise<void> {
   if (!activeRunner || !hostOrigin || !sessionId) return;
 
-  const { startGuard } = await import("./resource-guard.js");
-  startGuard(hostOrigin, sessionId, activeRunner);
+  guardModule = await import("./resource-guard.js");
+  guardModule.startGuard(hostOrigin, sessionId, activeRunner);
 
-  activeRunner.execute(msg.payload.source, msg.payload.props);
+  try {
+    activeRunner.execute(msg.payload.source, msg.payload.props);
+  } catch (err) {
+    guardModule.stopGuard();
+    const message = err instanceof Error ? err.message : String(err);
+    sendToHost({ type: "runtime:error", payload: { message } }, hostOrigin, sessionId);
+    sendToHost({ type: "runtime:stopped" }, hostOrigin, sessionId);
+  }
 }
 
 function handleStop(): void {
   if (!activeRunner || !hostOrigin || !sessionId) return;
   activeRunner.stop();
 
-  import("./resource-guard.js").then(({ stopGuard }) => {
-    stopGuard();
-  });
+  if (guardModule) {
+    guardModule.stopGuard();
+  }
 
   sendToHost({ type: "runtime:stopped" }, hostOrigin, sessionId);
 }

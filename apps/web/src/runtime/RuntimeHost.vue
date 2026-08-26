@@ -1,5 +1,10 @@
+<script lang="ts">
+import { ref } from "vue";
+const activeCount = ref(0);
+</script>
+
 <script setup lang="ts">
-import { ref, computed, onUnmounted, watch } from "vue";
+import { computed, onUnmounted, watch } from "vue";
 import { useRuntimeBridge } from "./useRuntimeBridge.js";
 import { SANDBOX_ORIGIN } from "./runtime-config.js";
 import { MAX_IFRAMES_PER_PAGE, MAX_CODE_SIZE_BYTES } from "@glyphquire/runtime-protocol";
@@ -17,12 +22,7 @@ const props = withDefaults(
   },
 );
 
-// Tracks whether the iframe has been mounted at least once. The iframe must
-// exist in the DOM (and finish loading) before `bridge.reset()` is called,
-// because `reset()` posts the `runtime:init` message through
-// `iframeRef.value.contentWindow` immediately.
 const started = ref(false);
-const activeCount = ref(0);
 const iframeRef = ref<HTMLIFrameElement | null>(null);
 const codeSizeError = ref<string | null>(null);
 const bridge = useRuntimeBridge(iframeRef, props.runtime);
