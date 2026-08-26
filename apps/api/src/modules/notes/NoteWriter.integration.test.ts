@@ -321,18 +321,32 @@ describeWithPostgres("NoteWriter", () => {
 
       let outcomes: PromiseSettledResult<unknown>[];
       try {
-        outcomes = await Promise.allSettled([
-          writer.save(fixture.owner, note.id, {
-            operationId: randomUUID(),
-            baseRevision: note.revision,
-            contentMarkdown: "# Winner content",
-          }),
-          writer.save(fixture.owner, note.id, {
-            operationId: randomUUID(),
-            baseRevision: note.revision,
-            contentMarkdown: sentinelMarkdown,
-          }),
-        ]);
+        let releaseFirstUpdate!: () => void;
+        const firstUpdate = new Promise<void>((resolve) => {
+          releaseFirstUpdate = resolve;
+        });
+        let updateCount = 0;
+        const orderedWriter = new NoteWriter(db, undefined, {
+          afterNoteChange() {
+            if (updateCount++ === 0) releaseFirstUpdate();
+          },
+        });
+
+        // Let the winner acquire the row lock before starting the competing
+        // transaction. The loser is still concurrent with the winner's
+        // in-flight transaction, but the CAS outcome is deterministic.
+        const winner = orderedWriter.save(fixture.owner, note.id, {
+          operationId: randomUUID(),
+          baseRevision: note.revision,
+          contentMarkdown: "# Winner content",
+        });
+        await firstUpdate;
+        const loser = orderedWriter.save(fixture.owner, note.id, {
+          operationId: randomUUID(),
+          baseRevision: note.revision,
+          contentMarkdown: sentinelMarkdown,
+        });
+        outcomes = await Promise.allSettled([winner, loser]);
       } finally {
         console.error = originalError;
         console.log = originalLog;

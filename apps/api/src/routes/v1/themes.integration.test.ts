@@ -14,15 +14,15 @@ const TEST_ENV = {
 describe("Theme API routes", () => {
   const app = createApp(TEST_ENV);
 
-  it("GET /api/v1/workspaces/:id/themes returns 401 without auth", async () => {
+  it("GET /api/v1/workspaces/:id/themes returns uniform 404 without auth", async () => {
     const res = await app.request("/api/v1/workspaces/00000000-0000-4000-8000-000000000001/themes");
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(404);
   });
 
-  it("DELETE /api/v1/themes/:id returns 401 without auth", async () => {
+  it("DELETE /api/v1/themes/:id rejects missing Origin before auth", async () => {
     const res = await app.request("/api/v1/themes/00000000-0000-4000-8000-000000000001", {
       method: "DELETE",
     });
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
   });
 });

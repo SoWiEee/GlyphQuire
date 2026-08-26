@@ -1438,7 +1438,7 @@ describe("rate-limit persistence contract", () => {
     expect(rateLimitReservations.releasedAt.name).toBe("released_at");
   });
 
-  it("commits exactly the frozen 0000-0002 prefix followed by 0003", async () => {
+  it("commits the frozen 0000-0003 prefix followed by the Phase 3 themes migration", async () => {
     const migrations = await readRepositoryMigrations(migrationsDirectory);
     expect(migrations.map(({ idx, tag, hash }) => ({ idx, tag, hash }))).toEqual([
       {
@@ -1461,9 +1461,14 @@ describe("rate-limit persistence contract", () => {
         tag: "0003_phase2_rate_limits",
         hash: "6b612d6e34faad76b973a6fb0701168d28b34f78921be444c26e6485b3e61562",
       },
+      {
+        idx: 4,
+        tag: "0004_phase3_themes",
+        hash: "49cdc8578e087d7c20db0e5d3cd55d6a11fd33767892bebe278a6d8b2f8c169e",
+      },
     ]);
     expect(migrations.every(({ hash }) => /^[a-f0-9]{64}$/.test(hash))).toBe(true);
-    expect(new Set(migrations.map(({ when }) => when)).size).toBe(4);
+    expect(new Set(migrations.map(({ when }) => when)).size).toBe(5);
 
     const sql = await readFile(
       new URL(

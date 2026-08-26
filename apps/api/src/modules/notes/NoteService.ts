@@ -301,6 +301,9 @@ export class NoteServiceImpl implements NoteService {
   }
 
   async list(actorId: string, input: ListNotesInput): Promise<NotePage> {
+    const membership = await this.membershipFor(actorId, input.workspaceId);
+    authorize(actorId, "list", membership);
+
     const cursor = input.cursor ? decodeCursor(input.cursor) : undefined;
     const conditions = [eq(notes.workspaceId, input.workspaceId), isNull(notes.deletedAt)];
     if (cursor) {
