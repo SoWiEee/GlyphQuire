@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { Database } from "@glyphquire/database";
 import type { IdempotencyStoreOptions } from "@glyphquire/database";
 import {
   P0_JOB_TYPES,
@@ -6,10 +7,11 @@ import {
   type JobRegistry,
   type PostgresJobDispatcherOptions,
 } from "@glyphquire/queue";
-import type { SearchPort } from "@glyphquire/search";
+import type { DerivedSearchMutationPort, SearchPort } from "@glyphquire/search";
 import type { ObjectStoragePort, S3EnvLike } from "@glyphquire/storage";
 import * as workerEntrypoint from "./index.js";
-import type { WorkerRuntime, WorkerRuntimeOptions } from "./runtime.js";
+import { createJobRegistry } from "./registry.js";
+import { WorkerRuntime, type WorkerRuntimeOptions } from "./runtime.js";
 
 const encryptionKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
@@ -109,10 +111,13 @@ function fakeStorage(): ObjectStoragePort {
   };
 }
 
-function fakeSearch(): SearchPort {
+function fakeSearch(): SearchPort & DerivedSearchMutationPort {
   return {
     indexNote: vi.fn(),
     removeNote: vi.fn(),
+    indexNoteIfCurrent: vi.fn(),
+    removeNoteIfCurrent: vi.fn(),
+    removeNoteIfMissing: vi.fn(),
     search: vi.fn(),
   };
 }
@@ -386,7 +391,7 @@ describe("production worker startup", () => {
 
   it("does not close PostgreSQL until an owned in-flight batch has settled", async () => {
     const batchFinished = deferred<void>();
-    const { dispatcher, factories } = fakeFactories();
+    const { database, dispatcher, factories } = fakeFactories();
     vi.mocked(dispatcher.dispatchBatch).mockImplementation(async () => {
       await batchFinished.promise;
       return { claimed: 1, succeeded: 1, retried: 0, deadLettered: 0 };
@@ -407,5 +412,66 @@ describe("production worker startup", () => {
     batchFinished.resolve(undefined);
     await expect(Promise.all([dispatching, firstClose, secondClose])).resolves.toBeDefined();
     expect(factories.closeDatabase).toHaveBeenCalledTimes(1);
+    expect(factories.closeDatabase).toHaveBeenCalledWith(database);
+  });
+
+  it("dispatches the first claim through handlers bound to the ready dependencies", async () => {
+    const workspaceId = "11111111-1111-4111-8111-111111111111";
+    const noteId = "22222222-2222-4222-8222-222222222222";
+    const database = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([
+              {
+                noteId,
+                workspaceId,
+                revision: 1,
+                title: "Ready note",
+                contentMarkdown: "# Ready note\n\nBody",
+                deletedAt: null,
+              },
+            ]),
+          })),
+        })),
+      })),
+    } as unknown as Database;
+    const storage = fakeStorage();
+    const search = fakeSearch();
+    const registry = createJobRegistry({
+      database,
+      storage,
+      search,
+      environment: workerEntrypoint.parseWorkerEnv(baseEnvironment),
+    });
+    const job = {
+      id: "33333333-3333-4333-8333-333333333333",
+      workspaceId,
+      type: "search.index" as const,
+      version: 1 as const,
+      attempts: 1,
+      createdAt: new Date(0).toISOString(),
+      payload: {
+        workspaceId,
+        noteId,
+        revision: 1,
+        operationId: "44444444-4444-4444-8444-444444444444",
+      },
+    };
+    const dispatcher = {
+      enqueue: vi.fn(),
+      dispatchBatch: vi.fn(async (handlers: JobRegistry, signal?: AbortSignal) => {
+        await handlers["search.index"]!(job, signal ?? new AbortController().signal);
+        return { claimed: 1, succeeded: 1, retried: 0, deadLettered: 0 };
+      }),
+    };
+    const runtime = new WorkerRuntime(dispatcher, registry);
+
+    await expect(runtime.dispatchOnce()).resolves.toMatchObject({ claimed: 1, succeeded: 1 });
+    expect(search.indexNoteIfCurrent).toHaveBeenCalledWith(
+      expect.objectContaining({ noteId, workspaceId, revision: 1 }),
+    );
+    expect(database.select).toHaveBeenCalledTimes(1);
+    expect(storage.delete).not.toHaveBeenCalled();
   });
 });

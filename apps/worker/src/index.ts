@@ -12,7 +12,7 @@ import {
   type JobRegistry,
   type PostgresJobDispatcherOptions,
 } from "@glyphquire/queue";
-import type { SearchPort } from "@glyphquire/search";
+import type { DerivedSearchMutationPort, SearchPort } from "@glyphquire/search";
 import {
   databaseEnvSchema,
   phase5EnvSchema,
@@ -28,11 +28,12 @@ export { WorkerRuntime, type WorkerRuntimeOptions } from "./runtime.js";
 export type WorkerEnv = Phase5Env & S3EnvLike & { DATABASE_URL: string };
 
 type MaybePromise<T> = T | Promise<T>;
+type WorkerSearchPort = SearchPort & DerivedSearchMutationPort;
 
 export interface WorkerFactories {
   createDatabase(url: string): MaybePromise<Database>;
   createStorage(environment: S3EnvLike): MaybePromise<ObjectStoragePort>;
-  createSearch(database: Database): MaybePromise<SearchPort>;
+  createSearch(database: Database): MaybePromise<WorkerSearchPort>;
   createDispatcher(
     database: Database,
     options: PostgresJobDispatcherOptions,
@@ -57,7 +58,7 @@ export interface StartedWorker {
   runtime: WorkerRuntime;
   idempotencyStore: IdempotencyStore;
   storage: ObjectStoragePort;
-  search: SearchPort;
+  search: WorkerSearchPort;
   close(): Promise<void>;
 }
 
@@ -110,8 +111,9 @@ export async function startWorker(options: StartWorkerOptions = {}): Promise<Sta
   // Keep the entrypoint importable before optional provider packages load so
   // invalid configuration is always reduced to the stable startup event.
   // The loaded registry itself remains the frozen static map in registry.ts.
-  const registry = options.registry ?? (await import("./registry.js")).jobRegistry;
-  assertRegistryComplete(registry);
+  const registryModule = options.registry ? undefined : await import("./registry.js");
+  const staticRegistry = options.registry ?? registryModule!.jobRegistry;
+  assertRegistryComplete(staticRegistry);
 
   const factories = options.factories ?? defaultFactories;
   const signal = options.signal ?? options.runtime?.signal;
@@ -143,6 +145,13 @@ export async function startWorker(options: StartWorkerOptions = {}): Promise<Sta
       leaseSeconds: env.IDEMPOTENCY_LEASE_SECONDS,
     });
     throwIfStartupAborted(signal);
+    const registry = options.registry
+      ? options.registry
+      : registryModule!.createJobRegistry(
+          { database, storage, search, environment: env },
+          staticRegistry,
+        );
+    assertRegistryComplete(registry);
     const runtime = new WorkerRuntime(dispatcher, registry, {
       ...options.runtime,
       signal,
