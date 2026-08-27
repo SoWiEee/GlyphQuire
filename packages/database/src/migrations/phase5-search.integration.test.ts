@@ -141,7 +141,7 @@ describe("Phase 5 search migration artifacts", () => {
 
   it("records exactly 0007_phase5_search after the frozen 0006 migration", async () => {
     const migrations = await readRepositoryMigrations(migrationsDirectory);
-    expect(migrations.map((entry) => entry.tag).slice(-2)).toEqual([
+    expect(migrations.map((entry) => entry.tag).slice(6, 8)).toEqual([
       "0006_phase5_assets",
       "0007_phase5_search",
     ]);
@@ -280,7 +280,9 @@ describeWithPostgres("Phase 5 search PostgreSQL migration", () => {
           select pg_catalog.to_regclass('public.search_documents')::text as search_documents
         `,
       ).toEqual([{ search_documents: null }]);
-      expect(await journalRows(database.migrationUrl)).toHaveLength(repository.length - 1);
+      expect(await journalRows(database.migrationUrl)).toHaveLength(
+        repository.findIndex((entry) => entry.tag === "0007_phase5_search"),
+      );
       expect(await client<{ id: string }[]>`select id from notes where id = ${noteId}`).toEqual([
         { id: noteId },
       ]);

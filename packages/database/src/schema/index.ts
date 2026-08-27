@@ -37,3 +37,22 @@ export {
   searchDocumentsRelations,
   MAX_SEARCH_TEXT_BYTES,
 } from "./search-documents.js";
+export {
+  imports,
+  importsRelations,
+  type ImportStatus,
+  type ImportCompensationStatus,
+  type ImportManifest,
+} from "./imports.js";
+export {
+  importResources,
+  importResourcesRelations,
+  type ImportResourceState,
+} from "./import-resources.js";
+export {
+  exports,
+  exportsRelations,
+  type ExportScopeType,
+  type ExportFormat,
+  type ExportStatus,
+} from "./exports.js";

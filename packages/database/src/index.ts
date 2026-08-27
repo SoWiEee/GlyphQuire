@@ -35,6 +35,12 @@ export {
   assetsRelations,
   searchDocuments,
   searchDocumentsRelations,
+  imports,
+  importsRelations,
+  importResources,
+  importResourcesRelations,
+  exports,
+  exportsRelations,
   MAX_SEARCH_TEXT_BYTES,
   type WorkspaceRole,
   type NoteVisibility,
@@ -44,6 +50,13 @@ export {
   type DocumentJobStatus,
   type JobStatus,
   type AssetThumbnailStatus,
+  type ImportStatus,
+  type ImportCompensationStatus,
+  type ImportManifest,
+  type ImportResourceState,
+  type ExportScopeType,
+  type ExportFormat,
+  type ExportStatus,
 } from "./schema/index.js";
 
 export {
@@ -64,6 +77,9 @@ export type { InferSelectModel, InferInsertModel } from "drizzle-orm";
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import type {
   assets,
+  exports,
+  importResources,
+  imports,
   documentJobs,
   idempotencyRecords,
   jobs,
@@ -101,3 +117,9 @@ export type Asset = InferSelectModel<typeof assets>;
 export type NewAsset = InferInsertModel<typeof assets>;
 export type SearchDocument = InferSelectModel<typeof searchDocuments>;
 export type NewSearchDocument = InferInsertModel<typeof searchDocuments>;
+export type Import = InferSelectModel<typeof imports>;
+export type NewImport = InferInsertModel<typeof imports>;
+export type ImportResource = InferSelectModel<typeof importResources>;
+export type NewImportResource = InferInsertModel<typeof importResources>;
+export type Export = InferSelectModel<typeof exports>;
+export type NewExport = InferInsertModel<typeof exports>;

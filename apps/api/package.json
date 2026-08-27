@@ -29,6 +29,7 @@
     "@glyphquire/theme-engine": "workspace:*",
     "@glyphquire/auth": "workspace:*",
     "drizzle-orm": "^0.44.0",
+    "fflate": "^0.8.2",
     "@glyphquire/document-engine": "workspace:*",
     "@glyphquire/queue": "workspace:*",
     "@glyphquire/search": "workspace:*",
