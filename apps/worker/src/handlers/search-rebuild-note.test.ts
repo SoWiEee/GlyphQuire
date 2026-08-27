@@ -52,8 +52,14 @@ function jobFor(payload: Record<string, unknown>) {
 const MARKDOWN = "---\nglyphquire-spec: 1\n---\n\n# Rebuild Target\n\nSome searchable body text.";
 
 describe("createSearchRebuildNoteHandler", () => {
-  it("registers only the static one-note search.rebuild handoff in Task 3", () => {
-    expect(Object.keys(jobRegistry)).toEqual(["search.rebuild"]);
+  it("preserves the one-note search.rebuild handoff in the Task 4 static registry", () => {
+    expect(Object.keys(jobRegistry)).toEqual([
+      "search.index",
+      "search.remove",
+      "search.rebuild",
+      "asset.cleanup",
+      "asset.thumbnail",
+    ]);
     expect(Object.isFrozen(jobRegistry)).toBe(true);
   });
 
