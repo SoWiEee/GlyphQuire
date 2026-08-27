@@ -87,6 +87,7 @@ function containsControlCharacter(value: string): boolean {
 }
 
 function canonicalRelativePath(rawName: string): string {
+  if (rawName.includes("\\")) invalidArchive();
   if (rawName.length === 0 || containsControlCharacter(rawName)) invalidArchive();
 
   const portable = rawName.replaceAll("\\", "/");

@@ -91,6 +91,15 @@ describe("ArchiveReader", () => {
     await expect(access(join(root, "outside.md"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("rejects a benign entry path containing a backslash", async () => {
+    const root = await temporaryRoot();
+
+    await expectInvalid(
+      smallReader(root).readZip(archive({ "notes\\note.md": strToU8("safe-looking") })),
+    );
+    expect(await readdir(root)).toEqual([]);
+  });
+
   it("rejects two names that canonicalize to the same relative path", async () => {
     const root = await temporaryRoot();
     await expectInvalid(
