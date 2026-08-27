@@ -22,6 +22,7 @@ export interface SearchCursor {
 }
 
 export interface SearchQuery {
+  actorId: string;
   workspaceId: string;
   q: string;
   cursor?: SearchCursor;

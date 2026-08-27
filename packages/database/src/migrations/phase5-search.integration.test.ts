@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
@@ -116,15 +116,46 @@ async function journalRows(databaseUrl: string) {
 }
 
 describe("Phase 5 search migration artifacts", () => {
+  it("preserves the exact committed bytes of migrations 0000 through 0006", async () => {
+    const expected = [
+      ["0000_phase0_auth", "7fbba803d17ce335f8acc41fd7027c3c1278d4af79225c48ac6d0ab885028863"],
+      [
+        "0001_phase2_workspaces",
+        "c0aac84d7bb3fd4766604dfa46d2f0df18b5b4f027e42e5ec6696e9386f1f162",
+      ],
+      ["0002_phase2_notes", "7d4bb87aae2f390f35070ed3e696a92222d2613bef64de573f3314eddbae3f3c"],
+      [
+        "0003_phase2_rate_limits",
+        "6b612d6e34faad76b973a6fb0701168d28b34f78921be444c26e6485b3e61562",
+      ],
+      ["0004_phase3_themes", "49cdc8578e087d7c20db0e5d3cd55d6a11fd33767892bebe278a6d8b2f8c169e"],
+      ["0005_phase5_jobs", "6891de73469132b56f1b9292ab2a2b4fcc73c29095ef5373c901adc3da13bdd8"],
+      ["0006_phase5_assets", "8def4960a411f9f49fc1ee035065325bc9a5563bca2ac8d759c170e5a23b7285"],
+    ] as const;
+
+    for (const [tag, hash] of expected) {
+      const source = await readFile(new URL(`./${tag}.sql`, import.meta.url));
+      expect(createHash("sha256").update(source).digest("hex"), tag).toBe(hash);
+    }
+  });
+
   it("records exactly 0007_phase5_search after the frozen 0006 migration", async () => {
     const migrations = await readRepositoryMigrations(migrationsDirectory);
     expect(migrations.map((entry) => entry.tag).slice(-2)).toEqual([
       "0006_phase5_assets",
       "0007_phase5_search",
     ]);
-    expect(
-      await readFile(new URL("./meta/0007_snapshot.json", import.meta.url), "utf8"),
-    ).toContain('"public.search_documents"');
+    expect(await readFile(new URL("./meta/0007_snapshot.json", import.meta.url), "utf8")).toContain(
+      '"public.search_documents"',
+    );
+    const source = await readFile(new URL("./0007_phase5_search.sql", import.meta.url), "utf8");
+    expect(source).toContain("CREATE EXTENSION IF NOT EXISTS pg_trgm;");
+    expect(source).toContain(
+      'CREATE INDEX "search_documents_tsv_idx" ON "search_documents" USING gin ("search_vector");',
+    );
+    expect(source).toContain(
+      'CREATE INDEX "search_documents_normalized_trgm_idx" ON "search_documents" USING gin ("normalized_text" gin_trgm_ops);',
+    );
   });
 });
 
@@ -170,7 +201,7 @@ describeWithPostgres("Phase 5 search PostgreSQL migration", () => {
     };
   }
 
-  it("migrates fresh, upgrades exact 0004, and reruns without journal drift", async () => {
+  it("migrates fresh, upgrades exact 0004 and exact 0006, and reruns without journal drift", async () => {
     const repository = await readRepositoryMigrations(migrationsDirectory);
 
     const fresh = await createTestDatabase();
@@ -188,6 +219,20 @@ describeWithPostgres("Phase 5 search PostgreSQL migration", () => {
     );
     await migrateDatabase(upgraded.migrationUrl);
     expect(await journalRows(upgraded.migrationUrl)).toEqual(
+      repository.map((entry) => ({ hash: entry.hash, created_at: String(entry.when) })),
+    );
+
+    const upgradedFrom0006 = await createTestDatabase();
+    await migrateThroughPhase3(upgradedFrom0006.migrationUrl);
+    await migrateThroughPhase5Assets(upgradedFrom0006.migrationUrl);
+    expect(await journalRows(upgradedFrom0006.migrationUrl)).toEqual(
+      repository.slice(0, 7).map((entry) => ({
+        hash: entry.hash,
+        created_at: String(entry.when),
+      })),
+    );
+    await migrateDatabase(upgradedFrom0006.migrationUrl);
+    expect(await journalRows(upgradedFrom0006.migrationUrl)).toEqual(
       repository.map((entry) => ({ hash: entry.hash, created_at: String(entry.when) })),
     );
   }, 120_000);
@@ -276,6 +321,16 @@ describeWithPostgres("Phase 5 search PostgreSQL migration", () => {
         returning id
       `;
 
+      const constraints = await client<{ constraint_name: string }[]>`
+        select catalog_constraint.conname as constraint_name
+        from pg_catalog.pg_constraint catalog_constraint
+        where catalog_constraint.conrelid = 'public.search_documents'::regclass
+        order by catalog_constraint.conname
+      `;
+      expect(constraints.map((constraint) => constraint.constraint_name)).toContain(
+        "search_documents_tags_size_check",
+      );
+
       await expect(
         client`
           insert into search_documents (workspace_id, note_id, revision, title, body)
@@ -286,12 +341,20 @@ describeWithPostgres("Phase 5 search PostgreSQL migration", () => {
         constraint_name: "search_documents_revision_positive_check",
       });
 
+      const searchableTag = `taxonomy${randomUUID().replaceAll("-", "")}`;
       const [row] = await client<{ id: string; revision: number; title: string }[]>`
-        insert into search_documents (workspace_id, note_id, revision, title, body)
-        values (${workspace!.id}, ${note!.id}, 3, 'Title v3', 'Body v3')
+        insert into search_documents (workspace_id, note_id, revision, title, body, tags)
+        values (${workspace!.id}, ${note!.id}, 3, 'Title v3', 'Body v3', ${searchableTag})
         returning id, revision, title
       `;
       expect(row).toMatchObject({ revision: 3, title: "Title v3" });
+      expect(
+        await client<{ matches: boolean }[]>`
+          select search_vector @@ plainto_tsquery('english', ${searchableTag}) as matches
+          from search_documents
+          where note_id = ${note!.id}
+        `,
+      ).toEqual([{ matches: true }]);
 
       // Stale-revision upsert is a no-op: revision 1 must not overwrite revision 3.
       await client`

@@ -1,13 +1,23 @@
 import { randomUUID } from "node:crypto";
-import { createDb, notes, user, workspaceMembers, workspaces, type Database } from "@glyphquire/database";
+import {
+  createDb,
+  notes,
+  user,
+  workspaceMembers,
+  workspaces,
+  type Database,
+} from "@glyphquire/database";
 import type { EnqueueJobInput, JobDispatcher, JobRegistry } from "@glyphquire/queue";
 import { PostgresSearchAdapter } from "@glyphquire/search";
 import { Hono, type Context } from "hono";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createErrorHandler } from "../../middleware/error-handler.js";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { createErrorHandler, type SecurityLogger } from "../../middleware/error-handler.js";
 import type { SecurityVariables } from "../../middleware/security.js";
-import { createOperatorAuthorizer } from "../../modules/search/OperatorAuthorizer.js";
-import { SearchServiceImpl } from "../../modules/search/SearchService.js";
+import {
+  createOperatorAuthorizer,
+  type OperatorAuthorizer,
+} from "../../modules/search/OperatorAuthorizer.js";
+import { SearchServiceImpl, type SearchService } from "../../modules/search/SearchService.js";
 import { createSearchRoutes } from "./search.js";
 
 // Exercises the operator-only bounded one-note rebuild route over HTTP:
@@ -39,10 +49,7 @@ class FakeJobDispatcher implements JobDispatcher {
 }
 
 function testAuthMiddleware() {
-  return async (
-    context: Context<{ Variables: SecurityVariables }>,
-    next: () => Promise<void>,
-  ) => {
+  return async (context: Context<{ Variables: SecurityVariables }>, next: () => Promise<void>) => {
     const actorId = context.req.header("x-test-actor-id");
     if (!actorId) return context.json({ error: { code: "NOTE_NOT_FOUND" } }, 404);
     context.set("requestContext", {
@@ -54,14 +61,24 @@ function testAuthMiddleware() {
   };
 }
 
-function buildApp(searchService: SearchServiceImpl) {
+function buildApp(
+  searchService: SearchService,
+  operatorAuthorizer: OperatorAuthorizer,
+  logger?: SecurityLogger,
+) {
+  const routes = createSearchRoutes(searchService, operatorAuthorizer);
   return new Hono<{ Variables: SecurityVariables }>()
     .use("*", testAuthMiddleware())
-    .onError(createErrorHandler())
-    .route("/api/v1", createSearchRoutes(searchService));
+    .onError(createErrorHandler(logger))
+    .route("/api/v1", routes);
 }
 
-function v1(app: ReturnType<typeof buildApp>, path: string, actorId: string, init: RequestInit = {}) {
+function v1(
+  app: ReturnType<typeof buildApp>,
+  path: string,
+  actorId: string,
+  init: RequestInit = {},
+) {
   const headers = new Headers(init.headers);
   headers.set("x-test-actor-id", actorId);
   return app.request(`${baseUrl}/api/v1${path}`, { ...init, headers });
@@ -106,17 +123,33 @@ describeWithPostgres("search rebuild operator route", () => {
     return { owner, workspaceId: workspace!.id, noteId: note!.id };
   }
 
-  function freshApp(operatorIds: readonly string[]) {
+  function freshApp(operatorIds: readonly string[], logger?: SecurityLogger) {
     const dispatcher = new FakeJobDispatcher();
     const adapter = new PostgresSearchAdapter(db);
-    const service = new SearchServiceImpl(
-      db,
-      adapter,
-      dispatcher,
-      createOperatorAuthorizer(operatorIds),
-    );
-    return { app: buildApp(service), dispatcher };
+    const operatorAuthorizer = createOperatorAuthorizer(operatorIds);
+    const service = new SearchServiceImpl(db, adapter, dispatcher, operatorAuthorizer);
+    return { app: buildApp(service, operatorAuthorizer, logger), dispatcher };
   }
+
+  it("enforces operator authorization in route middleware even if a service omits the check", async () => {
+    const fixture = await buildFixture();
+    const rebuildNote = vi.fn().mockResolvedValue({ enqueued: true });
+    const bypassableService: SearchService = {
+      search: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+      rebuildNote,
+    };
+    const app = buildApp(bypassableService, createOperatorAuthorizer([]));
+
+    const response = await v1(
+      app,
+      `/workspaces/${fixture.workspaceId}/notes/${fixture.noteId}/search-rebuild`,
+      fixture.owner,
+      { method: "POST" },
+    );
+
+    expect(response.status).toBe(404);
+    expect(rebuildNote).not.toHaveBeenCalled();
+  });
 
   it("denies the workspace owner — owning the workspace does not grant operator access", async () => {
     const fixture = await buildFixture();
@@ -159,7 +192,7 @@ describeWithPostgres("search rebuild operator route", () => {
 
     const response = await v1(
       app,
-      `/workspaces/${fixture.workspaceId}/notes/${fixture.noteId}/search-rebuild`,
+      `/workspaces/${fixture.workspaceId}/notes/${fixture.noteId}/search-rebuild?cursor=one-note-cursor`,
       operatorId,
       { method: "POST" },
     );
@@ -174,8 +207,25 @@ describeWithPostgres("search rebuild operator route", () => {
         scope: "note",
         noteId: fixture.noteId,
         batchSize: 1,
+        cursor: "one-note-cursor",
       },
     });
+  });
+
+  it("rejects a workspace rebuild branch instead of ignoring unbounded parameters", async () => {
+    const fixture = await buildFixture();
+    const operatorId = await insertActor("rebuild-workspace-branch-operator");
+    const { app, dispatcher } = freshApp([operatorId]);
+
+    const response = await v1(
+      app,
+      `/workspaces/${fixture.workspaceId}/notes/${fixture.noteId}/search-rebuild?scope=workspace&batchSize=100`,
+      operatorId,
+      { method: "POST" },
+    );
+
+    expect(response.status).toBe(400);
+    expect(dispatcher.enqueued).toEqual([]);
   });
 
   it("denies every actor, including a plausible operator id, when the allowlist is empty", async () => {
@@ -193,14 +243,36 @@ describeWithPostgres("search rebuild operator route", () => {
     expect(dispatcher.enqueued).toEqual([]);
   });
 
-  it("rejects a malformed noteId path parameter before touching authorization", async () => {
+  it("fails closed on a malformed allowlist and audits denial without actor-id leakage", async () => {
     const fixture = await buildFixture();
-    const { app } = freshApp([]);
+    const wouldBeOperator = await insertActor("rebuild-malformed-operator");
+    const entries: unknown[] = [];
+    const logger: SecurityLogger = { error: (entry) => entries.push(entry) };
+    const { app, dispatcher } = freshApp([wouldBeOperator, "malformed id"], logger);
+
+    const response = await v1(
+      app,
+      `/workspaces/${fixture.workspaceId}/notes/${fixture.noteId}/search-rebuild`,
+      wouldBeOperator,
+      { method: "POST" },
+    );
+    const serialized = JSON.stringify({ body: await response.json(), entries });
+
+    expect(response.status).toBe(404);
+    expect(dispatcher.enqueued).toEqual([]);
+    expect(entries).toHaveLength(1);
+    expect(serialized).not.toContain(wouldBeOperator);
+  });
+
+  it("rejects a malformed noteId path parameter for an exact configured operator", async () => {
+    const fixture = await buildFixture();
+    const operatorId = await insertActor("rebuild-malformed-note-operator");
+    const { app } = freshApp([operatorId]);
 
     const response = await v1(
       app,
       `/workspaces/${fixture.workspaceId}/notes/not-a-uuid/search-rebuild`,
-      fixture.owner,
+      operatorId,
       { method: "POST" },
     );
     expect(response.status).toBe(400);

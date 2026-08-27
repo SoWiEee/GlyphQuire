@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { parseEnv } from "../../env.js";
 import { PublicApiError } from "../../middleware/error-handler.js";
 import { createOperatorAuthorizer } from "./OperatorAuthorizer.js";
 
@@ -11,6 +12,23 @@ import { createOperatorAuthorizer } from "./OperatorAuthorizer.js";
  * closed whenever that allowlist is empty.
  */
 describe("OperatorAuthorizer", () => {
+  const apiEnvironment = {
+    DATABASE_URL: "postgresql://app:secret@localhost:5432/glyphquire",
+    BETTER_AUTH_SECRET: "operator-env-test-secret-at-least-32-characters",
+    BETTER_AUTH_URL: "http://localhost:3000",
+    WEB_ORIGIN: "http://localhost:5173",
+  };
+
+  it("parses the API operator allowlist once and rejects malformed deployment values", () => {
+    expect(
+      parseEnv({ ...apiEnvironment, PHASE5_OPERATOR_IDS: "operator-a,operator-b" })
+        .PHASE5_OPERATOR_IDS,
+    ).toEqual(["operator-a", "operator-b"]);
+    expect(() =>
+      parseEnv({ ...apiEnvironment, PHASE5_OPERATOR_IDS: "operator-a, operator-b" }),
+    ).toThrow("Invalid environment variables: PHASE5_OPERATOR_IDS");
+  });
+
   it("allows an exact configured operator id", () => {
     const operatorId = `operator-${randomUUID()}`;
     const authorizer = createOperatorAuthorizer([operatorId]);
@@ -55,7 +73,9 @@ describe("OperatorAuthorizer", () => {
     const emptyAllowlistDenial = capture(() =>
       emptyAllowlistAuthorizer.authorize(`someone-${randomUUID()}`),
     );
-    const nonMemberDenial = capture(() => configuredAuthorizer.authorize(`stranger-${randomUUID()}`));
+    const nonMemberDenial = capture(() =>
+      configuredAuthorizer.authorize(`stranger-${randomUUID()}`),
+    );
 
     expect(emptyAllowlistDenial).toEqual(nonMemberDenial);
     expect(emptyAllowlistDenial).toEqual({ code: "NOTE_NOT_FOUND", status: 404 });

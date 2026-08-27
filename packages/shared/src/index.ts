@@ -5,6 +5,7 @@ export {
   s3EnvSchema,
   authEnvSchema,
   appEnvSchema,
+  operatorAllowlistSchema,
   phase5EnvSchema,
   webOriginSchema,
   type Phase5Env,

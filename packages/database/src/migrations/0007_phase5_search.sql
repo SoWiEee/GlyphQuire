@@ -8,13 +8,14 @@ CREATE TABLE "search_documents" (
 	"body" text DEFAULT '' NOT NULL,
 	"tags" text DEFAULT '' NOT NULL,
 	"normalized_text" text DEFAULT '' NOT NULL,
-	"search_vector" "tsvector" GENERATED ALWAYS AS (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(headings, '') || ' ' || coalesce(body, ''))) STORED,
+	"search_vector" "tsvector" GENERATED ALWAYS AS (to_tsvector('english', coalesce(title, '') || ' ' || coalesce(headings, '') || ' ' || coalesce(body, '') || ' ' || coalesce(tags, ''))) STORED,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "search_documents_revision_positive_check" CHECK ("search_documents"."revision" > 0),
 	CONSTRAINT "search_documents_title_size_check" CHECK (octet_length("search_documents"."title") <= 2097152),
 	CONSTRAINT "search_documents_headings_size_check" CHECK (octet_length("search_documents"."headings") <= 2097152),
 	CONSTRAINT "search_documents_body_size_check" CHECK (octet_length("search_documents"."body") <= 2097152),
+	CONSTRAINT "search_documents_tags_size_check" CHECK (octet_length("search_documents"."tags") <= 2097152),
 	CONSTRAINT "search_documents_normalized_text_size_check" CHECK (octet_length("search_documents"."normalized_text") <= 2097152)
 );
 --> statement-breakpoint

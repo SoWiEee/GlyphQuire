@@ -86,7 +86,7 @@ const base64UrlKeySchema = z
     }
   });
 
-const operatorAllowlistSchema = z
+export const operatorAllowlistSchema = z
   .string()
   .default("")
   .transform((value, context): string[] => {

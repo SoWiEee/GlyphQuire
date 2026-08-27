@@ -160,7 +160,7 @@ describeWithPostgres("SearchService", () => {
 
     const noteId = await insertNote(workspaceId, owner, "Rebuild target");
     const error = await captureApiError(() =>
-      service.rebuildNote(viewer, { workspaceId, noteId }),
+      service.rebuildNote(viewer, { workspaceId, scope: "note", noteId, batchSize: 1 }),
     );
     expect(error).toEqual({ code: "NOTE_NOT_FOUND", status: 404 });
     expect(dispatcher.enqueued).toEqual([]);
@@ -177,14 +177,44 @@ describeWithPostgres("SearchService", () => {
     const operatorAuthorizer = createOperatorAuthorizer([operatorId]);
     const service = new SearchServiceImpl(db, adapter, dispatcher, operatorAuthorizer);
 
-    const result = await service.rebuildNote(operatorId, { workspaceId, noteId });
+    const rebuildInput = {
+      workspaceId,
+      scope: "note" as const,
+      noteId,
+      batchSize: 1 as const,
+      cursor: "one-note-cursor",
+    };
+    const result = await service.rebuildNote(operatorId, rebuildInput);
     expect(result).toEqual({ enqueued: true });
     expect(dispatcher.enqueued).toHaveLength(1);
     expect(dispatcher.enqueued[0]).toMatchObject({
       workspaceId,
       type: "search.rebuild",
-      payload: { workspaceId, scope: "note", noteId, batchSize: 1 },
+      payload: { workspaceId, scope: "note", noteId, batchSize: 1, cursor: "one-note-cursor" },
     });
+  });
+
+  it("allows an operator to repeat a bounded repair of the same current revision", async () => {
+    const owner = await insertActor("search-owner-rebuild-revision");
+    const operatorId = await insertActor("search-operator-rebuild-revision");
+    const workspaceId = await insertWorkspace(owner);
+    const noteId = await insertNote(workspaceId, owner, "Revision-aware rebuild target");
+
+    const dispatcher = new FakeJobDispatcher();
+    const adapter = new PostgresSearchAdapter(db);
+    const service = new SearchServiceImpl(
+      db,
+      adapter,
+      dispatcher,
+      createOperatorAuthorizer([operatorId]),
+    );
+    const rebuildInput = { workspaceId, scope: "note" as const, noteId, batchSize: 1 as const };
+
+    await service.rebuildNote(operatorId, rebuildInput);
+    await service.rebuildNote(operatorId, rebuildInput);
+
+    expect(dispatcher.enqueued).toHaveLength(2);
+    expect(dispatcher.enqueued.map((job) => job.idempotencyKey)).toEqual([undefined, undefined]);
   });
 
   it("denies a rebuild for a note outside the operator's target workspace", async () => {
@@ -201,7 +231,12 @@ describeWithPostgres("SearchService", () => {
     const service = new SearchServiceImpl(db, adapter, dispatcher, operatorAuthorizer);
 
     const error = await captureApiError(() =>
-      service.rebuildNote(operatorId, { workspaceId, noteId }),
+      service.rebuildNote(operatorId, {
+        workspaceId,
+        scope: "note",
+        noteId,
+        batchSize: 1,
+      }),
     );
     expect(error).toEqual({ code: "NOTE_NOT_FOUND", status: 404 });
     expect(dispatcher.enqueued).toEqual([]);

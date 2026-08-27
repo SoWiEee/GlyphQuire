@@ -74,6 +74,10 @@ function assertWithinBound(field: string, value: string): void {
  */
 export function extractSearchableText(title: string, markdown: string): ExtractedNoteText {
   assertWithinBound("title", title);
+  // Bound the untrusted source before parser allocation. Content excluded
+  // from the semantic result (runtime/code blocks) must not bypass the same
+  // limit merely because it never reaches the extracted body.
+  assertWithinBound("markdown", markdown);
 
   const result = parse(markdown);
   const document: NotebookDocument | null = result.ok ? result.document : null;

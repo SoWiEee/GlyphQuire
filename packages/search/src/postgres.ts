@@ -1,5 +1,5 @@
 import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
-import { notes, searchDocuments, type Database } from "@glyphquire/database";
+import { notes, searchDocuments, workspaceMembers, type Database } from "@glyphquire/database";
 import { normalizeSearchText } from "./extract.js";
 import type { SearchPort, SearchQuery, SearchResult, SearchableNote } from "./types.js";
 
@@ -23,9 +23,8 @@ function toScore(tsRank: unknown, similarity: unknown): number {
  * (idempotent — deleting an absent row is a no-op too). Search combines
  * English tsvector matching with pg_trgm similarity so CJK and fuzzy terms
  * that `to_tsvector('english', ...)` cannot tokenize still match via
- * trigram fallback. Every query is scoped to `workspaceId` in the SQL
- * predicate itself, so a caller can never read another workspace's notes
- * regardless of what it passes.
+ * trigram fallback. Every query scopes both `workspaceId` and current actor
+ * membership in the result-selecting SQL statement.
  */
 export class PostgresSearchAdapter implements SearchPort {
   constructor(private readonly db: Database) {}
@@ -68,19 +67,21 @@ export class PostgresSearchAdapter implements SearchPort {
 
   async search(query: SearchQuery): Promise<SearchResult[]> {
     const normalizedQuery = normalizeSearchText(query.q);
+    // Avoid `LIKE '%%'`, which would turn whitespace-only input into a
+    // workspace-wide scan if a caller bypassed the HTTP schema boundary.
+    if (normalizedQuery.length === 0) return [];
 
-    // `%` (pg_trgm's similarity operator) compares two strings as wholes,
-    // which is the wrong shape for "does this note contain the query" —
-    // it fails short/CJK queries embedded in longer normalized text. A
-    // wildcard LIKE is a substring test that pg_trgm's GIN index still
-    // accelerates, so it is the fuzzy/CJK fallback here; similarity() below
-    // is used only for ranking, never for matching.
+    // `LIKE` supplies exact substring matching for CJK/short terms. PostgreSQL's
+    // `<%` word-similarity operator supplies indexed fuzzy-word matching
+    // without comparing the query against the whole (usually much longer)
+    // document as the `%` operator would.
     const likePattern = `%${normalizedQuery.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
     const conditions = [
       eq(searchDocuments.workspaceId, query.workspaceId),
       or(
         sql`${searchDocuments.searchVector} @@ websearch_to_tsquery('english', ${query.q})`,
         sql`${searchDocuments.normalizedText} LIKE ${likePattern}`,
+        sql`${normalizedQuery} <% ${searchDocuments.normalizedText}`,
       )!,
     ];
 
@@ -106,13 +107,23 @@ export class PostgresSearchAdapter implements SearchPort {
         body: searchDocuments.body,
         updatedAt: searchDocuments.updatedAt,
         tsScore: sql`ts_rank_cd(${searchDocuments.searchVector}, websearch_to_tsquery('english', ${query.q}))`,
-        trgmScore: sql`similarity(${searchDocuments.normalizedText}, ${normalizedQuery})`,
+        trgmScore: sql`word_similarity(${normalizedQuery}, ${searchDocuments.normalizedText})`,
       })
       .from(searchDocuments)
       // Defense in depth: a note's removal (search.remove) is at-least-once
       // and may lag its soft-delete by a beat, so the query itself excludes
       // deleted notes rather than relying solely on the async cleanup job.
       .innerJoin(notes, and(eq(notes.id, searchDocuments.noteId), isNull(notes.deletedAt)))
+      // Authorization is part of the same SQL statement as result selection.
+      // The service's pre-check supplies a uniform missing/unauthorized error;
+      // this join closes the revocation race between that check and this read.
+      .innerJoin(
+        workspaceMembers,
+        and(
+          eq(workspaceMembers.workspaceId, searchDocuments.workspaceId),
+          eq(workspaceMembers.userId, query.actorId),
+        ),
+      )
       .where(and(...conditions))
       .orderBy(desc(searchDocuments.updatedAt), desc(searchDocuments.noteId))
       .limit(query.pageSize + 1);

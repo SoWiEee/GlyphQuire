@@ -1,8 +1,20 @@
 import { randomUUID } from "node:crypto";
-import { createDb, notes, user, workspaceMembers, workspaces, type Database } from "@glyphquire/database";
+import {
+  MAX_SEARCH_TEXT_BYTES,
+  createDb,
+  notes,
+  user,
+  workspaceMembers,
+  workspaces,
+  type Database,
+} from "@glyphquire/database";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { extractSearchableText, normalizeSearchText, SearchTextTooLargeError } from "../src/extract.js";
+import {
+  extractSearchableText,
+  normalizeSearchText,
+  SearchTextTooLargeError,
+} from "../src/extract.js";
 import { PostgresSearchAdapter } from "../src/postgres.js";
 import type { SearchableNote } from "../src/types.js";
 
@@ -52,6 +64,14 @@ describe("extractSearchableText", () => {
   it("rejects a title over the configured text bound", () => {
     const oversizedTitle = "x".repeat(2 * 1024 * 1024 + 1);
     expect(() => extractSearchableText(oversizedTitle, "body")).toThrow(SearchTextTooLargeError);
+  });
+
+  it("rejects oversized source Markdown before excluded code can evade the text bound", () => {
+    const oversizedMarkdown = `\`\`\`text\n${"x".repeat(MAX_SEARCH_TEXT_BYTES + 1)}\n\`\`\``;
+
+    expect(() => extractSearchableText("Bounded source", oversizedMarkdown)).toThrow(
+      /SEARCH_TEXT_TOO_LARGE: markdown/,
+    );
   });
 
   it("degrades to title-only extraction for a document that fails to parse into headings/body", () => {
@@ -106,7 +126,9 @@ async function insertNote(
   return note!.id;
 }
 
-function searchableNote(overrides: Partial<SearchableNote> & { noteId: string; workspaceId: string }): SearchableNote {
+function searchableNote(
+  overrides: Partial<SearchableNote> & { noteId: string; workspaceId: string },
+): SearchableNote {
   return {
     revision: 1,
     title: "Untitled",
@@ -145,11 +167,18 @@ describeWithPostgres("PostgresSearchAdapter", () => {
         title: "Glacier Survey",
         headings: ["Glacier Survey"],
         body: "Field notes about glacier retreat measurements.",
-        normalizedText: normalizeSearchText("Glacier Survey Field notes about glacier retreat measurements."),
+        normalizedText: normalizeSearchText(
+          "Glacier Survey Field notes about glacier retreat measurements.",
+        ),
       }),
     );
 
-    const results = await adapter.search({ workspaceId, q: "glacier retreat", pageSize: 10 });
+    const results = await adapter.search({
+      actorId: ownerId,
+      workspaceId,
+      q: "glacier retreat",
+      pageSize: 10,
+    });
     expect(results.map((row) => row.noteId)).toContain(noteId);
   });
 
@@ -167,8 +196,48 @@ describeWithPostgres("PostgresSearchAdapter", () => {
       }),
     );
 
-    const results = await adapter.search({ workspaceId, q: "京都", pageSize: 10 });
+    const results = await adapter.search({
+      actorId: ownerId,
+      workspaceId,
+      q: "京都",
+      pageSize: 10,
+    });
     expect(results.map((row) => row.noteId)).toContain(noteId);
+  });
+
+  it("finds a fuzzy word through trigram fallback rather than substring matching alone", async () => {
+    const marker = randomUUID().replaceAll("-", "");
+    const noteId = await insertNote(db, workspaceId, ownerId, `Glacier ${marker}`);
+    await adapter.indexNote(
+      searchableNote({
+        noteId,
+        workspaceId,
+        title: `Glacier ${marker}`,
+        body: "Glacier observations",
+        normalizedText: normalizeSearchText(`Glacier ${marker} Glacier observations`),
+      }),
+    );
+
+    const fuzzyQuery = { actorId: ownerId, workspaceId, q: "glacir", pageSize: 10 };
+    const results = await adapter.search(fuzzyQuery);
+    expect(results.map((row) => row.noteId)).toContain(noteId);
+  });
+
+  it("returns no results for a query that normalizes to empty text", async () => {
+    const marker = randomUUID().replaceAll("-", "");
+    const noteId = await insertNote(db, workspaceId, ownerId, `Whitespace ${marker}`);
+    await adapter.indexNote(
+      searchableNote({
+        noteId,
+        workspaceId,
+        title: `Whitespace ${marker}`,
+        normalizedText: normalizeSearchText(`Whitespace ${marker}`),
+      }),
+    );
+
+    const emptyQuery = { actorId: ownerId, workspaceId, q: " \n\t ", pageSize: 10 };
+    const results = await adapter.search(emptyQuery);
+    expect(results).toEqual([]);
   });
 
   it("treats a stale-revision index write as a no-op", async () => {
@@ -192,7 +261,12 @@ describeWithPostgres("PostgresSearchAdapter", () => {
       }),
     );
 
-    const results = await adapter.search({ workspaceId, q: "Title", pageSize: 10 });
+    const results = await adapter.search({
+      actorId: ownerId,
+      workspaceId,
+      q: "Title",
+      pageSize: 10,
+    });
     const match = results.find((row) => row.noteId === noteId);
     expect(match?.title).toBe("Latest Title");
     expect(match?.revision).toBe(5);
@@ -211,7 +285,12 @@ describeWithPostgres("PostgresSearchAdapter", () => {
     await adapter.removeNote(noteId);
     await expect(adapter.removeNote(noteId)).resolves.toBeUndefined();
 
-    const results = await adapter.search({ workspaceId, q: "Removable", pageSize: 10 });
+    const results = await adapter.search({
+      actorId: ownerId,
+      workspaceId,
+      q: "Removable",
+      pageSize: 10,
+    });
     expect(results.some((row) => row.noteId === noteId)).toBe(false);
   });
 
@@ -230,7 +309,12 @@ describeWithPostgres("PostgresSearchAdapter", () => {
       .set({ deletedAt: new Date(), revision: sql`${notes.revision} + 1` })
       .where(eq(notes.id, noteId));
 
-    const results = await adapter.search({ workspaceId, q: "Deleted Note", pageSize: 10 });
+    const results = await adapter.search({
+      actorId: ownerId,
+      workspaceId,
+      q: "Deleted Note",
+      pageSize: 10,
+    });
     expect(results.some((row) => row.noteId === noteId)).toBe(false);
   });
 
@@ -247,8 +331,36 @@ describeWithPostgres("PostgresSearchAdapter", () => {
       }),
     );
 
-    const results = await adapter.search({ workspaceId, q: "Cross Tenant Secret", pageSize: 10 });
+    const results = await adapter.search({
+      actorId: ownerId,
+      workspaceId,
+      q: "Cross Tenant Secret",
+      pageSize: 10,
+    });
     expect(results.some((row) => row.noteId === noteId)).toBe(false);
+  });
+
+  it("filters current workspace membership in the same SQL query as search results", async () => {
+    const outsiderId = await insertActor(db, "search-adapter-non-member");
+    const marker = randomUUID().replaceAll("-", "");
+    const noteId = await insertNote(db, workspaceId, ownerId, `Atomic membership ${marker}`);
+    await adapter.indexNote(
+      searchableNote({
+        noteId,
+        workspaceId,
+        title: `Atomic membership ${marker}`,
+        normalizedText: normalizeSearchText(`Atomic membership ${marker}`),
+      }),
+    );
+
+    const unauthorizedQuery = {
+      actorId: outsiderId,
+      workspaceId,
+      q: marker,
+      pageSize: 10,
+    };
+    const results = await adapter.search(unauthorizedQuery);
+    expect(results).toEqual([]);
   });
 
   it("paginates with a stable cursor that never repeats or skips a match", async () => {
@@ -273,7 +385,13 @@ describeWithPostgres("PostgresSearchAdapter", () => {
     const seen: string[] = [];
     let cursor: { updatedAt: string; noteId: string } | undefined;
     for (let guard = 0; guard < 10; guard += 1) {
-      const page = await adapter.search({ workspaceId, q: term, pageSize: 2, cursor });
+      const page = await adapter.search({
+        actorId: ownerId,
+        workspaceId,
+        q: term,
+        pageSize: 2,
+        cursor,
+      });
       const kept = page.slice(0, 2);
       if (kept.length === 0) break;
       seen.push(...kept.map((row) => row.noteId));

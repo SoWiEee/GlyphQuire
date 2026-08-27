@@ -1,6 +1,8 @@
 import { getConnInfo } from "@hono/node-server/conninfo";
 import type { AuthOptions } from "@glyphquire/auth";
 import { createDb, type Database } from "@glyphquire/database";
+import { PostgresJobDispatcher, type JobDispatcher } from "@glyphquire/queue";
+import { PostgresSearchAdapter } from "@glyphquire/search";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { type Env, type EnvInput, parseEnv } from "./env.js";
 import { createCorsMiddleware } from "./middleware/cors.js";
@@ -28,6 +30,11 @@ import {
 } from "./middleware/security.js";
 import { NoteServiceImpl, type NoteService } from "./modules/notes/NoteService.js";
 import {
+  createOperatorAuthorizer,
+  type OperatorAuthorizer,
+} from "./modules/search/OperatorAuthorizer.js";
+import { SearchServiceImpl, type SearchService } from "./modules/search/SearchService.js";
+import {
   WorkspaceService,
   type PersonalWorkspaceProvisioner,
 } from "./modules/workspaces/WorkspaceService.js";
@@ -37,6 +44,7 @@ import { createNoteRoutes } from "./routes/v1/notes.js";
 import { createVersionRoutes } from "./routes/v1/versions.js";
 import { ThemeServiceImpl, type ThemeService } from "./modules/themes/ThemeService.js";
 import { createThemeRoutes } from "./routes/v1/themes.js";
+import { createSearchRoutes } from "./routes/v1/search.js";
 
 type AuthErrorLogger = NonNullable<AuthOptions["errorLogger"]>;
 type AuthErrorLogEntry = Parameters<AuthErrorLogger["error"]>[0];
@@ -56,6 +64,9 @@ export interface AppDependencies {
   workspaceService?: PersonalWorkspaceProvisioner;
   noteService?: NoteService;
   themeService?: ThemeService;
+  searchService?: SearchService;
+  operatorAuthorizer?: OperatorAuthorizer;
+  jobDispatcher?: JobDispatcher;
   rateLimit?: RateLimitPort;
   clock?: Clock;
   logger?: AppSecurityLogger;
@@ -87,6 +98,12 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
   const workspaceService = dependencies.workspaceService ?? new WorkspaceService(db);
   const noteService = dependencies.noteService ?? new NoteServiceImpl(db);
   const themeService = dependencies.themeService ?? new ThemeServiceImpl(db);
+  const operatorAuthorizer =
+    dependencies.operatorAuthorizer ?? createOperatorAuthorizer(env.PHASE5_OPERATOR_IDS);
+  const jobDispatcher = dependencies.jobDispatcher ?? new PostgresJobDispatcher(db);
+  const searchService =
+    dependencies.searchService ??
+    new SearchServiceImpl(db, new PostgresSearchAdapter(db), jobDispatcher, operatorAuthorizer);
   const logger = dependencies.logger ?? defaultAppLogger;
   const rateLimit =
     dependencies.rateLimit ??
@@ -172,7 +189,8 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
     .route("/api", authRoutes)
     .route("/api/v1", createNoteRoutes(noteService))
     .route("/api/v1", createVersionRoutes(noteService))
-    .route("/api/v1", createThemeRoutes(themeService));
+    .route("/api/v1", createThemeRoutes(themeService))
+    .route("/api/v1", createSearchRoutes(searchService, operatorAuthorizer));
 
   return {
     app,

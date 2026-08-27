@@ -37,7 +37,7 @@ export const searchDocuments = pgTable(
     tags: text("tags").notNull().default(""),
     normalizedText: text("normalized_text").notNull().default(""),
     searchVector: tsvector("search_vector").generatedAlwaysAs(
-      sql`to_tsvector('english', coalesce(title, '') || ' ' || coalesce(headings, '') || ' ' || coalesce(body, ''))`,
+      sql`to_tsvector('english', coalesce(title, '') || ' ' || coalesce(headings, '') || ' ' || coalesce(body, '') || ' ' || coalesce(tags, ''))`,
     ),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -58,18 +58,10 @@ export const searchDocuments = pgTable(
       table.noteId,
     ),
     check("search_documents_revision_positive_check", sql`${table.revision} > 0`),
-    check(
-      "search_documents_title_size_check",
-      sql`octet_length(${table.title}) <= 2097152`,
-    ),
-    check(
-      "search_documents_headings_size_check",
-      sql`octet_length(${table.headings}) <= 2097152`,
-    ),
-    check(
-      "search_documents_body_size_check",
-      sql`octet_length(${table.body}) <= 2097152`,
-    ),
+    check("search_documents_title_size_check", sql`octet_length(${table.title}) <= 2097152`),
+    check("search_documents_headings_size_check", sql`octet_length(${table.headings}) <= 2097152`),
+    check("search_documents_body_size_check", sql`octet_length(${table.body}) <= 2097152`),
+    check("search_documents_tags_size_check", sql`octet_length(${table.tags}) <= 2097152`),
     check(
       "search_documents_normalized_text_size_check",
       sql`octet_length(${table.normalizedText}) <= 2097152`,

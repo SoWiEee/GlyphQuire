@@ -2,7 +2,7 @@ import { extractSearchableText, type SearchPort } from "@glyphquire/search";
 import type { JobEnvelope, SearchRebuildPayload } from "@glyphquire/api-contract/jobs";
 import { notes, type Database } from "@glyphquire/database";
 import type { JobHandler } from "@glyphquire/queue";
-import { and, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 export interface SearchRebuildNoteRow {
   noteId: string;
@@ -10,20 +10,18 @@ export interface SearchRebuildNoteRow {
   revision: number;
   title: string;
   contentMarkdown: string;
+  deletedAt: Date | null;
 }
 
 /** Narrow repository seam so the handler is unit-testable without PostgreSQL. */
 export interface SearchRebuildNoteRepository {
-  loadActiveNote(workspaceId: string, noteId: string): Promise<SearchRebuildNoteRow | undefined>;
+  loadNote(noteId: string): Promise<SearchRebuildNoteRow | undefined>;
 }
 
 export class PostgresSearchRebuildNoteRepository implements SearchRebuildNoteRepository {
   constructor(private readonly db: Database) {}
 
-  async loadActiveNote(
-    workspaceId: string,
-    noteId: string,
-  ): Promise<SearchRebuildNoteRow | undefined> {
+  async loadNote(noteId: string): Promise<SearchRebuildNoteRow | undefined> {
     const [row] = await this.db
       .select({
         noteId: notes.id,
@@ -31,11 +29,10 @@ export class PostgresSearchRebuildNoteRepository implements SearchRebuildNoteRep
         revision: notes.revision,
         title: notes.title,
         contentMarkdown: notes.contentMarkdown,
+        deletedAt: notes.deletedAt,
       })
       .from(notes)
-      .where(
-        and(eq(notes.id, noteId), eq(notes.workspaceId, workspaceId), isNull(notes.deletedAt)),
-      )
+      .where(eq(notes.id, noteId))
       .limit(1);
     return row;
   }
@@ -66,8 +63,18 @@ export function createSearchRebuildNoteHandler(
       throw new Error("JOB_INVALID: unsupported search.rebuild scope");
     }
 
-    const note = await deps.repository.loadActiveNote(payload.workspaceId, payload.noteId);
+    const note = await deps.repository.loadNote(payload.noteId);
     if (!note) {
+      await deps.searchPort.removeNote(payload.noteId);
+      return;
+    }
+    // A mismatched routing scope is invalid, not evidence that the note was
+    // deleted. Never turn a forged/corrupt cross-workspace payload into an
+    // unconditional removal by note id.
+    if (note.workspaceId !== payload.workspaceId) {
+      throw new Error("JOB_INVALID: search.rebuild workspace mismatch");
+    }
+    if (note.deletedAt !== null) {
       await deps.searchPort.removeNote(payload.noteId);
       return;
     }

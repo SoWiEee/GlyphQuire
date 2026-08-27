@@ -1,7 +1,15 @@
 import type { z } from "zod";
-import { databaseEnvSchema, authEnvSchema, appEnvSchema } from "@glyphquire/shared";
+import {
+  databaseEnvSchema,
+  authEnvSchema,
+  appEnvSchema,
+  operatorAllowlistSchema,
+} from "@glyphquire/shared";
 
-const envSchema = databaseEnvSchema.merge(authEnvSchema).merge(appEnvSchema);
+const envSchema = databaseEnvSchema
+  .merge(authEnvSchema)
+  .merge(appEnvSchema)
+  .extend({ PHASE5_OPERATOR_IDS: operatorAllowlistSchema });
 
 export type EnvInput = z.input<typeof envSchema>;
 type ParsedEnv = z.output<typeof envSchema>;

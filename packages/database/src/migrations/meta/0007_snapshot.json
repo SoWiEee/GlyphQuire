@@ -1,5 +1,5 @@
 {
-  "id": "2e5bc19c-df78-4019-92d6-56d58c821e1b",
+  "id": "ad0bb2ec-616e-43cb-a800-a7acc826e626",
   "prevId": "abd7ab08-3e57-4533-a1e1-47492c3d41d7",
   "version": "7",
   "dialect": "postgresql",
@@ -1916,7 +1916,7 @@
           "primaryKey": false,
           "notNull": false,
           "generated": {
-            "as": "to_tsvector('english', coalesce(title, '') || ' ' || coalesce(headings, '') || ' ' || coalesce(body, ''))",
+            "as": "to_tsvector('english', coalesce(title, '') || ' ' || coalesce(headings, '') || ' ' || coalesce(body, '') || ' ' || coalesce(tags, ''))",
             "type": "stored"
           }
         },
@@ -2028,6 +2028,10 @@
         "search_documents_body_size_check": {
           "name": "search_documents_body_size_check",
           "value": "octet_length(\"search_documents\".\"body\") <= 2097152"
+        },
+        "search_documents_tags_size_check": {
+          "name": "search_documents_tags_size_check",
+          "value": "octet_length(\"search_documents\".\"tags\") <= 2097152"
         },
         "search_documents_normalized_text_size_check": {
           "name": "search_documents_normalized_text_size_check",

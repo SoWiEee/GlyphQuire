@@ -6,19 +6,17 @@ import {
   type SearchRebuildNoteRepository,
   type SearchRebuildNoteRow,
 } from "./search-rebuild-note.js";
+import { jobRegistry } from "../registry.js";
 
 class FakeRepository implements SearchRebuildNoteRepository {
   readonly rows = new Map<string, SearchRebuildNoteRow>();
 
   seed(row: SearchRebuildNoteRow): void {
-    this.rows.set(`${row.workspaceId}:${row.noteId}`, row);
+    this.rows.set(row.noteId, row);
   }
 
-  async loadActiveNote(
-    workspaceId: string,
-    noteId: string,
-  ): Promise<SearchRebuildNoteRow | undefined> {
-    return this.rows.get(`${workspaceId}:${noteId}`);
+  async loadNote(noteId: string): Promise<SearchRebuildNoteRow | undefined> {
+    return this.rows.get(noteId);
   }
 }
 
@@ -54,6 +52,11 @@ function jobFor(payload: Record<string, unknown>) {
 const MARKDOWN = "---\nglyphquire-spec: 1\n---\n\n# Rebuild Target\n\nSome searchable body text.";
 
 describe("createSearchRebuildNoteHandler", () => {
+  it("registers only the static one-note search.rebuild handoff in Task 3", () => {
+    expect(Object.keys(jobRegistry)).toEqual(["search.rebuild"]);
+    expect(Object.isFrozen(jobRegistry)).toBe(true);
+  });
+
   it("re-extracts and indexes an active note", async () => {
     const workspaceId = randomUUID();
     const noteId = randomUUID();
@@ -64,6 +67,7 @@ describe("createSearchRebuildNoteHandler", () => {
       revision: 3,
       title: "Rebuild Target",
       contentMarkdown: MARKDOWN,
+      deletedAt: null,
     });
     const searchPort = new FakeSearchPort();
     const handler = createSearchRebuildNoteHandler({ repository, searchPort });
@@ -85,7 +89,7 @@ describe("createSearchRebuildNoteHandler", () => {
     expect(searchPort.indexed[0]!.body).toContain("Some searchable body text.");
   });
 
-  it("removes the index entry when the note is missing or soft-deleted", async () => {
+  it("removes the index entry when the note is missing", async () => {
     const workspaceId = randomUUID();
     const noteId = randomUUID();
     const repository = new FakeRepository(); // never seeded: not found / deleted
@@ -101,6 +105,56 @@ describe("createSearchRebuildNoteHandler", () => {
     expect(searchPort.removed).toEqual([noteId]);
   });
 
+  it("removes the index entry for a soft-deleted note in the claimed workspace", async () => {
+    const workspaceId = randomUUID();
+    const noteId = randomUUID();
+    const repository = new FakeRepository();
+    repository.seed({
+      noteId,
+      workspaceId,
+      revision: 2,
+      title: "Deleted note",
+      contentMarkdown: MARKDOWN,
+      deletedAt: new Date(),
+    });
+    const searchPort = new FakeSearchPort();
+    const handler = createSearchRebuildNoteHandler({ repository, searchPort });
+
+    await handler(
+      jobFor({ workspaceId, scope: "note", noteId, batchSize: 1 }),
+      new AbortController().signal,
+    );
+
+    expect(searchPort.indexed).toEqual([]);
+    expect(searchPort.removed).toEqual([noteId]);
+  });
+
+  it("rejects a mismatched workspace without removing another tenant's index row", async () => {
+    const actualWorkspaceId = randomUUID();
+    const claimedWorkspaceId = randomUUID();
+    const noteId = randomUUID();
+    const repository = new FakeRepository();
+    repository.seed({
+      noteId,
+      workspaceId: actualWorkspaceId,
+      revision: 1,
+      title: "Other tenant note",
+      contentMarkdown: MARKDOWN,
+      deletedAt: null,
+    });
+    const searchPort = new FakeSearchPort();
+    const handler = createSearchRebuildNoteHandler({ repository, searchPort });
+
+    await expect(
+      handler(
+        jobFor({ workspaceId: claimedWorkspaceId, scope: "note", noteId, batchSize: 1 }),
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow(/JOB_INVALID/);
+    expect(searchPort.indexed).toEqual([]);
+    expect(searchPort.removed).toEqual([]);
+  });
+
   it("is idempotent across at-least-once redelivery", async () => {
     const workspaceId = randomUUID();
     const noteId = randomUUID();
@@ -111,6 +165,7 @@ describe("createSearchRebuildNoteHandler", () => {
       revision: 1,
       title: "Rebuild Target",
       contentMarkdown: MARKDOWN,
+      deletedAt: null,
     });
     const searchPort = new FakeSearchPort();
     const handler = createSearchRebuildNoteHandler({ repository, searchPort });

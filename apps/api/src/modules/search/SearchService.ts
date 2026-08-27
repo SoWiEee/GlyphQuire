@@ -1,5 +1,6 @@
 import { notes, workspaceMembers, type Database } from "@glyphquire/database";
 import type { JobDispatcher } from "@glyphquire/queue";
+import type { SearchRebuildPayload } from "@glyphquire/api-contract/jobs";
 import {
   decodeCursor,
   encodeCursor,
@@ -19,14 +20,11 @@ function unavailable(): never {
   throw new PublicApiError("SEARCH_UNAVAILABLE", 503);
 }
 
-export interface RebuildNoteInput {
-  workspaceId: string;
-  noteId: string;
-}
+export type SearchRebuildNoteInput = Extract<SearchRebuildPayload, { scope: "note" }>;
 
 export interface SearchService {
   search(actorId: string, query: SearchQueryContract): Promise<SearchResponse>;
-  rebuildNote(actorId: string, input: RebuildNoteInput): Promise<{ enqueued: boolean }>;
+  rebuildNote(actorId: string, input: SearchRebuildNoteInput): Promise<{ enqueued: boolean }>;
 }
 
 export class SearchServiceImpl implements SearchService {
@@ -64,6 +62,7 @@ export class SearchServiceImpl implements SearchService {
     let rows: SearchResult[];
     try {
       rows = await this.searchPort.search({
+        actorId,
         workspaceId: query.workspaceId,
         q: query.q,
         cursor,
@@ -92,7 +91,10 @@ export class SearchServiceImpl implements SearchService {
     };
   }
 
-  async rebuildNote(actorId: string, input: RebuildNoteInput): Promise<{ enqueued: boolean }> {
+  async rebuildNote(
+    actorId: string,
+    input: SearchRebuildNoteInput,
+  ): Promise<{ enqueued: boolean }> {
     this.operatorAuthorizer.authorize(actorId);
 
     const [note] = await this.db
@@ -105,13 +107,7 @@ export class SearchServiceImpl implements SearchService {
     await this.dispatcher.enqueue({
       workspaceId: input.workspaceId,
       type: "search.rebuild",
-      payload: {
-        workspaceId: input.workspaceId,
-        scope: "note",
-        noteId: input.noteId,
-        batchSize: 1,
-      },
-      idempotencyKey: `search-rebuild-note-${input.noteId}`,
+      payload: input,
     });
     return { enqueued: true };
   }
