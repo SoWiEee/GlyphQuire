@@ -105,6 +105,14 @@ describe("WorkerRuntime", () => {
     } satisfies JobDispatcher;
   }
 
+  function deferred<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    const promise = new Promise<T>((resolvePromise) => {
+      resolve = resolvePromise;
+    });
+    return { promise, resolve };
+  }
+
   it("allows staged dispatch but gates activation on every P0 handler", async () => {
     const dispatcher = fakeDispatcher();
     const partial: JobRegistry = { "asset.cleanup": vi.fn() };
@@ -125,6 +133,98 @@ describe("WorkerRuntime", () => {
 
     await expect(runtime.dispatchOnce()).rejects.toThrow(/stopped/i);
     expect(dispatcher.dispatchBatch).not.toHaveBeenCalled();
+    expect(runtime.signal.aborted).toBe(true);
+  });
+
+  it("runs an injectable polling loop until its external signal is aborted", async () => {
+    const dispatcher = fakeDispatcher();
+    const externalController = new AbortController();
+    const waits: number[] = [];
+    const wait = vi.fn(async (milliseconds: number, signal: AbortSignal) => {
+      waits.push(milliseconds);
+      if (signal.aborted) return;
+      await new Promise<void>((resolve) => {
+        signal.addEventListener("abort", () => resolve(), { once: true });
+      });
+    });
+    const complete = Object.fromEntries(P0_JOB_TYPES.map((type) => [type, vi.fn()])) as JobRegistry;
+    const runtime = new WorkerRuntime(dispatcher, complete, {
+      clock: () => 12_345,
+      pollIntervalMs: 25,
+      signal: externalController.signal,
+      wait,
+    });
+
+    const running = runtime.run();
+    await vi.waitFor(() => expect(dispatcher.dispatchBatch).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(wait).toHaveBeenCalledTimes(1));
+
+    expect(runtime.now()).toBe(12_345);
+    expect(waits).toEqual([25]);
+    externalController.abort();
+
+    await expect(running).resolves.toBeUndefined();
+    expect(runtime.signal.aborted).toBe(true);
+    expect(dispatcher.dispatchBatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("aborts and drains an in-flight batch before shutdown resolves", async () => {
+    let activeSignal: AbortSignal | undefined;
+    let releaseBatch: (() => void) | undefined;
+    const batchFinished = new Promise<void>((resolve) => {
+      releaseBatch = resolve;
+    });
+    const dispatcher = {
+      enqueue: vi.fn(),
+      dispatchBatch: vi.fn(async (_registry: JobRegistry, signal?: AbortSignal) => {
+        activeSignal = signal;
+        await batchFinished;
+        return summary;
+      }),
+    } satisfies JobDispatcher;
+    const runtime = new WorkerRuntime(dispatcher, {});
+    const dispatching = runtime.dispatchOnce();
+    await vi.waitFor(() => expect(dispatcher.dispatchBatch).toHaveBeenCalledTimes(1));
+
+    let firstShutdownSettled = false;
+    const firstShutdown = runtime.shutdown().then(() => {
+      firstShutdownSettled = true;
+    });
+    const secondShutdown = runtime.shutdown();
+    await Promise.resolve();
+
+    expect(activeSignal?.aborted).toBe(true);
+    expect(firstShutdownSettled).toBe(false);
+    releaseBatch?.();
+
+    await expect(Promise.all([dispatching, firstShutdown, secondShutdown])).resolves.toBeDefined();
+    expect(dispatcher.dispatchBatch).toHaveBeenCalledTimes(1);
+    await expect(runtime.shutdown()).resolves.toBeUndefined();
+  });
+
+  it("treats an abort rejection from an in-flight loop batch as graceful shutdown", async () => {
+    const started = deferred<void>();
+    const dispatcher = {
+      enqueue: vi.fn(),
+      dispatchBatch: vi.fn(async (_registry: JobRegistry, signal?: AbortSignal) => {
+        started.resolve(undefined);
+        await new Promise<void>((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(new Error("raw abort detail")), {
+            once: true,
+          });
+        });
+        return summary;
+      }),
+    } satisfies JobDispatcher;
+    const complete = Object.fromEntries(P0_JOB_TYPES.map((type) => [type, vi.fn()])) as JobRegistry;
+    const runtime = new WorkerRuntime(dispatcher, complete);
+
+    const running = runtime.run();
+    await started.promise;
+    const shuttingDown = runtime.shutdown();
+
+    await expect(running).resolves.toBeUndefined();
+    await expect(shuttingDown).resolves.toBeUndefined();
     expect(runtime.signal.aborted).toBe(true);
   });
 });

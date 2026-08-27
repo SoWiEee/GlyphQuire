@@ -12,23 +12,36 @@ import {
   type JobRegistry,
   type PostgresJobDispatcherOptions,
 } from "@glyphquire/queue";
+import type { SearchPort } from "@glyphquire/search";
 import {
   databaseEnvSchema,
   phase5EnvSchema,
+  s3EnvSchema,
   type Phase5Env,
 } from "@glyphquire/shared";
-import { jobRegistry } from "./registry.js";
+import type { ObjectStoragePort, S3EnvLike } from "@glyphquire/storage";
+import { sql } from "drizzle-orm";
 import { WorkerRuntime, type WorkerRuntimeOptions } from "./runtime.js";
 
-export { jobRegistry } from "./registry.js";
 export { WorkerRuntime, type WorkerRuntimeOptions } from "./runtime.js";
 
-export type WorkerEnv = Phase5Env & { DATABASE_URL: string };
+export type WorkerEnv = Phase5Env & S3EnvLike & { DATABASE_URL: string };
+
+type MaybePromise<T> = T | Promise<T>;
 
 export interface WorkerFactories {
-  createDatabase(url: string): Database;
-  createDispatcher(database: Database, options: PostgresJobDispatcherOptions): JobDispatcher;
-  createIdempotencyStore(database: Database, options: IdempotencyStoreOptions): IdempotencyStore;
+  createDatabase(url: string): MaybePromise<Database>;
+  createStorage(environment: S3EnvLike): MaybePromise<ObjectStoragePort>;
+  createSearch(database: Database): MaybePromise<SearchPort>;
+  createDispatcher(
+    database: Database,
+    options: PostgresJobDispatcherOptions,
+  ): MaybePromise<JobDispatcher>;
+  createIdempotencyStore(
+    database: Database,
+    options: IdempotencyStoreOptions,
+  ): MaybePromise<IdempotencyStore>;
+  closeDatabase(database: Database): Promise<void>;
 }
 
 export interface StartWorkerOptions {
@@ -36,89 +49,188 @@ export interface StartWorkerOptions {
   registry?: JobRegistry;
   factories?: WorkerFactories;
   runtime?: WorkerRuntimeOptions;
+  signal?: AbortSignal;
 }
 
 export interface StartedWorker {
   env: WorkerEnv;
   runtime: WorkerRuntime;
   idempotencyStore: IdempotencyStore;
+  storage: ObjectStoragePort;
+  search: SearchPort;
   close(): Promise<void>;
 }
 
 const defaultFactories: WorkerFactories = {
-  createDatabase: createDb,
+  async createDatabase(url) {
+    const database = createDb(url);
+    try {
+      await database.execute(sql`select 1`);
+      return database;
+    } catch {
+      await database.$client.end().catch(() => undefined);
+      throw new Error("JOB_FAILED: database initialization failed");
+    }
+  },
+  async createStorage(environment) {
+    const { createMinioObjectStorage } = await import("@glyphquire/storage");
+    return createMinioObjectStorage(environment);
+  },
+  async createSearch(database) {
+    const { PostgresSearchAdapter } = await import("@glyphquire/search");
+    return new PostgresSearchAdapter(database);
+  },
   createDispatcher: (database, options) => new PostgresJobDispatcher(database, options),
   createIdempotencyStore: (database, options) => new IdempotencyStore(database, options),
+  closeDatabase: async (database) => database.$client.end(),
 };
 
 export function parseWorkerEnv(source: unknown): WorkerEnv {
   const database = databaseEnvSchema.safeParse(source);
+  const storage = s3EnvSchema.safeParse(source);
   const phase5 = phase5EnvSchema.safeParse(source);
-  if (!database.success || !phase5.success) {
+  if (!database.success || !storage.success || !phase5.success) {
     const issues = [
       ...(database.success ? [] : database.error.issues),
+      ...(storage.success ? [] : storage.error.issues),
       ...(phase5.success ? [] : phase5.error.issues),
     ];
     const fields = [...new Set(issues.map((issue) => issue.path.join(".")))].sort();
     throw new Error(`Invalid environment variables: ${fields.join(", ")}`);
   }
-  return { ...phase5.data, ...database.data };
+  return { ...phase5.data, ...storage.data, ...database.data };
 }
 
-export function startWorker(options: StartWorkerOptions = {}): StartedWorker {
+function throwIfStartupAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new Error("Worker startup aborted");
+}
+
+export async function startWorker(options: StartWorkerOptions = {}): Promise<StartedWorker> {
   const env = parseWorkerEnv(options.source === undefined ? process.env : options.source);
-  const registry = options.registry ?? jobRegistry;
+  // Keep the entrypoint importable before optional provider packages load so
+  // invalid configuration is always reduced to the stable startup event.
+  // The loaded registry itself remains the frozen static map in registry.ts.
+  const registry = options.registry ?? (await import("./registry.js")).jobRegistry;
   assertRegistryComplete(registry);
 
   const factories = options.factories ?? defaultFactories;
-  const database = factories.createDatabase(env.DATABASE_URL);
-  const dispatcher = factories.createDispatcher(database, {
-    lockTimeoutSeconds: env.JOB_LOCK_TIMEOUT_SECONDS,
-    maxAttempts: env.JOB_MAX_ATTEMPTS,
-    backoffBaseSeconds: env.JOB_BACKOFF_BASE_SECONDS,
-    backoffCapSeconds: env.JOB_BACKOFF_CAP_SECONDS,
-  });
-  const idempotencyStore = factories.createIdempotencyStore(database, {
-    encryptionKey: env.IDEMPOTENCY_ENCRYPTION_KEY,
-    leaseSeconds: env.IDEMPOTENCY_LEASE_SECONDS,
-  });
-  const runtime = new WorkerRuntime(dispatcher, registry, options.runtime);
-  let closed = false;
+  const signal = options.signal ?? options.runtime?.signal;
+  let database: Database | undefined;
 
-  return {
-    env,
-    runtime,
-    idempotencyStore,
-    async close() {
-      if (closed) return;
-      closed = true;
-      runtime.stop();
-      await database.$client.end();
-    },
-  };
+  try {
+    throwIfStartupAborted(signal);
+    database = await factories.createDatabase(env.DATABASE_URL);
+    throwIfStartupAborted(signal);
+    const storage = await factories.createStorage({
+      S3_ENDPOINT: env.S3_ENDPOINT,
+      S3_ACCESS_KEY: env.S3_ACCESS_KEY,
+      S3_SECRET_KEY: env.S3_SECRET_KEY,
+      S3_BUCKET: env.S3_BUCKET,
+      S3_REGION: env.S3_REGION,
+    });
+    throwIfStartupAborted(signal);
+    const search = await factories.createSearch(database);
+    throwIfStartupAborted(signal);
+    const dispatcher = await factories.createDispatcher(database, {
+      lockTimeoutSeconds: env.JOB_LOCK_TIMEOUT_SECONDS,
+      maxAttempts: env.JOB_MAX_ATTEMPTS,
+      backoffBaseSeconds: env.JOB_BACKOFF_BASE_SECONDS,
+      backoffCapSeconds: env.JOB_BACKOFF_CAP_SECONDS,
+    });
+    throwIfStartupAborted(signal);
+    const idempotencyStore = await factories.createIdempotencyStore(database, {
+      encryptionKey: env.IDEMPOTENCY_ENCRYPTION_KEY,
+      leaseSeconds: env.IDEMPOTENCY_LEASE_SECONDS,
+    });
+    throwIfStartupAborted(signal);
+    const runtime = new WorkerRuntime(dispatcher, registry, {
+      ...options.runtime,
+      signal,
+    });
+    let closeResult: Promise<void> | undefined;
+
+    return {
+      env,
+      runtime,
+      idempotencyStore,
+      storage,
+      search,
+      close() {
+        closeResult ??= runtime.shutdown().then(() => factories.closeDatabase(database!));
+        return closeResult;
+      },
+    };
+  } catch {
+    if (database) await factories.closeDatabase(database).catch(() => undefined);
+    throw new Error("JOB_FAILED: worker dependency initialization failed");
+  }
 }
 
-interface StartupFailureLogEntry {
-  event: "worker_startup_failed";
+export type WorkerProcessSignal = "SIGTERM" | "SIGINT";
+
+export interface WorkerSignalSource {
+  on(signal: WorkerProcessSignal, listener: () => void): void;
+  off(signal: WorkerProcessSignal, listener: () => void): void;
+}
+
+export interface WorkerFailureLogEntry {
+  event: "worker_startup_failed" | "worker_runtime_failed";
   code: "JOB_FAILED";
 }
 
+const processSignals: WorkerSignalSource = {
+  on: (signal, listener) => process.on(signal, listener),
+  off: (signal, listener) => process.off(signal, listener),
+};
+
+function emitFailureLog(
+  log: (entry: WorkerFailureLogEntry) => void,
+  event: WorkerFailureLogEntry["event"],
+): void {
+  try {
+    log({ event, code: "JOB_FAILED" });
+  } catch {
+    // A logging outage cannot turn a failed worker into a successful one.
+  }
+}
+
 export async function runWorkerEntrypoint(
-  start: () => StartedWorker | Promise<StartedWorker> = startWorker,
-  log: (entry: StartupFailureLogEntry) => void = (entry) => {
+  start: (signal: AbortSignal) => StartedWorker | Promise<StartedWorker> = (signal) =>
+    startWorker({ signal }),
+  log: (entry: WorkerFailureLogEntry) => void = (entry) => {
     console.error(JSON.stringify(entry));
   },
+  signals: WorkerSignalSource = processSignals,
 ): Promise<number> {
+  const controller = new AbortController();
+  let started: StartedWorker | undefined;
+  let runtimeStarted = false;
+  let cleanupFailed = false;
+  const handleSignal = () => {
+    controller.abort();
+    started?.runtime.stop();
+  };
+
+  signals.on("SIGTERM", handleSignal);
+  signals.on("SIGINT", handleSignal);
   try {
-    await start();
+    started = await start(controller.signal);
+    runtimeStarted = true;
+    if (!controller.signal.aborted) await started.runtime.run();
+    await started.close();
     return 0;
   } catch {
     try {
-      log({ event: "worker_startup_failed", code: "JOB_FAILED" });
+      await started?.close();
     } catch {
-      // A logging outage cannot turn a failed startup into a successful one.
+      cleanupFailed = true;
     }
+    if (controller.signal.aborted && !cleanupFailed) return 0;
+    emitFailureLog(log, runtimeStarted ? "worker_runtime_failed" : "worker_startup_failed");
     return 1;
+  } finally {
+    signals.off("SIGTERM", handleSignal);
+    signals.off("SIGINT", handleSignal);
   }
 }
 
