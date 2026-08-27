@@ -170,6 +170,15 @@ export interface JobStore {
  */
 export type JobDatabaseExecutor = Pick<Database, "execute" | "insert" | "select" | "update">;
 
+/**
+ * Binds enqueue persistence to a caller-owned Drizzle transaction. Services
+ * that mutate source rows and emit generic jobs use this capability to fail
+ * closed instead of silently falling back to a post-commit enqueue.
+ */
+export interface TransactionalJobDispatcher extends JobDispatcher {
+  withDatabaseExecutor(executor: JobDatabaseExecutor): JobDispatcher;
+}
+
 class PostgresJobStore implements JobStore {
   constructor(private readonly db: JobDatabaseExecutor) {}
 
@@ -341,7 +350,7 @@ function failureCode(error: unknown): string {
     : "JOB_FAILED";
 }
 
-export class PostgresJobDispatcher implements JobDispatcher {
+export class PostgresJobDispatcher implements TransactionalJobDispatcher {
   private readonly store: JobStore;
   private readonly dispatcherId: string;
   private readonly batchSize: number;
@@ -386,6 +395,18 @@ export class PostgresJobDispatcher implements JobDispatcher {
       "job backoff cap",
     );
     this.clock = options.clock ?? Date.now;
+  }
+
+  withDatabaseExecutor(executor: JobDatabaseExecutor): PostgresJobDispatcher {
+    return new PostgresJobDispatcher(executor, {
+      dispatcherId: this.dispatcherId,
+      batchSize: this.batchSize,
+      lockTimeoutSeconds: this.lockTimeoutSeconds,
+      maxAttempts: this.maxAttempts,
+      backoffBaseSeconds: this.backoffBaseSeconds,
+      backoffCapSeconds: this.backoffCapSeconds,
+      clock: this.clock,
+    });
   }
 
   async enqueue<TType extends JobType>(

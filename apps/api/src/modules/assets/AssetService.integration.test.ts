@@ -10,7 +10,12 @@ import {
   type WorkspaceRole,
 } from "@glyphquire/database";
 import { InMemoryObjectStorage } from "@glyphquire/storage";
-import type { EnqueueJobInput, JobDispatcher, JobRegistry } from "@glyphquire/queue";
+import type {
+  EnqueueJobInput,
+  JobDatabaseExecutor,
+  JobDispatcher,
+  JobRegistry,
+} from "@glyphquire/queue";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PublicApiError } from "../../middleware/error-handler.js";
@@ -46,6 +51,10 @@ async function addMember(db: Database, workspaceId: string, userId: string, role
 
 class FakeJobDispatcher implements JobDispatcher {
   readonly enqueued: EnqueueJobInput<never>[] = [];
+
+  withDatabaseExecutor(_executor: JobDatabaseExecutor): JobDispatcher {
+    return this;
+  }
 
   async enqueue<TType extends never>(
     input: EnqueueJobInput<TType>,
@@ -238,7 +247,12 @@ describeWithPostgres("AssetService", () => {
     const storage = new InMemoryObjectStorage();
     const service = makeService(storage, new FakeJobDispatcher());
 
-    const result = await service.create(fixture.owner, fixture.workspaceId, createInput(), randomUUID());
+    const result = await service.create(
+      fixture.owner,
+      fixture.workspaceId,
+      createInput(),
+      randomUUID(),
+    );
     const [row] = await db.select().from(assets).where(eq(assets.id, result.id));
     expect(row!.objectKey).toBe(`workspace/${fixture.workspaceId}/assets/${result.id}/original`);
     expect(storage.has(row!.objectKey)).toBe(true);
@@ -338,7 +352,12 @@ describeWithPostgres("AssetService", () => {
     const fixture = await buildFixture(db);
     const storage = new InMemoryObjectStorage();
     const service = makeService(storage, new FakeJobDispatcher());
-    const created = await service.create(fixture.owner, fixture.workspaceId, createInput(), randomUUID());
+    const created = await service.create(
+      fixture.owner,
+      fixture.workspaceId,
+      createInput(),
+      randomUUID(),
+    );
 
     const missing = await captureApiError(() => service.get(fixture.owner, randomUUID()));
     expect(missing).toEqual({ code: "ASSET_INVALID", status: 404 });
@@ -356,7 +375,12 @@ describeWithPostgres("AssetService", () => {
     const storage = new InMemoryObjectStorage();
     const dispatcher = new FakeJobDispatcher();
     const service = makeService(storage, dispatcher);
-    const created = await service.create(fixture.owner, fixture.workspaceId, createInput(), randomUUID());
+    const created = await service.create(
+      fixture.owner,
+      fixture.workspaceId,
+      createInput(),
+      randomUUID(),
+    );
 
     const key = randomUUID();
     const first = await service.delete(fixture.owner, created.id, key);
@@ -380,9 +404,16 @@ describeWithPostgres("AssetService", () => {
     const fixture = await buildFixture(db);
     const storage = new InMemoryObjectStorage();
     const service = makeService(storage, new FakeJobDispatcher());
-    const created = await service.create(fixture.owner, fixture.workspaceId, createInput(), randomUUID());
+    const created = await service.create(
+      fixture.owner,
+      fixture.workspaceId,
+      createInput(),
+      randomUUID(),
+    );
 
-    const error = await captureApiError(() => service.delete(fixture.viewer, created.id, randomUUID()));
+    const error = await captureApiError(() =>
+      service.delete(fixture.viewer, created.id, randomUUID()),
+    );
     expect(error).toEqual({ code: "ASSET_INVALID", status: 404 });
   });
 
@@ -390,7 +421,12 @@ describeWithPostgres("AssetService", () => {
     const fixture = await buildFixture(db);
     const storage = new InMemoryObjectStorage();
     const service = makeService(storage, new FakeJobDispatcher());
-    const created = await service.create(fixture.owner, fixture.workspaceId, createInput(), randomUUID());
+    const created = await service.create(
+      fixture.owner,
+      fixture.workspaceId,
+      createInput(),
+      randomUUID(),
+    );
 
     const withUrl = await service.getDownloadUrl(fixture.viewer, created.id);
     expect(withUrl.downloadUrl).toBeTruthy();
@@ -405,7 +441,12 @@ describeWithPostgres("AssetService", () => {
     const fixture = await buildFixture(db);
     const storage = new InMemoryObjectStorage();
     const service = makeService(storage, new FakeJobDispatcher());
-    const created = await service.create(fixture.owner, fixture.workspaceId, createInput(), randomUUID());
+    const created = await service.create(
+      fixture.owner,
+      fixture.workspaceId,
+      createInput(),
+      randomUUID(),
+    );
 
     const error = await captureApiError(() => service.getThumbnailUrl(fixture.owner, created.id));
     expect(error).toEqual({ code: "ASSET_INVALID", status: 400 });
@@ -415,7 +456,12 @@ describeWithPostgres("AssetService", () => {
     const fixture = await buildFixture(db);
     const storage = new InMemoryObjectStorage();
     const service = makeService(storage, new FakeJobDispatcher());
-    const created = await service.create(fixture.owner, fixture.workspaceId, createInput(), randomUUID());
+    const created = await service.create(
+      fixture.owner,
+      fixture.workspaceId,
+      createInput(),
+      randomUUID(),
+    );
 
     const thumbnailKey = `workspace/${fixture.workspaceId}/assets/${created.id}/thumbnail.webp`;
     const thumbnailBody = Buffer.from("fake-webp-bytes");

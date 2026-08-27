@@ -9,7 +9,12 @@ import {
   type Database,
 } from "@glyphquire/database";
 import { InMemoryObjectStorage } from "@glyphquire/storage";
-import type { EnqueueJobInput, JobDispatcher, JobRegistry } from "@glyphquire/queue";
+import type {
+  EnqueueJobInput,
+  JobDatabaseExecutor,
+  JobDispatcher,
+  JobRegistry,
+} from "@glyphquire/queue";
 import { eq } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -33,6 +38,10 @@ const baseUrl = "http://localhost:3000";
 class FakeJobDispatcher implements JobDispatcher {
   readonly enqueued: EnqueueJobInput<never>[] = [];
 
+  withDatabaseExecutor(_executor: JobDatabaseExecutor): JobDispatcher {
+    return this;
+  }
+
   async enqueue<TType extends never>(
     input: EnqueueJobInput<TType>,
   ): Promise<{ id: string; duplicate: boolean }> {
@@ -46,10 +55,7 @@ class FakeJobDispatcher implements JobDispatcher {
 }
 
 function testAuthMiddleware() {
-  return async (
-    context: Context<{ Variables: SecurityVariables }>,
-    next: () => Promise<void>,
-  ) => {
+  return async (context: Context<{ Variables: SecurityVariables }>, next: () => Promise<void>) => {
     const actorId = context.req.header("x-test-actor-id");
     if (!actorId) return context.json({ error: { code: "NOTE_NOT_FOUND" } }, 404);
     context.set("requestContext", {
@@ -68,7 +74,12 @@ function buildApp(assetService: AssetServiceImpl) {
     .route("/api/v1", createAssetRoutes(assetService));
 }
 
-function v1(app: ReturnType<typeof buildApp>, path: string, actorId: string, init: RequestInit = {}) {
+function v1(
+  app: ReturnType<typeof buildApp>,
+  path: string,
+  actorId: string,
+  init: RequestInit = {},
+) {
   const headers = new Headers(init.headers);
   headers.set("x-test-actor-id", actorId);
   return app.request(`${baseUrl}/api/v1${path}`, { ...init, headers });
@@ -125,11 +136,16 @@ describeWithPostgres("asset routes", () => {
     const body = Buffer.alloc(64, 1);
     Buffer.from([0x89, 0x50, 0x4e, 0x47]).copy(body);
 
-    const createResponse = await v1(app, `/workspaces/${fixture.workspaceId}/assets`, fixture.owner, {
-      method: "POST",
-      headers: { "idempotency-key": randomUUID() },
-      body: multipartBody("photo.png", "image/png", body),
-    });
+    const createResponse = await v1(
+      app,
+      `/workspaces/${fixture.workspaceId}/assets`,
+      fixture.owner,
+      {
+        method: "POST",
+        headers: { "idempotency-key": randomUUID() },
+        body: multipartBody("photo.png", "image/png", body),
+      },
+    );
     expect(createResponse.status).toBe(201);
     const created = (await createResponse.json()) as { id: string; originalName: string };
     expect(created.originalName).toBe("photo.png");
@@ -158,11 +174,16 @@ describeWithPostgres("asset routes", () => {
     const fixture = await buildFixture();
     const { app } = freshApp();
     const body = Buffer.alloc(16, 2);
-    const createResponse = await v1(app, `/workspaces/${fixture.workspaceId}/assets`, fixture.owner, {
-      method: "POST",
-      headers: { "idempotency-key": randomUUID() },
-      body: multipartBody("secret.txt", "text/plain", body),
-    });
+    const createResponse = await v1(
+      app,
+      `/workspaces/${fixture.workspaceId}/assets`,
+      fixture.owner,
+      {
+        method: "POST",
+        headers: { "idempotency-key": randomUUID() },
+        body: multipartBody("secret.txt", "text/plain", body),
+      },
+    );
     const created = (await createResponse.json()) as { id: string };
 
     const response = await v1(app, `/assets/${created.id}`, fixture.outsider);
@@ -196,11 +217,16 @@ describeWithPostgres("asset routes", () => {
     const fixture = await buildFixture();
     const { app, storage } = freshApp();
     const body = Buffer.alloc(16, 3);
-    const createResponse = await v1(app, `/workspaces/${fixture.workspaceId}/assets`, fixture.owner, {
-      method: "POST",
-      headers: { "idempotency-key": randomUUID() },
-      body: multipartBody("thumb.png", "image/png", body),
-    });
+    const createResponse = await v1(
+      app,
+      `/workspaces/${fixture.workspaceId}/assets`,
+      fixture.owner,
+      {
+        method: "POST",
+        headers: { "idempotency-key": randomUUID() },
+        body: multipartBody("thumb.png", "image/png", body),
+      },
+    );
     const created = (await createResponse.json()) as { id: string };
 
     const notReady = await v1(app, `/assets/${created.id}/thumbnail`, fixture.owner);

@@ -9,7 +9,7 @@ import {
 import type { ObjectStoragePort } from "@glyphquire/storage";
 import type { AssetResponse } from "@glyphquire/api-contract";
 import { assetResponseSchema } from "@glyphquire/api-contract";
-import type { JobDispatcher } from "@glyphquire/queue";
+import type { JobDispatcher, TransactionalJobDispatcher } from "@glyphquire/queue";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { PublicApiError } from "../../middleware/error-handler.js";
 import {
@@ -33,12 +33,17 @@ export interface AssetServiceLimits {
   maxBytes: number;
   workspaceQuotaBytes: number;
   downloadUrlExpirySeconds: number;
+  assetDeleteGraceDays: number;
 }
+
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000;
+const MAX_ASSET_DELETE_GRACE_DAYS = 3_650;
 
 const DEFAULT_LIMITS: AssetServiceLimits = {
   maxBytes: 5 * 1024 * 1024,
   workspaceQuotaBytes: 100 * 1024 * 1024,
   downloadUrlExpirySeconds: 300,
+  assetDeleteGraceDays: 30,
 };
 
 /**
@@ -48,13 +53,15 @@ const DEFAULT_LIMITS: AssetServiceLimits = {
  * transaction back automatically (nothing external was written). A failure
  * that occurs *after* the object write (surfaced via afterObjectPut) still
  * rolls the DB transaction back, so the service explicitly compensates by
- * deleting the now-orphaned object.
+ * deleting the now-orphaned object. afterDeleteJobInsert exercises the delete
+ * transaction after both the soft-delete row and cleanup job have been written.
  */
 export interface AssetServiceHooks {
   beforeDbInsert?(): void | Promise<void>;
   afterDbInsert?(): void | Promise<void>;
   beforeObjectPut?(): void | Promise<void>;
   afterObjectPut?(): void | Promise<void>;
+  afterDeleteJobInsert?(): void | Promise<void>;
 }
 
 export interface AssetService {
@@ -107,6 +114,18 @@ function toAssetResponse(row: Asset): AssetResponse {
   return base;
 }
 
+type DbTransaction = Parameters<Database["transaction"]>[0] extends (tx: infer Tx) => unknown
+  ? Tx
+  : never;
+
+function isTransactionalDispatcher(
+  dispatcher: JobDispatcher,
+): dispatcher is TransactionalJobDispatcher {
+  return (
+    "withDatabaseExecutor" in dispatcher && typeof dispatcher.withDatabaseExecutor === "function"
+  );
+}
+
 export class AssetServiceImpl implements AssetService {
   private readonly limits: AssetServiceLimits;
 
@@ -119,6 +138,20 @@ export class AssetServiceImpl implements AssetService {
     private readonly hooks: AssetServiceHooks = {},
   ) {
     this.limits = { ...DEFAULT_LIMITS, ...limits };
+    if (
+      !Number.isInteger(this.limits.assetDeleteGraceDays) ||
+      this.limits.assetDeleteGraceDays < 1 ||
+      this.limits.assetDeleteGraceDays > MAX_ASSET_DELETE_GRACE_DAYS
+    ) {
+      throw new Error("Invalid asset delete grace days");
+    }
+  }
+
+  private transactionDispatcher(tx: DbTransaction): JobDispatcher {
+    if (!isTransactionalDispatcher(this.dispatcher)) {
+      throw new Error("JOB_FAILED: transactional enqueue unavailable");
+    }
+    return this.dispatcher.withDatabaseExecutor(tx);
   }
 
   private async requireMembership(actorId: string, workspaceId: string): Promise<void> {
@@ -232,7 +265,10 @@ export class AssetServiceImpl implements AssetService {
       .from(assets)
       .innerJoin(
         workspaceMembers,
-        and(eq(workspaceMembers.workspaceId, assets.workspaceId), eq(workspaceMembers.userId, actorId)),
+        and(
+          eq(workspaceMembers.workspaceId, assets.workspaceId),
+          eq(workspaceMembers.userId, actorId),
+        ),
       )
       .where(and(eq(assets.id, assetId), isNull(assets.deletedAt)))
       .limit(1);
@@ -253,7 +289,10 @@ export class AssetServiceImpl implements AssetService {
       .from(assets)
       .innerJoin(
         workspaceMembers,
-        and(eq(workspaceMembers.workspaceId, assets.workspaceId), eq(workspaceMembers.userId, actorId)),
+        and(
+          eq(workspaceMembers.workspaceId, assets.workspaceId),
+          eq(workspaceMembers.userId, actorId),
+        ),
       )
       .where(eq(assets.id, assetId))
       .limit(1);
@@ -303,26 +342,40 @@ export class AssetServiceImpl implements AssetService {
     if (lease.kind === "conflict") throw new PublicApiError("OPERATION_REUSED", 409);
     if (lease.kind === "in_progress") throw new PublicApiError("OPERATION_REUSED", 409);
 
-    const [updated] = await this.db
-      .update(assets)
-      .set({ deletedAt: new Date() })
-      .where(and(eq(assets.id, assetId), isNull(assets.deletedAt)))
-      .returning();
+    const current = await this.db.transaction(async (tx) => {
+      const deletedAt = new Date();
+      const [updated] = await tx
+        .update(assets)
+        .set({ deletedAt })
+        .where(and(eq(assets.id, assetId), isNull(assets.deletedAt)))
+        .returning();
 
-    if (updated) {
-      await this.dispatcher.enqueue({
-        workspaceId: asset.workspaceId,
+      if (!updated) {
+        // The row loaded before this transaction can be stale when a
+        // differently-keyed delete wins the row lock. Reload inside the
+        // transaction so this request records and replays the winner's
+        // authoritative deletedAt value without emitting a second job.
+        const [reloaded] = await tx.select().from(assets).where(eq(assets.id, assetId)).limit(1);
+        if (!reloaded) notFound();
+        return reloaded;
+      }
+
+      const runAt = new Date(
+        deletedAt.getTime() + this.limits.assetDeleteGraceDays * MILLISECONDS_PER_DAY,
+      );
+      await this.transactionDispatcher(tx).enqueue({
+        workspaceId: updated.workspaceId,
         type: "asset.cleanup",
-        payload: { workspaceId: asset.workspaceId, assetId },
-        idempotencyKey: `asset-cleanup-${assetId}`,
+        payload: { workspaceId: updated.workspaceId, assetId: updated.id },
+        idempotencyKey: `asset-cleanup-${updated.id}`,
+        runAt,
       });
-    }
+      await this.hooks.afterDeleteJobInsert?.();
 
-    // If a differently-keyed request already deleted this asset first,
-    // `updated` is undefined; fall back to the row loaded above (which
-    // already reflects the deleted state) so the response stays idempotent
-    // without a duplicate cleanup enqueue.
-    const response = toAssetResponse(updated ?? asset);
+      return updated;
+    });
+
+    const response = toAssetResponse(current);
     await this.idempotencyStore.complete(lease.recordId, lease.leaseToken, response);
     return response;
   }
