@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { CreateBucketCommand, S3Client } from "@aws-sdk/client-s3";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ObjectStorageError } from "./port.js";
 import { S3ObjectStorage } from "./s3.js";
 import { InMemoryObjectStorage } from "./fake.js";
@@ -54,7 +54,18 @@ describe("S3ObjectStorage against MinIO", () => {
   }, 30_000);
 
   afterAll(() => {
+    storage.destroy();
     admin.destroy();
+  });
+
+  it("destroys its owned S3 client once", () => {
+    const client = (storage as unknown as { client: S3Client }).client;
+    const destroy = vi.spyOn(client, "destroy");
+
+    storage.destroy();
+    storage.destroy();
+
+    expect(destroy).toHaveBeenCalledTimes(1);
   });
 
   it("round-trips an object through put/get/delete", async () => {
@@ -139,6 +150,12 @@ describe("S3ObjectStorage against MinIO", () => {
 });
 
 describe("InMemoryObjectStorage", () => {
+  it("provides a safe no-op destroy method", () => {
+    const storage = new InMemoryObjectStorage();
+
+    expect(() => storage.destroy()).not.toThrow();
+  });
+
   it("round-trips and rejects a checksum mismatch", async () => {
     const storage = new InMemoryObjectStorage();
     const body = Buffer.from("in-memory");

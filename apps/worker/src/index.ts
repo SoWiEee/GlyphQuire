@@ -42,6 +42,7 @@ export interface WorkerFactories {
     database: Database,
     options: IdempotencyStoreOptions,
   ): MaybePromise<IdempotencyStore>;
+  closeStorage(storage: ObjectStoragePort): Promise<void>;
   closeDatabase(database: Database): Promise<void>;
 }
 
@@ -83,6 +84,7 @@ const defaultFactories: WorkerFactories = {
   },
   createDispatcher: (database, options) => new PostgresJobDispatcher(database, options),
   createIdempotencyStore: (database, options) => new IdempotencyStore(database, options),
+  closeStorage: async (storage) => storage.destroy(),
   closeDatabase: async (database) => database.$client.end(),
 };
 
@@ -106,6 +108,32 @@ function throwIfStartupAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) throw new Error("Worker startup aborted");
 }
 
+async function closeInitializedResources(
+  factories: WorkerFactories,
+  storage: ObjectStoragePort | undefined,
+  database: Database | undefined,
+): Promise<void> {
+  let firstError: unknown;
+
+  if (storage) {
+    try {
+      await factories.closeStorage(storage);
+    } catch (error) {
+      firstError = error;
+    }
+  }
+
+  if (database) {
+    try {
+      await factories.closeDatabase(database);
+    } catch (error) {
+      firstError ??= error;
+    }
+  }
+
+  if (firstError) throw firstError;
+}
+
 export async function startWorker(options: StartWorkerOptions = {}): Promise<StartedWorker> {
   const env = parseWorkerEnv(options.source === undefined ? process.env : options.source);
   // Keep the entrypoint importable before optional provider packages load so
@@ -118,12 +146,13 @@ export async function startWorker(options: StartWorkerOptions = {}): Promise<Sta
   const factories = options.factories ?? defaultFactories;
   const signal = options.signal ?? options.runtime?.signal;
   let database: Database | undefined;
+  let storage: ObjectStoragePort | undefined;
 
   try {
     throwIfStartupAborted(signal);
     database = await factories.createDatabase(env.DATABASE_URL);
     throwIfStartupAborted(signal);
-    const storage = await factories.createStorage({
+    storage = await factories.createStorage({
       S3_ENDPOINT: env.S3_ENDPOINT,
       S3_ACCESS_KEY: env.S3_ACCESS_KEY,
       S3_SECRET_KEY: env.S3_SECRET_KEY,
@@ -165,12 +194,14 @@ export async function startWorker(options: StartWorkerOptions = {}): Promise<Sta
       storage,
       search,
       close() {
-        closeResult ??= runtime.shutdown().then(() => factories.closeDatabase(database!));
+        closeResult ??= runtime
+          .shutdown()
+          .then(() => closeInitializedResources(factories, storage, database));
         return closeResult;
       },
     };
   } catch {
-    if (database) await factories.closeDatabase(database).catch(() => undefined);
+    await closeInitializedResources(factories, storage, database).catch(() => undefined);
     throw new Error("JOB_FAILED: worker dependency initialization failed");
   }
 }

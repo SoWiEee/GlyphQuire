@@ -38,6 +38,7 @@ interface WorkerFactories {
     database: unknown,
     options: IdempotencyStoreOptions,
   ): unknown | Promise<unknown>;
+  closeStorage(storage: ObjectStoragePort): Promise<void>;
   closeDatabase(database: unknown): Promise<void>;
 }
 
@@ -108,6 +109,7 @@ function fakeStorage(): ObjectStoragePort {
     get: vi.fn(),
     delete: vi.fn(),
     createDownloadUrl: vi.fn(),
+    destroy: vi.fn(),
   };
 }
 
@@ -129,13 +131,19 @@ function fakeFactories() {
   const search = fakeSearch();
   const dispatcher = fakeDispatcher();
   const idempotencyStore = { marker: "idempotency" };
+  const closeOrder: string[] = [];
   const factories: WorkerFactories = {
     createDatabase: vi.fn(() => database),
     createStorage: vi.fn(() => storage),
     createSearch: vi.fn(() => search),
     createDispatcher: vi.fn(() => dispatcher),
     createIdempotencyStore: vi.fn(() => idempotencyStore),
+    closeStorage: vi.fn(async (resource) => {
+      closeOrder.push("storage");
+      resource.destroy();
+    }),
     closeDatabase: vi.fn(async () => {
+      closeOrder.push("database");
       await databaseEnd();
     }),
   };
@@ -146,6 +154,7 @@ function fakeFactories() {
     search,
     dispatcher,
     idempotencyStore,
+    closeOrder,
     factories,
   };
 }
@@ -348,9 +357,35 @@ describe("production worker startup", () => {
     expect(JSON.stringify(logs)).not.toContain(baseEnvironment.S3_SECRET_KEY);
     expect(JSON.stringify(logs)).not.toContain("hunter2");
     expect(factories.closeDatabase).toHaveBeenCalledTimes(1);
+    expect(factories.closeStorage).not.toHaveBeenCalled();
     expect(factories.createSearch).not.toHaveBeenCalled();
     expect(factories.createDispatcher).not.toHaveBeenCalled();
   });
+
+  it.each(["createSearch", "createDispatcher"] as const)(
+    "closes initialized storage before database when %s fails",
+    async (failedFactory) => {
+      const { database, storage, factories, closeOrder } = fakeFactories();
+      factories[failedFactory] = vi.fn(async () => {
+        throw new Error(`${failedFactory} raw failure`);
+      }) as never;
+
+      await expect(
+        getStartWorker()({
+          source: baseEnvironment,
+          registry: completeRegistry(),
+          factories,
+        }),
+      ).rejects.toThrow("JOB_FAILED: worker dependency initialization failed");
+
+      expect(factories.closeStorage).toHaveBeenCalledTimes(1);
+      expect(factories.closeStorage).toHaveBeenCalledWith(storage);
+      expect(storage.destroy).toHaveBeenCalledTimes(1);
+      expect(factories.closeDatabase).toHaveBeenCalledTimes(1);
+      expect(factories.closeDatabase).toHaveBeenCalledWith(database);
+      expect(closeOrder).toEqual(["storage", "database"]);
+    },
+  );
 
   it.each(["SIGTERM", "SIGINT"] as const)(
     "awaits the long-lived process and handles %s as an idempotent graceful stop",
@@ -391,7 +426,7 @@ describe("production worker startup", () => {
 
   it("does not close PostgreSQL until an owned in-flight batch has settled", async () => {
     const batchFinished = deferred<void>();
-    const { database, dispatcher, factories } = fakeFactories();
+    const { database, storage, dispatcher, factories } = fakeFactories();
     vi.mocked(dispatcher.dispatchBatch).mockImplementation(async () => {
       await batchFinished.promise;
       return { claimed: 1, succeeded: 1, retried: 0, deadLettered: 0 };
@@ -407,12 +442,32 @@ describe("production worker startup", () => {
     const firstClose = started.close();
     const secondClose = started.close();
     await Promise.resolve();
+    expect(factories.closeStorage).not.toHaveBeenCalled();
     expect(factories.closeDatabase).not.toHaveBeenCalled();
 
     batchFinished.resolve(undefined);
     await expect(Promise.all([dispatching, firstClose, secondClose])).resolves.toBeDefined();
+    expect(factories.closeStorage).toHaveBeenCalledTimes(1);
+    expect(factories.closeStorage).toHaveBeenCalledWith(storage);
     expect(factories.closeDatabase).toHaveBeenCalledTimes(1);
     expect(factories.closeDatabase).toHaveBeenCalledWith(database);
+  });
+
+  it("closes storage and database once on an idempotent normal shutdown", async () => {
+    const { storage, factories, closeOrder } = fakeFactories();
+    const started = await getStartWorker()({
+      source: baseEnvironment,
+      registry: completeRegistry(),
+      factories,
+    });
+
+    await Promise.all([started.close(), started.close(), started.close()]);
+
+    expect(factories.closeStorage).toHaveBeenCalledTimes(1);
+    expect(factories.closeStorage).toHaveBeenCalledWith(storage);
+    expect(storage.destroy).toHaveBeenCalledTimes(1);
+    expect(factories.closeDatabase).toHaveBeenCalledTimes(1);
+    expect(closeOrder).toEqual(["storage", "database"]);
   });
 
   it("dispatches the first claim through handlers bound to the ready dependencies", async () => {

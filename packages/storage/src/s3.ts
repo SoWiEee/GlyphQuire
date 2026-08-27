@@ -45,6 +45,7 @@ function assertSafeKey(key: string): void {
 export class S3ObjectStorage implements ObjectStoragePort {
   private readonly client: S3Client;
   private readonly bucket: string;
+  private destroyed = false;
 
   constructor(options: S3ObjectStorageOptions) {
     this.bucket = options.bucket;
@@ -57,6 +58,12 @@ export class S3ObjectStorage implements ObjectStoragePort {
         secretAccessKey: options.secretAccessKey,
       },
     });
+  }
+
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    this.client.destroy();
   }
 
   async put(input: ObjectStoragePutInput): Promise<ObjectStoragePutResult> {

@@ -23,6 +23,8 @@ export class InMemoryObjectStorage implements ObjectStoragePort {
 
   constructor(private readonly hooks: InMemoryObjectStorageHooks = {}) {}
 
+  destroy(): void {}
+
   async put(input: ObjectStoragePutInput): Promise<ObjectStoragePutResult> {
     await this.hooks.beforePut?.(input);
     if (input.contentLength !== input.body.byteLength) {

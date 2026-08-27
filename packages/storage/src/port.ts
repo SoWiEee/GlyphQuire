@@ -20,6 +20,7 @@ export interface ObjectStoragePort {
   get(key: string): Promise<ReadableStream<Uint8Array>>;
   delete(key: string): Promise<void>;
   createDownloadUrl(key: string, expiresInSeconds: number): Promise<string>;
+  destroy(): void;
 }
 
 export class ObjectStorageError extends Error {
