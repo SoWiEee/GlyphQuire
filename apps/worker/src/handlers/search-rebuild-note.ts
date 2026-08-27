@@ -1,4 +1,4 @@
-import { extractSearchableText, type SearchPort } from "@glyphquire/search";
+import { extractSearchableText, type DerivedSearchMutationPort } from "@glyphquire/search";
 import type { JobEnvelope, SearchRebuildPayload } from "@glyphquire/api-contract/jobs";
 import { notes, type Database } from "@glyphquire/database";
 import type { JobHandler } from "@glyphquire/queue";
@@ -40,7 +40,7 @@ export class PostgresSearchRebuildNoteRepository implements SearchRebuildNoteRep
 
 export interface SearchRebuildNoteHandlerDeps {
   repository: SearchRebuildNoteRepository;
-  searchPort: SearchPort;
+  searchPort: DerivedSearchMutationPort;
 }
 
 /**
@@ -65,7 +65,10 @@ export function createSearchRebuildNoteHandler(
 
     const note = await deps.repository.loadNote(payload.noteId);
     if (!note) {
-      await deps.searchPort.removeNote(payload.noteId);
+      await deps.searchPort.removeNoteIfMissing({
+        noteId: payload.noteId,
+        workspaceId: payload.workspaceId,
+      });
       return;
     }
     // A mismatched routing scope is invalid, not evidence that the note was
@@ -75,12 +78,16 @@ export function createSearchRebuildNoteHandler(
       throw new Error("JOB_INVALID: search.rebuild workspace mismatch");
     }
     if (note.deletedAt !== null) {
-      await deps.searchPort.removeNote(payload.noteId);
+      await deps.searchPort.removeNoteIfCurrent({
+        noteId: note.noteId,
+        workspaceId: note.workspaceId,
+        revision: note.revision,
+      });
       return;
     }
 
     const extracted = extractSearchableText(note.title, note.contentMarkdown);
-    await deps.searchPort.indexNote({
+    await deps.searchPort.indexNoteIfCurrent({
       noteId: note.noteId,
       workspaceId: note.workspaceId,
       revision: note.revision,

@@ -1,7 +1,7 @@
 import type { JobEnvelope, SearchRemovePayload } from "@glyphquire/api-contract/jobs";
 import { notes, type Database } from "@glyphquire/database";
 import type { JobHandler } from "@glyphquire/queue";
-import type { SearchPort } from "@glyphquire/search";
+import type { DerivedSearchMutationPort } from "@glyphquire/search";
 import { eq } from "drizzle-orm";
 
 export interface SearchRemoveNoteRow {
@@ -35,7 +35,7 @@ export class PostgresSearchRemoveRepository implements SearchRemoveRepository {
 
 export interface SearchRemoveHandlerDeps {
   repository: SearchRemoveRepository;
-  searchPort: SearchPort;
+  searchPort: DerivedSearchMutationPort;
 }
 
 export function createSearchRemoveHandler(
@@ -58,7 +58,11 @@ export function createSearchRemoveHandler(
     }
 
     try {
-      await deps.searchPort.removeNote(payload.noteId);
+      await deps.searchPort.removeNoteIfCurrent({
+        noteId: payload.noteId,
+        workspaceId: payload.workspaceId,
+        revision: payload.revision,
+      });
     } catch {
       throw new Error("JOB_FAILED");
     }

@@ -1,5 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { SearchPort, SearchQuery, SearchResult, SearchableNote } from "@glyphquire/search";
+import type {
+  DerivedSearchMissingTarget,
+  DerivedSearchMutationPort,
+  DerivedSearchMutationTarget,
+  SearchPort,
+  SearchQuery,
+  SearchResult,
+  SearchableNote,
+} from "@glyphquire/search";
 import { assertRegistryComplete } from "@glyphquire/queue";
 import { InMemoryObjectStorage } from "@glyphquire/storage";
 import { describe, expect, it } from "vitest";
@@ -58,29 +66,103 @@ class FakeAssetCleanupRepository implements AssetCleanupRepository {
   }
 }
 
-class MemorySearchPort implements SearchPort {
+interface CurrentSearchSource {
+  noteId: string;
+  workspaceId: string;
+  revision: number;
+  deletedAt: Date | null;
+}
+
+class MemorySearchPort implements SearchPort, DerivedSearchMutationPort {
   readonly documents = new Map<string, SearchableNote>();
   readonly indexed: SearchableNote[] = [];
   readonly removed: string[] = [];
   indexFailure: Error | undefined;
   removeFailure: Error | undefined;
+  beforeIndex: (() => Promise<void>) | undefined;
+  beforeRemove: (() => Promise<void>) | undefined;
 
-  async indexNote(note: SearchableNote): Promise<void> {
-    if (this.indexFailure) throw this.indexFailure;
+  constructor(
+    private readonly currentSource?: (noteId: string) => CurrentSearchSource | undefined,
+  ) {}
+
+  private applyIndex(note: SearchableNote): void {
     this.indexed.push(note);
     const existing = this.documents.get(note.noteId);
     if (!existing || existing.revision < note.revision) this.documents.set(note.noteId, note);
   }
 
-  async removeNote(noteId: string): Promise<void> {
-    if (this.removeFailure) throw this.removeFailure;
+  private applyRemove(noteId: string): void {
     this.removed.push(noteId);
     this.documents.delete(noteId);
+  }
+
+  async indexNote(note: SearchableNote): Promise<void> {
+    await this.beforeIndex?.();
+    if (this.indexFailure) throw this.indexFailure;
+    this.applyIndex(note);
+  }
+
+  async indexNoteIfCurrent(note: SearchableNote): Promise<void> {
+    await this.beforeIndex?.();
+    if (this.indexFailure) throw this.indexFailure;
+    if (this.currentSource) {
+      const source = this.currentSource(note.noteId);
+      if (
+        !source ||
+        source.noteId !== note.noteId ||
+        source.workspaceId !== note.workspaceId ||
+        source.revision !== note.revision ||
+        source.deletedAt !== null
+      ) {
+        return;
+      }
+    }
+    this.applyIndex(note);
+  }
+
+  async removeNote(noteId: string): Promise<void> {
+    await this.beforeRemove?.();
+    if (this.removeFailure) throw this.removeFailure;
+    this.applyRemove(noteId);
+  }
+
+  async removeNoteIfCurrent(target: DerivedSearchMutationTarget): Promise<void> {
+    await this.beforeRemove?.();
+    if (this.removeFailure) throw this.removeFailure;
+    if (this.currentSource) {
+      const source = this.currentSource(target.noteId);
+      if (
+        source &&
+        (source.noteId !== target.noteId ||
+          source.workspaceId !== target.workspaceId ||
+          source.revision !== target.revision ||
+          source.deletedAt === null)
+      ) {
+        return;
+      }
+    }
+    this.applyRemove(target.noteId);
+  }
+
+  async removeNoteIfMissing(target: DerivedSearchMissingTarget): Promise<void> {
+    await this.beforeRemove?.();
+    if (this.removeFailure) throw this.removeFailure;
+    if (this.currentSource?.(target.noteId)) return;
+    this.applyRemove(target.noteId);
   }
 
   async search(_query: SearchQuery): Promise<SearchResult[]> {
     return [];
   }
+}
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
 }
 
 function searchIndexJob(workspaceId: string, noteId: string, revision: number) {
@@ -263,6 +345,49 @@ describe("search.index handler", () => {
     expect(repository.loaded).toEqual([noteId]);
     expect(searchPort.indexed).toEqual([]);
     expect(searchPort.removed).toEqual([]);
+  });
+
+  it("does not re-index a stale revision when deletion commits after the source read", async () => {
+    const workspaceId = randomUUID();
+    const noteId = randomUUID();
+    const repository = new FakeSearchIndexRepository();
+    let currentSource: SearchIndexNoteRow = {
+      noteId,
+      workspaceId,
+      revision: 4,
+      title: "Active revision",
+      contentMarkdown: MARKDOWN,
+      deletedAt: null,
+    };
+    repository.row = currentSource;
+    const searchPort = new MemorySearchPort(() => currentSource);
+    const mutationEntered = deferred();
+    const releaseMutation = deferred();
+    searchPort.beforeIndex = async () => {
+      mutationEntered.resolve();
+      await releaseMutation.promise;
+    };
+    const handler = createSearchIndexHandler({ repository, searchPort });
+
+    const staleIndex = handler(
+      searchIndexJob(workspaceId, noteId, 4),
+      new AbortController().signal,
+    );
+    await mutationEntered.promise;
+
+    currentSource = {
+      ...currentSource,
+      revision: 5,
+      title: "Deleted revision",
+      deletedAt: new Date(),
+    };
+    repository.row = currentSource;
+    await handler(searchIndexJob(workspaceId, noteId, 5), new AbortController().signal);
+
+    releaseMutation.resolve();
+    await staleIndex;
+
+    expect(searchPort.documents.has(noteId)).toBe(false);
   });
 
   it("removes an index entry when the authoritative note is gone", async () => {
@@ -454,6 +579,62 @@ describe("search.remove handler", () => {
 
     expect(repository.loaded).toEqual([noteId]);
     expect(searchPort.removed).toEqual([]);
+  });
+
+  it("does not remove a newer restored index when restoration commits after the source read", async () => {
+    const workspaceId = randomUUID();
+    const noteId = randomUUID();
+    let currentSource: CurrentSearchSource = {
+      noteId,
+      workspaceId,
+      revision: 4,
+      deletedAt: new Date(),
+    };
+    const removeRepository = new FakeSearchRemoveRepository();
+    removeRepository.row = currentSource;
+    const indexRepository = new FakeSearchIndexRepository();
+    const searchPort = new MemorySearchPort(() => currentSource);
+    searchPort.documents.set(noteId, {
+      noteId,
+      workspaceId,
+      revision: 3,
+      title: "Before deletion",
+      headings: [],
+      body: "old",
+      tags: [],
+      normalizedText: "old",
+    });
+    const mutationEntered = deferred();
+    const releaseMutation = deferred();
+    searchPort.beforeRemove = async () => {
+      mutationEntered.resolve();
+      await releaseMutation.promise;
+    };
+    const removeHandler = createSearchRemoveHandler({
+      repository: removeRepository,
+      searchPort,
+    });
+    const indexHandler = createSearchIndexHandler({ repository: indexRepository, searchPort });
+
+    const staleRemove = removeHandler(
+      searchRemoveJob(workspaceId, noteId, 4),
+      new AbortController().signal,
+    );
+    await mutationEntered.promise;
+
+    currentSource = { noteId, workspaceId, revision: 5, deletedAt: null };
+    removeRepository.row = currentSource;
+    indexRepository.row = {
+      ...currentSource,
+      title: "Restored revision",
+      contentMarkdown: MARKDOWN,
+    };
+    await indexHandler(searchIndexJob(workspaceId, noteId, 5), new AbortController().signal);
+
+    releaseMutation.resolve();
+    await staleRemove;
+
+    expect(searchPort.documents.get(noteId)?.revision).toBe(5);
   });
 
   it("is idempotent when the note and index entry are already absent", async () => {

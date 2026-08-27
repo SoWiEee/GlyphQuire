@@ -1,7 +1,7 @@
 import type { JobEnvelope, SearchIndexPayload } from "@glyphquire/api-contract/jobs";
 import { notes, type Database } from "@glyphquire/database";
 import type { JobHandler } from "@glyphquire/queue";
-import { extractSearchableText, type SearchPort } from "@glyphquire/search";
+import { extractSearchableText, type DerivedSearchMutationPort } from "@glyphquire/search";
 import { eq } from "drizzle-orm";
 
 export interface SearchIndexNoteRow {
@@ -39,7 +39,7 @@ export class PostgresSearchIndexRepository implements SearchIndexRepository {
 
 export interface SearchIndexHandlerDeps {
   repository: SearchIndexRepository;
-  searchPort: SearchPort;
+  searchPort: DerivedSearchMutationPort;
 }
 
 export function createSearchIndexHandler(deps: SearchIndexHandlerDeps): JobHandler<"search.index"> {
@@ -54,7 +54,11 @@ export function createSearchIndexHandler(deps: SearchIndexHandlerDeps): JobHandl
 
     if (!note) {
       try {
-        await deps.searchPort.removeNote(payload.noteId);
+        await deps.searchPort.removeNoteIfCurrent({
+          noteId: payload.noteId,
+          workspaceId: payload.workspaceId,
+          revision: payload.revision,
+        });
       } catch {
         throw new Error("JOB_FAILED");
       }
@@ -67,12 +71,16 @@ export function createSearchIndexHandler(deps: SearchIndexHandlerDeps): JobHandl
 
     try {
       if (note.deletedAt !== null) {
-        await deps.searchPort.removeNote(note.noteId);
+        await deps.searchPort.removeNoteIfCurrent({
+          noteId: note.noteId,
+          workspaceId: note.workspaceId,
+          revision: note.revision,
+        });
         return;
       }
 
       const extracted = extractSearchableText(note.title, note.contentMarkdown);
-      await deps.searchPort.indexNote({
+      await deps.searchPort.indexNoteIfCurrent({
         noteId: note.noteId,
         workspaceId: note.workspaceId,
         revision: note.revision,

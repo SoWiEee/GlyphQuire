@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import type { SearchPort, SearchQuery, SearchResult, SearchableNote } from "@glyphquire/search";
+import type {
+  DerivedSearchMissingTarget,
+  DerivedSearchMutationPort,
+  DerivedSearchMutationTarget,
+  SearchPort,
+  SearchQuery,
+  SearchResult,
+  SearchableNote,
+} from "@glyphquire/search";
 import { describe, expect, it } from "vitest";
 import {
   createSearchRebuildNoteHandler,
@@ -20,7 +28,7 @@ class FakeRepository implements SearchRebuildNoteRepository {
   }
 }
 
-class FakeSearchPort implements SearchPort {
+class FakeSearchPort implements SearchPort, DerivedSearchMutationPort {
   readonly indexed: SearchableNote[] = [];
   readonly removed: string[] = [];
 
@@ -30,6 +38,18 @@ class FakeSearchPort implements SearchPort {
 
   async removeNote(noteId: string): Promise<void> {
     this.removed.push(noteId);
+  }
+
+  async indexNoteIfCurrent(note: SearchableNote): Promise<void> {
+    await this.indexNote(note);
+  }
+
+  async removeNoteIfCurrent(target: DerivedSearchMutationTarget): Promise<void> {
+    await this.removeNote(target.noteId);
+  }
+
+  async removeNoteIfMissing(target: DerivedSearchMissingTarget): Promise<void> {
+    await this.removeNote(target.noteId);
   }
 
   async search(_query: SearchQuery): Promise<SearchResult[]> {

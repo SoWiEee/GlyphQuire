@@ -1,7 +1,15 @@
 import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import { notes, searchDocuments, workspaceMembers, type Database } from "@glyphquire/database";
 import { normalizeSearchText } from "./extract.js";
-import type { SearchPort, SearchQuery, SearchResult, SearchableNote } from "./types.js";
+import type {
+  DerivedSearchMissingTarget,
+  DerivedSearchMutationPort,
+  DerivedSearchMutationTarget,
+  SearchPort,
+  SearchQuery,
+  SearchResult,
+  SearchableNote,
+} from "./types.js";
 
 const SNIPPET_MAX_LENGTH = 280;
 
@@ -17,6 +25,41 @@ function toScore(tsRank: unknown, similarity: unknown): number {
   return Math.max(Number.isFinite(ts) ? ts : 0, Number.isFinite(trgm) ? trgm : 0);
 }
 
+async function upsertSearchDocument(
+  executor: Pick<Database, "insert">,
+  note: SearchableNote,
+): Promise<void> {
+  const headingsText = note.headings.join(" ");
+  const tagsText = note.tags.join(" ");
+
+  await executor
+    .insert(searchDocuments)
+    .values({
+      workspaceId: note.workspaceId,
+      noteId: note.noteId,
+      revision: note.revision,
+      title: note.title,
+      headings: headingsText,
+      body: note.body,
+      tags: tagsText,
+      normalizedText: note.normalizedText,
+    })
+    .onConflictDoUpdate({
+      target: searchDocuments.noteId,
+      set: {
+        workspaceId: note.workspaceId,
+        revision: note.revision,
+        title: note.title,
+        headings: headingsText,
+        body: note.body,
+        tags: tagsText,
+        normalizedText: note.normalizedText,
+        updatedAt: new Date(),
+      },
+      setWhere: sql`${searchDocuments.revision} < ${note.revision}`,
+    });
+}
+
 /**
  * PostgreSQL-backed SearchPort. Indexing is a revision-gated upsert (a
  * stale-revision write is a silent no-op); removal is a plain delete
@@ -24,45 +67,105 @@ function toScore(tsRank: unknown, similarity: unknown): number {
  * English tsvector matching with pg_trgm similarity so CJK and fuzzy terms
  * that `to_tsvector('english', ...)` cannot tokenize still match via
  * trigram fallback. Every query scopes both `workspaceId` and current actor
- * membership in the result-selecting SQL statement.
+ * membership in the result-selecting SQL statement. The separate derived-job
+ * mutations lock the authoritative note row and apply their compare-and-write
+ * in one transaction; ordinary SearchPort callers retain the original direct
+ * index/remove semantics.
  */
-export class PostgresSearchAdapter implements SearchPort {
+export class PostgresSearchAdapter implements SearchPort, DerivedSearchMutationPort {
   constructor(private readonly db: Database) {}
 
   async indexNote(note: SearchableNote): Promise<void> {
-    const headingsText = note.headings.join(" ");
-    const tagsText = note.tags.join(" ");
-
-    await this.db
-      .insert(searchDocuments)
-      .values({
-        workspaceId: note.workspaceId,
-        noteId: note.noteId,
-        revision: note.revision,
-        title: note.title,
-        headings: headingsText,
-        body: note.body,
-        tags: tagsText,
-        normalizedText: note.normalizedText,
-      })
-      .onConflictDoUpdate({
-        target: searchDocuments.noteId,
-        set: {
-          workspaceId: note.workspaceId,
-          revision: note.revision,
-          title: note.title,
-          headings: headingsText,
-          body: note.body,
-          tags: tagsText,
-          normalizedText: note.normalizedText,
-          updatedAt: new Date(),
-        },
-        setWhere: sql`${searchDocuments.revision} < ${note.revision}`,
-      });
+    await upsertSearchDocument(this.db, note);
   }
 
   async removeNote(noteId: string): Promise<void> {
     await this.db.delete(searchDocuments).where(eq(searchDocuments.noteId, noteId));
+  }
+
+  async indexNoteIfCurrent(note: SearchableNote): Promise<void> {
+    await this.db.transaction(async (transaction) => {
+      const [source] = await transaction
+        .select({
+          noteId: notes.id,
+          workspaceId: notes.workspaceId,
+          revision: notes.revision,
+          deletedAt: notes.deletedAt,
+        })
+        .from(notes)
+        .where(eq(notes.id, note.noteId))
+        .for("update")
+        .limit(1);
+
+      if (
+        !source ||
+        source.noteId !== note.noteId ||
+        source.workspaceId !== note.workspaceId ||
+        source.revision !== note.revision ||
+        source.deletedAt !== null
+      ) {
+        return;
+      }
+
+      await upsertSearchDocument(transaction, note);
+    });
+  }
+
+  async removeNoteIfCurrent(target: DerivedSearchMutationTarget): Promise<void> {
+    await this.db.transaction(async (transaction) => {
+      const [source] = await transaction
+        .select({
+          noteId: notes.id,
+          workspaceId: notes.workspaceId,
+          revision: notes.revision,
+          deletedAt: notes.deletedAt,
+        })
+        .from(notes)
+        .where(eq(notes.id, target.noteId))
+        .for("update")
+        .limit(1);
+
+      if (
+        source &&
+        (source.noteId !== target.noteId ||
+          source.workspaceId !== target.workspaceId ||
+          source.revision !== target.revision ||
+          source.deletedAt === null)
+      ) {
+        return;
+      }
+
+      await transaction
+        .delete(searchDocuments)
+        .where(
+          and(
+            eq(searchDocuments.noteId, target.noteId),
+            eq(searchDocuments.workspaceId, target.workspaceId),
+          ),
+        );
+    });
+  }
+
+  async removeNoteIfMissing(target: DerivedSearchMissingTarget): Promise<void> {
+    await this.db.transaction(async (transaction) => {
+      const [source] = await transaction
+        .select({ noteId: notes.id })
+        .from(notes)
+        .where(eq(notes.id, target.noteId))
+        .for("update")
+        .limit(1);
+
+      if (source) return;
+
+      await transaction
+        .delete(searchDocuments)
+        .where(
+          and(
+            eq(searchDocuments.noteId, target.noteId),
+            eq(searchDocuments.workspaceId, target.workspaceId),
+          ),
+        );
+    });
   }
 
   async search(query: SearchQuery): Promise<SearchResult[]> {

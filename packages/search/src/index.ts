@@ -1,4 +1,7 @@
 export type {
+  DerivedSearchMissingTarget,
+  DerivedSearchMutationPort,
+  DerivedSearchMutationTarget,
   SearchableNote,
   SearchCursor,
   SearchQuery,

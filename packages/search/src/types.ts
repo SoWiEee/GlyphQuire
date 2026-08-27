@@ -51,3 +51,29 @@ export interface SearchPort {
   removeNote(noteId: string): Promise<void>;
   search(query: SearchQuery): Promise<SearchResult[]>;
 }
+
+export interface DerivedSearchMutationTarget {
+  noteId: string;
+  workspaceId: string;
+  revision: number;
+}
+
+export interface DerivedSearchMissingTarget {
+  noteId: string;
+  workspaceId: string;
+}
+
+/**
+ * Stronger mutation capability for at-least-once jobs derived from the
+ * authoritative note row. Implementations must compare the target identity,
+ * workspace, revision, and deletion state at the same serialization boundary
+ * as the index mutation. Index applies only to an exact active revision;
+ * current removal applies only to an exact deleted revision (or an absent
+ * source), and missing removal applies only while the source remains absent.
+ * A stale comparison is a successful no-op.
+ */
+export interface DerivedSearchMutationPort {
+  indexNoteIfCurrent(note: SearchableNote): Promise<void>;
+  removeNoteIfCurrent(target: DerivedSearchMutationTarget): Promise<void>;
+  removeNoteIfMissing(target: DerivedSearchMissingTarget): Promise<void>;
+}
