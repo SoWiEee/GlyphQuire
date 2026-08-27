@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createDb,
   documentJobs,
+  jobs as genericJobs,
   notes,
   user,
   workspaceMembers,
@@ -12,7 +13,7 @@ import {
   type WorkspaceRole,
 } from "@glyphquire/database";
 import type { CreateNoteInput, NoteResult } from "@glyphquire/api-contract";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { NoteServiceImpl, type NoteServiceHooks } from "./NoteService.js";
 import { PublicApiError } from "../../middleware/error-handler.js";
 
@@ -105,6 +106,21 @@ async function jobRowsFor(db: Database, noteId: string) {
   return db.query.documentJobs.findMany({
     where: (table, { eq: whereEq }) => whereEq(table.noteId, noteId),
   });
+}
+
+async function derivedJobRowsForNote(db: Database, noteId: string) {
+  const rows = await db
+    .select()
+    .from(genericJobs)
+    .where(sql`${genericJobs.payload}->>'noteId' = ${noteId}`);
+  return rows.sort((left, right) => Number(left.payload.revision) - Number(right.payload.revision));
+}
+
+async function derivedJobRowsForOperation(db: Database, operationId: string) {
+  return db
+    .select()
+    .from(genericJobs)
+    .where(sql`${genericJobs.payload}->>'operationId' = ${operationId}`);
 }
 
 describeWithPostgres("NoteService", () => {
@@ -290,6 +306,7 @@ describeWithPostgres("NoteService", () => {
           ),
       });
       expect(operationRow).toBeUndefined();
+      expect(await derivedJobRowsForOperation(db, operationId)).toHaveLength(0);
     }
   });
 
@@ -354,6 +371,7 @@ describeWithPostgres("NoteService", () => {
             whereAnd(whereEq(table.noteId, note.id), whereEq(table.operationId, operationId)),
         });
         expect(jobRow).toBeUndefined();
+        expect(await derivedJobRowsForOperation(db, operationId)).toHaveLength(0);
       }
     },
   );
@@ -382,6 +400,7 @@ describeWithPostgres("NoteService", () => {
       where: (table, { eq: whereEq }) => whereEq(table.operationId, operationId),
     });
     expect(operationRows).toHaveLength(1);
+    expect(await derivedJobRowsForNote(db, noteRows[0]!.id)).toHaveLength(1);
   });
 
   it("resolves concurrent identical rename requests to one recorded response", async () => {
@@ -401,6 +420,108 @@ describeWithPostgres("NoteService", () => {
     expect(first).toEqual(second);
     expect(await operationRowsFor(db, note.id, "rename")).toHaveLength(1);
     expect(await jobRowsFor(db, note.id)).toHaveLength(2); // one from create, one from the single recorded rename
+    expect(await derivedJobRowsForNote(db, note.id)).toHaveLength(2);
+  });
+
+  it("transactionally enqueues exactly one derived search job for create, rename, delete, and restore", async () => {
+    const fixture = await buildFixture(db);
+    const createOperationId = randomUUID();
+    const createRequest = {
+      workspaceId: fixture.workspaceId,
+      ...createInput({ operationId: createOperationId }),
+    };
+    const created = await service.create(fixture.owner, createRequest);
+    expect(await service.create(fixture.owner, createRequest)).toEqual(created);
+
+    const renameOperationId = randomUUID();
+    const renameRequest = {
+      operationId: renameOperationId,
+      baseRevision: created.revision,
+      title: "Derived search rename",
+    };
+    const renamed = await service.rename(fixture.owner, created.id, renameRequest);
+    expect(await service.rename(fixture.owner, created.id, renameRequest)).toEqual(renamed);
+
+    expect(
+      await captureApiError(() =>
+        service.rename(fixture.owner, created.id, {
+          operationId: randomUUID(),
+          baseRevision: created.revision,
+          title: "Stale rename",
+        }),
+      ),
+    ).toEqual({ code: "REVISION_CONFLICT", status: 409 });
+
+    const deleteOperationId = randomUUID();
+    const deleteRequest = {
+      operationId: deleteOperationId,
+      baseRevision: renamed.revision,
+    };
+    const deleted = await service.softDelete(fixture.owner, created.id, deleteRequest);
+    expect(
+      await captureApiError(() => service.softDelete(fixture.owner, created.id, deleteRequest)),
+    ).toEqual({ code: "NOTE_NOT_FOUND", status: 404 });
+
+    const restoreOperationId = randomUUID();
+    const restoreRequest = {
+      operationId: restoreOperationId,
+      baseRevision: deleted.revision,
+    };
+    const restored = await service.restore(fixture.owner, created.id, restoreRequest);
+    expect(
+      await captureApiError(() => service.restore(fixture.owner, created.id, restoreRequest)),
+    ).toEqual({ code: "NOTE_NOT_FOUND", status: 404 });
+
+    const rows = await derivedJobRowsForNote(db, created.id);
+    expect(
+      rows.map((row) => ({
+        type: row.type,
+        idempotencyKey: row.idempotencyKey,
+        payload: row.payload,
+      })),
+    ).toEqual([
+      {
+        type: "search.index",
+        idempotencyKey: `note-${created.id}-revision-${created.revision}-operation-${createOperationId}`,
+        payload: {
+          workspaceId: fixture.workspaceId,
+          noteId: created.id,
+          revision: created.revision,
+          operationId: createOperationId,
+        },
+      },
+      {
+        type: "search.index",
+        idempotencyKey: `note-${created.id}-revision-${renamed.revision}-operation-${renameOperationId}`,
+        payload: {
+          workspaceId: fixture.workspaceId,
+          noteId: created.id,
+          revision: renamed.revision,
+          operationId: renameOperationId,
+        },
+      },
+      {
+        type: "search.remove",
+        idempotencyKey: `note-${created.id}-revision-${deleted.revision}-operation-${deleteOperationId}`,
+        payload: {
+          workspaceId: fixture.workspaceId,
+          noteId: created.id,
+          revision: deleted.revision,
+          operationId: deleteOperationId,
+        },
+      },
+      {
+        type: "search.index",
+        idempotencyKey: `note-${created.id}-revision-${restored.revision}-operation-${restoreOperationId}`,
+        payload: {
+          workspaceId: fixture.workspaceId,
+          noteId: created.id,
+          revision: restored.revision,
+          operationId: restoreOperationId,
+        },
+      },
+    ]);
+    expect(new Set(rows.map((row) => row.idempotencyKey)).size).toBe(rows.length);
   });
 
   it("returns OPERATION_REUSED when a create operationId carries a different canonical request", async () => {

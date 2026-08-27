@@ -29,6 +29,7 @@ import type {
   RestoreNoteVersionInput,
   SaveNoteInput,
 } from "@glyphquire/api-contract";
+import { PostgresJobDispatcher } from "@glyphquire/queue";
 import { and, desc, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { PublicApiError } from "../../middleware/error-handler.js";
 import { authorize, type NoteAction } from "./authorization.js";
@@ -427,6 +428,13 @@ export class NoteServiceImpl implements NoteService {
           revision: note.revision,
           kind: "upsert",
         });
+        await this.insertDerivedSearchJob(tx, {
+          workspaceId: input.workspaceId,
+          noteId: note.id,
+          operationId: input.operationId,
+          revision: note.revision,
+          kind: "upsert",
+        });
         await this.hooks.afterDocumentJobInsert?.();
 
         return response;
@@ -671,6 +679,13 @@ export class NoteServiceImpl implements NoteService {
           revision: updated.revision,
           kind: jobKind,
         });
+        await this.insertDerivedSearchJob(tx, {
+          workspaceId,
+          noteId,
+          operationId,
+          revision: updated.revision,
+          kind: jobKind,
+        });
         await this.hooks.afterDocumentJobInsert?.();
 
         return response;
@@ -689,5 +704,29 @@ export class NoteServiceImpl implements NoteService {
       }
       throw error;
     }
+  }
+
+  private async insertDerivedSearchJob(
+    tx: DbTransaction,
+    params: {
+      workspaceId: string;
+      noteId: string;
+      operationId: string;
+      revision: number;
+      kind: DocumentJobKind;
+    },
+  ): Promise<void> {
+    const type = params.kind === "delete" ? "search.remove" : "search.index";
+    await new PostgresJobDispatcher(tx).enqueue({
+      workspaceId: params.workspaceId,
+      type,
+      payload: {
+        workspaceId: params.workspaceId,
+        noteId: params.noteId,
+        revision: params.revision,
+        operationId: params.operationId,
+      },
+      idempotencyKey: `note-${params.noteId}-revision-${params.revision}-operation-${params.operationId}`,
+    });
   }
 }

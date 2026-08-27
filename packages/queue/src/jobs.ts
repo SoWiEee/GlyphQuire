@@ -162,8 +162,16 @@ export interface JobStore {
   markDeadLetter(input: DeadLetterJobInput): Promise<boolean>;
 }
 
+/**
+ * Database operations used by the PostgreSQL job store. Both the top-level
+ * Drizzle database and a transaction callback implement this surface, so a
+ * dispatcher can validate and persist an enqueue inside its caller's
+ * transaction without exposing transaction lifecycle controls.
+ */
+export type JobDatabaseExecutor = Pick<Database, "execute" | "insert" | "select" | "update">;
+
 class PostgresJobStore implements JobStore {
-  constructor(private readonly db: Database) {}
+  constructor(private readonly db: JobDatabaseExecutor) {}
 
   async enqueue(input: PersistJobInput): Promise<{ id: string; duplicate: boolean }> {
     const inserted = await this.db
@@ -316,7 +324,7 @@ export interface PostgresJobDispatcherOptions {
   clock?: () => number;
 }
 
-function isJobStore(value: Database | JobStore): value is JobStore {
+function isJobStore(value: JobDatabaseExecutor | JobStore): value is JobStore {
   return "claimBatch" in value && typeof value.claimBatch === "function";
 }
 
@@ -343,7 +351,10 @@ export class PostgresJobDispatcher implements JobDispatcher {
   private readonly backoffCapSeconds: number;
   private readonly clock: () => number;
 
-  constructor(databaseOrStore: Database | JobStore, options: PostgresJobDispatcherOptions = {}) {
+  constructor(
+    databaseOrStore: JobDatabaseExecutor | JobStore,
+    options: PostgresJobDispatcherOptions = {},
+  ) {
     this.store = isJobStore(databaseOrStore)
       ? databaseOrStore
       : new PostgresJobStore(databaseOrStore);

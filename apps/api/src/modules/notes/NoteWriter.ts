@@ -20,6 +20,7 @@ import type {
 } from "@glyphquire/api-contract";
 import { MAX_MARKDOWN_BYTES } from "@glyphquire/api-contract";
 import { createDocumentEngine } from "@glyphquire/document-engine";
+import { PostgresJobDispatcher } from "@glyphquire/queue";
 import { and, eq, isNull } from "drizzle-orm";
 import { PublicApiError } from "../../middleware/error-handler.js";
 import { authorize, type NoteAction } from "./authorization.js";
@@ -143,10 +144,10 @@ export class NoteSaveConflictError extends Error {
  * autosave, checkpoint, and version restore. Each method performs replay
  * lookup, authorization, CAS, the note mutation, the immutable snapshot
  * decision, operation recording, and the in-transaction `document_jobs`
- * ("outbox") insert as one Drizzle transaction. No route or external queue
- * call participates in that transaction, and this module never imports from
- * `@glyphquire/queue` — the queue package claims and dispatches those job
- * rows post-commit through its own adapter.
+ * ("outbox") insert and generic derived-search enqueue as one Drizzle
+ * transaction. The queue adapter participates only as a transaction-bound
+ * row inserter here; workers claim and process those rows independently after
+ * commit, so handler failures cannot alter the committed source mutation.
  */
 export class NoteWriter {
   constructor(
@@ -665,6 +666,17 @@ export class NoteWriter {
       operationId: params.operationId,
       revision: params.revision,
       kind: "upsert",
+    });
+    await new PostgresJobDispatcher(tx).enqueue({
+      workspaceId: params.workspaceId,
+      type: "search.index",
+      payload: {
+        workspaceId: params.workspaceId,
+        noteId: params.noteId,
+        revision: params.revision,
+        operationId: params.operationId,
+      },
+      idempotencyKey: `note-${params.noteId}-revision-${params.revision}-operation-${params.operationId}`,
     });
     await this.hooks.afterDocumentJobInsert?.();
   }

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createDb,
   documentJobs,
+  jobs as genericJobs,
   noteOperations,
   notes,
   noteVersions,
@@ -12,7 +13,7 @@ import {
   type Database,
 } from "@glyphquire/database";
 import { MAX_MARKDOWN_BYTES } from "@glyphquire/api-contract";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { PublicApiError } from "../../middleware/error-handler.js";
 import { SNAPSHOT_ABSOLUTE_TRIGGER_BYTES, SNAPSHOT_TIME_TRIGGER_MS } from "./snapshot-policy.js";
 import { NoteSaveConflictError, NoteWriter, type NoteWriterHooks } from "./NoteWriter.js";
@@ -96,6 +97,21 @@ async function operationRowsFor(db: Database, noteId: string) {
 
 async function jobRowsFor(db: Database, noteId: string) {
   return db.select().from(documentJobs).where(eq(documentJobs.noteId, noteId));
+}
+
+async function derivedJobRowsForNote(db: Database, noteId: string) {
+  const rows = await db
+    .select()
+    .from(genericJobs)
+    .where(sql`${genericJobs.payload}->>'noteId' = ${noteId}`);
+  return rows.sort((left, right) => Number(left.payload.revision) - Number(right.payload.revision));
+}
+
+async function derivedJobRowsForOperation(db: Database, operationId: string) {
+  return db
+    .select()
+    .from(genericJobs)
+    .where(sql`${genericJobs.payload}->>'operationId' = ${operationId}`);
 }
 
 async function captureApiError(fn: () => Promise<unknown>) {
@@ -263,6 +279,7 @@ describeWithPostgres("NoteWriter", () => {
         expect(await snapshotRowsFor(db, note.id)).toHaveLength(0);
         expect(await operationRowsFor(db, note.id)).toHaveLength(0);
         expect(await jobRowsFor(db, note.id)).toHaveLength(0);
+        expect(await derivedJobRowsForOperation(db, operationId)).toHaveLength(0);
       }
     });
 
@@ -306,6 +323,7 @@ describeWithPostgres("NoteWriter", () => {
       expect(first).toEqual(second);
       expect(await operationRowsFor(db, note.id)).toHaveLength(1);
       expect(await jobRowsFor(db, note.id)).toHaveLength(1);
+      expect(await derivedJobRowsForNote(db, note.id)).toHaveLength(1);
     });
 
     it("yields one success and one authorized rich conflict for concurrent distinct requests, and the loser writes nothing", async () => {
@@ -436,6 +454,7 @@ describeWithPostgres("NoteWriter", () => {
       expect(first).toEqual(second);
       expect(await snapshotRowsFor(db, note.id)).toHaveLength(1);
       expect(await operationRowsFor(db, note.id)).toHaveLength(1);
+      expect(await derivedJobRowsForNote(db, note.id)).toHaveLength(1);
     });
 
     it("rejects a stale baseRevision with REVISION_CONFLICT and writes nothing", async () => {
@@ -457,6 +476,7 @@ describeWithPostgres("NoteWriter", () => {
 
       expect(await snapshotRowsFor(db, note.id)).toHaveLength(1);
       expect(await operationRowsFor(db, note.id)).toHaveLength(1);
+      expect(await derivedJobRowsForNote(db, note.id)).toHaveLength(1);
     });
 
     it("keeps every write atomic when a failure is injected at each step", async () => {
@@ -486,6 +506,7 @@ describeWithPostgres("NoteWriter", () => {
         expect(await snapshotRowsFor(db, note.id)).toHaveLength(0);
         expect(await operationRowsFor(db, note.id)).toHaveLength(0);
         expect(await jobRowsFor(db, note.id)).toHaveLength(0);
+        expect(await derivedJobRowsForOperation(db, operationId)).toHaveLength(0);
       }
     });
   });
@@ -586,8 +607,89 @@ describeWithPostgres("NoteWriter", () => {
         expect(ops.filter((o) => o.operationKind === "restore_version")).toHaveLength(0);
         const jobs = await jobRowsFor(db, note.id);
         expect(jobs.filter((j) => j.revision > checkpointed.note.revision)).toHaveLength(0);
+        expect(await derivedJobRowsForOperation(db, operationId)).toHaveLength(0);
       }
     });
+  });
+
+  it("transactionally enqueues one search.index job for save, checkpoint, and version restore", async () => {
+    const fixture = await buildFixture(db);
+    const note = await insertNote(db, fixture.workspaceId, fixture.owner, "# Original");
+
+    const saveOperationId = randomUUID();
+    const saveRequest = {
+      operationId: saveOperationId,
+      baseRevision: note.revision,
+      contentMarkdown: "# Saved",
+    };
+    const saved = await writer.save(fixture.owner, note.id, saveRequest);
+    expect(await writer.save(fixture.owner, note.id, saveRequest)).toEqual(saved);
+
+    const checkpointOperationId = randomUUID();
+    const checkpointRequest = {
+      operationId: checkpointOperationId,
+      baseRevision: saved.revision,
+    };
+    const checkpointed = await writer.checkpoint(fixture.owner, note.id, checkpointRequest);
+    expect(await writer.checkpoint(fixture.owner, note.id, checkpointRequest)).toEqual(
+      checkpointed,
+    );
+
+    const restoreOperationId = randomUUID();
+    const restoreRequest = {
+      operationId: restoreOperationId,
+      baseRevision: checkpointed.note.revision,
+    };
+    const restored = await writer.restoreVersion(
+      fixture.owner,
+      note.id,
+      checkpointed.version.id,
+      restoreRequest,
+    );
+    expect(
+      await writer.restoreVersion(fixture.owner, note.id, checkpointed.version.id, restoreRequest),
+    ).toEqual(restored);
+
+    const rows = await derivedJobRowsForNote(db, note.id);
+    expect(
+      rows.map((row) => ({
+        type: row.type,
+        idempotencyKey: row.idempotencyKey,
+        payload: row.payload,
+      })),
+    ).toEqual([
+      {
+        type: "search.index",
+        idempotencyKey: `note-${note.id}-revision-${saved.revision}-operation-${saveOperationId}`,
+        payload: {
+          workspaceId: fixture.workspaceId,
+          noteId: note.id,
+          revision: saved.revision,
+          operationId: saveOperationId,
+        },
+      },
+      {
+        type: "search.index",
+        idempotencyKey: `note-${note.id}-revision-${checkpointed.note.revision}-operation-${checkpointOperationId}`,
+        payload: {
+          workspaceId: fixture.workspaceId,
+          noteId: note.id,
+          revision: checkpointed.note.revision,
+          operationId: checkpointOperationId,
+        },
+      },
+      {
+        type: "search.index",
+        idempotencyKey: `note-${note.id}-revision-${restored.revision}-operation-${restoreOperationId}`,
+        payload: {
+          workspaceId: fixture.workspaceId,
+          noteId: note.id,
+          revision: restored.revision,
+          operationId: restoreOperationId,
+        },
+      },
+    ]);
+    expect(new Set(rows.map((row) => row.idempotencyKey)).size).toBe(rows.length);
   });
 
   describe("cross-workspace scoping", () => {
