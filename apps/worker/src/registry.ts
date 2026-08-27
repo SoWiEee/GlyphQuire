@@ -22,6 +22,8 @@ import {
   createSearchRebuildNoteHandler,
   PostgresSearchRebuildNoteRepository,
 } from "./handlers/search-rebuild-note.js";
+import { createImportCleanupHandler } from "./handlers/import-cleanup.js";
+import { createImportHandler } from "./handlers/import.js";
 
 export interface JobRegistryDependencies {
   database: Database;
@@ -46,6 +48,8 @@ export const jobRegistry: JobRegistry = Object.freeze({
   "search.rebuild": unboundHandler,
   "asset.cleanup": unboundHandler,
   "asset.thumbnail": unboundHandler,
+  import: unboundHandler,
+  "import.cleanup": unboundHandler,
 });
 
 /**
@@ -91,6 +95,20 @@ export function createJobRegistry(
     },
   });
 
+  const importNote = createImportHandler({
+    database: dependencies.database,
+    storage: dependencies.storage,
+    maxAssetBytes: dependencies.environment.ASSET_MAX_BYTES,
+    workspaceQuotaBytes: dependencies.environment.ASSET_WORKSPACE_QUOTA_BYTES,
+    stagingGraceSeconds: dependencies.environment.IMPORT_STAGING_GRACE_SECONDS,
+  });
+
+  const importCleanup = createImportCleanupHandler({
+    database: dependencies.database,
+    storage: dependencies.storage,
+    graceSeconds: dependencies.environment.IMPORT_STAGING_GRACE_SECONDS,
+  });
+
   return Object.freeze({
     ...baseRegistry,
     "search.index": searchIndex,
@@ -98,5 +116,7 @@ export function createJobRegistry(
     "search.rebuild": searchRebuildNote,
     "asset.cleanup": assetCleanup,
     "asset.thumbnail": assetThumbnail,
+    import: importNote,
+    "import.cleanup": importCleanup,
   });
 }

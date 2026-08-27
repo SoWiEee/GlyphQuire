@@ -239,6 +239,9 @@ importers:
       '@glyphquire/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@glyphquire/document-engine':
+        specifier: workspace:*
+        version: link:../../packages/document-engine
       '@glyphquire/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -254,6 +257,9 @@ importers:
       drizzle-orm:
         specifier: ^0.44.0
         version: 0.44.7(kysely@0.29.5)(postgres@3.4.9)
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.3
       sharp:
         specifier: ^0.33.5
         version: 0.33.5

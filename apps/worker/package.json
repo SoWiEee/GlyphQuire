@@ -15,11 +15,13 @@
   "dependencies": {
     "@glyphquire/api-contract": "workspace:*",
     "@glyphquire/database": "workspace:*",
+    "@glyphquire/document-engine": "workspace:*",
     "@glyphquire/queue": "workspace:*",
     "@glyphquire/search": "workspace:*",
     "@glyphquire/shared": "workspace:*",
     "@glyphquire/storage": "workspace:*",
     "drizzle-orm": "^0.44.0",
+    "fflate": "^0.8.2",
     "sharp": "^0.33.5"
   },
   "devDependencies": {

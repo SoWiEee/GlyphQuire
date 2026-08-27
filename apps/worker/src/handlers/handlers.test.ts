@@ -213,20 +213,22 @@ async function putObject(storage: InMemoryObjectStorage, key: string): Promise<v
 }
 
 describe("Phase 5 worker consumer modules", () => {
-  it("registers exactly the five reviewed Task 4 handler keys statically", () => {
+  it("registers the reviewed Task 4 handlers and Task 5 import handlers statically", () => {
     expect(Object.keys(jobRegistry)).toEqual([
       "search.index",
       "search.remove",
       "search.rebuild",
       "asset.cleanup",
       "asset.thumbnail",
+      "import",
+      "import.cleanup",
     ]);
     expect(Object.values(jobRegistry).every((handler) => typeof handler === "function")).toBe(true);
     expect(Object.isFrozen(jobRegistry)).toBe(true);
   });
 
   it("keeps production activation closed while later P0 handlers are absent", () => {
-    expect(() => assertRegistryComplete(jobRegistry)).toThrow(/import/u);
+    expect(() => assertRegistryComplete(jobRegistry)).toThrow(/export/u);
   });
 
   it("exposes the search.index handler factory", async () => {
