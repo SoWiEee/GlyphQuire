@@ -55,6 +55,25 @@ function cleanupJob(
   };
 }
 
+function stagingCleanupJob(
+  workspaceId: string,
+  options: { id?: string; attempts?: number; batchSize?: number } = {},
+): JobEnvelope<"import.cleanup"> {
+  return {
+    id: options.id ?? randomUUID(),
+    workspaceId,
+    type: "import.cleanup",
+    version: 1,
+    attempts: options.attempts ?? 1,
+    createdAt: new Date().toISOString(),
+    payload: {
+      workspaceId,
+      scope: "staging",
+      batchSize: options.batchSize ?? 10,
+    },
+  };
+}
+
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => {
@@ -341,6 +360,168 @@ describeWithPostgres("import crash recovery", () => {
     expect(storage.has(staged.sourceObjectKey)).toBe(true);
     const [row] = await db.select().from(imports).where(eq(imports.id, staged.importId));
     expect(row).toMatchObject({ status: "processing", compensationStatus: "none" });
+  });
+
+  it("recovers an exhausted processing import through the staging cleanup scan", async () => {
+    const now = Date.now();
+    const storage = new InMemoryObjectStorage();
+    const staged = await stagedImport(storage, new Date(now - 3_600_001));
+    const [row] = await db.select().from(imports).where(eq(imports.id, staged.importId));
+    // A stale queue reclaim increments beyond max attempts and dead-letters before
+    // re-entering the handler, so the last persisted lifecycle owner remains here.
+    await db
+      .update(imports)
+      .set({
+        status: "processing",
+        compensationStatus: "none",
+        manifest: {
+          ...row!.manifest,
+          _lifecycle: {
+            kind: "import",
+            jobId: randomUUID(),
+            attempt: 5,
+            leaseExpiresAt: new Date(now - 1).toISOString(),
+          },
+        },
+      })
+      .where(eq(imports.id, staged.importId));
+    const cleanup = createImportCleanupHandler({
+      database: db,
+      storage,
+      graceSeconds: 3_600,
+      clock: () => now,
+    });
+
+    await cleanup(
+      stagingCleanupJob(staged.workspaceId, { attempts: 1 }),
+      new AbortController().signal,
+    );
+
+    expect(storage.has(staged.sourceObjectKey)).toBe(false);
+    const [recovered] = await db.select().from(imports).where(eq(imports.id, staged.importId));
+    expect(recovered).toMatchObject({ status: "expired", compensationStatus: "completed" });
+    expect(recovered!.manifest).not.toHaveProperty("_lifecycle");
+  });
+
+  it("recovers an exhausted cleanup owner through the staging cleanup scan", async () => {
+    const now = Date.now();
+    const storage = new InMemoryObjectStorage();
+    const staged = await stagedImport(storage, new Date(now - 3_600_001));
+    const [row] = await db.select().from(imports).where(eq(imports.id, staged.importId));
+    await db
+      .update(imports)
+      .set({
+        status: "failed",
+        compensationStatus: "running",
+        manifest: {
+          ...row!.manifest,
+          _lifecycle: {
+            kind: "cleanup",
+            jobId: randomUUID(),
+            attempt: 5,
+            leaseExpiresAt: new Date(now - 1).toISOString(),
+          },
+        },
+      })
+      .where(eq(imports.id, staged.importId));
+    const cleanup = createImportCleanupHandler({
+      database: db,
+      storage,
+      graceSeconds: 3_600,
+      clock: () => now,
+    });
+
+    await cleanup(
+      stagingCleanupJob(staged.workspaceId, { attempts: 1 }),
+      new AbortController().signal,
+    );
+
+    expect(storage.has(staged.sourceObjectKey)).toBe(false);
+    const [recovered] = await db.select().from(imports).where(eq(imports.id, staged.importId));
+    expect(recovered).toMatchObject({ status: "failed", compensationStatus: "completed" });
+    expect(recovered!.manifest).not.toHaveProperty("_lifecycle");
+  });
+
+  it("keeps active lifecycle owners and completed imports out of the staging cleanup scan", async () => {
+    const now = Date.now();
+    const storage = new InMemoryObjectStorage();
+    const processing = await stagedImport(storage, new Date(now - 3_600_001));
+    const [processingRow] = await db
+      .select()
+      .from(imports)
+      .where(eq(imports.id, processing.importId));
+    await db
+      .update(imports)
+      .set({
+        status: "processing",
+        compensationStatus: "none",
+        manifest: {
+          ...processingRow!.manifest,
+          _lifecycle: {
+            kind: "import",
+            jobId: randomUUID(),
+            attempt: 5,
+            leaseExpiresAt: new Date(now + 1).toISOString(),
+          },
+        },
+      })
+      .where(eq(imports.id, processing.importId));
+    const cleanup = createImportCleanupHandler({
+      database: db,
+      storage,
+      graceSeconds: 3_600,
+      clock: () => now,
+    });
+
+    await cleanup(stagingCleanupJob(processing.workspaceId), new AbortController().signal);
+
+    const [activeImport] = await db
+      .select()
+      .from(imports)
+      .where(eq(imports.id, processing.importId));
+    expect(activeImport).toMatchObject({ status: "processing", compensationStatus: "none" });
+    expect(storage.has(processing.sourceObjectKey)).toBe(true);
+
+    await db
+      .update(imports)
+      .set({
+        status: "failed",
+        compensationStatus: "running",
+        manifest: {
+          ...activeImport!.manifest,
+          _lifecycle: {
+            kind: "cleanup",
+            jobId: randomUUID(),
+            attempt: 5,
+            leaseExpiresAt: new Date(now + 1).toISOString(),
+          },
+        },
+      })
+      .where(eq(imports.id, processing.importId));
+
+    await cleanup(stagingCleanupJob(processing.workspaceId), new AbortController().signal);
+
+    const [activeCleanup] = await db
+      .select()
+      .from(imports)
+      .where(eq(imports.id, processing.importId));
+    expect(activeCleanup).toMatchObject({ status: "failed", compensationStatus: "running" });
+    expect(storage.has(processing.sourceObjectKey)).toBe(true);
+
+    await db
+      .update(imports)
+      .set({
+        status: "completed",
+        compensationStatus: "none",
+        manifest: processingRow!.manifest,
+      })
+      .where(eq(imports.id, processing.importId));
+
+    await cleanup(stagingCleanupJob(processing.workspaceId), new AbortController().signal);
+
+    const [completed] = await db.select().from(imports).where(eq(imports.id, processing.importId));
+    expect(completed).toMatchObject({ status: "completed", compensationStatus: "none" });
+    expect(storage.has(processing.sourceObjectKey)).toBe(true);
   });
 
   it("does not restart an import while its compensator owns the row", async () => {

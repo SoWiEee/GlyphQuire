@@ -95,6 +95,29 @@ export function importLifecycleUnownedPredicate() {
   return sql`not (${imports.manifest} ? '_lifecycle')`;
 }
 
+export function importLifecycleExpiredOwnerPredicate(kind: ImportLifecycleKind, now: number) {
+  const leaseCutoff = new Date(now).toISOString();
+  return and(
+    sql`jsonb_typeof(${imports.manifest} -> '_lifecycle') = 'object'`,
+    sql`${imports.manifest} -> '_lifecycle' ->> 'kind' = ${kind}`,
+    sql`jsonb_typeof(${imports.manifest} -> '_lifecycle' -> 'jobId') = 'string'`,
+    sql`char_length(${imports.manifest} -> '_lifecycle' ->> 'jobId') > 0`,
+    sql`jsonb_typeof(${imports.manifest} -> '_lifecycle' -> 'attempt') = 'number'`,
+    sql`${imports.manifest} -> '_lifecycle' ->> 'attempt' ~ '^[1-9][0-9]*$'`,
+    sql`jsonb_typeof(${imports.manifest} -> '_lifecycle' -> 'leaseExpiresAt') = 'string'`,
+    sql`${imports.manifest} -> '_lifecycle' ->> 'leaseExpiresAt'
+      ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$'`,
+    sql`case
+      when pg_input_is_valid(
+        ${imports.manifest} -> '_lifecycle' ->> 'leaseExpiresAt',
+        'timestamp with time zone'
+      ) then (${imports.manifest} -> '_lifecycle' ->> 'leaseExpiresAt')::timestamptz
+        <= ${leaseCutoff}::timestamptz
+      else false
+    end`,
+  );
+}
+
 export function importLifecycleLeaseExpired(owner: ImportLifecycleOwner, now: number): boolean {
   return Date.parse(owner.leaseExpiresAt) <= now;
 }

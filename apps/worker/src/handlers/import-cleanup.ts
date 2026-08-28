@@ -15,6 +15,7 @@ import { isOwnedImportResource } from "./import.js";
 import {
   createImportLifecycleOwner,
   importLeaseSeconds,
+  importLifecycleExpiredOwnerPredicate,
   importLifecycleLeaseExpired,
   importLifecycleOwnerPredicate,
   importLifecycleUnownedPredicate,
@@ -141,7 +142,7 @@ async function cleanupOne(
   row: Import,
   cutoff: Date,
   signal: AbortSignal,
-  allowRunningRetry: boolean,
+  source: "one" | "staging",
   job: JobEnvelope<"import.cleanup">,
   now: number,
   leaseSeconds: number,
@@ -154,9 +155,13 @@ async function cleanupOne(
     if (current.createdAt > cutoff) return;
     const previous = readImportLifecycleOwner(current.manifest);
     const owner = createImportLifecycleOwner("cleanup", job, now, leaseSeconds);
+    const staleProcessing =
+      current.status === "processing" &&
+      current.compensationStatus === "none" &&
+      previous?.kind === "import" &&
+      importLifecycleLeaseExpired(previous, now);
     const staleRunning =
       current.compensationStatus === "running" &&
-      allowRunningRetry &&
       ((previous?.kind === "cleanup" &&
         importLifecycleLeaseExpired(previous, now) &&
         (previous.jobId !== owner.jobId || previous.attempt < owner.attempt)) ||
@@ -164,9 +169,12 @@ async function cleanupOne(
     const claimable =
       current.compensationStatus === "required" ||
       current.compensationStatus === "failed" ||
+      staleProcessing ||
       staleRunning;
     if (!claimable) {
-      if (current.compensationStatus === "running") throw new Error("JOB_FAILED");
+      if (source === "one" && current.compensationStatus === "running") {
+        throw new Error("JOB_FAILED");
+      }
       return;
     }
 
@@ -182,7 +190,9 @@ async function cleanupOne(
           and(
             eq(imports.id, current.id),
             eq(imports.workspaceId, current.workspaceId),
-            inArray(imports.status, ["staging", "failed", "expired"]),
+            staleProcessing
+              ? eq(imports.status, "processing")
+              : inArray(imports.status, ["staging", "failed", "expired"]),
             eq(imports.compensationStatus, current.compensationStatus),
             previous ? importLifecycleOwnerPredicate(previous) : importLifecycleUnownedPredicate(),
           ),
@@ -293,6 +303,7 @@ async function stagingRows(
   database: Database,
   payload: Extract<ImportCleanupPayload, { scope: "staging" }>,
   cutoff: Date,
+  now: number,
 ): Promise<Import[]> {
   let cursor: { createdAt: string; id: string } | undefined;
   if (payload.cursor) {
@@ -315,8 +326,22 @@ async function stagingRows(
       and(
         eq(imports.workspaceId, payload.workspaceId),
         lte(imports.createdAt, cutoff),
-        inArray(imports.status, ["staging", "failed", "expired"]),
-        inArray(imports.compensationStatus, ["required", "failed"]),
+        or(
+          and(
+            inArray(imports.status, ["staging", "failed", "expired"]),
+            inArray(imports.compensationStatus, ["required", "failed"]),
+          ),
+          and(
+            eq(imports.status, "processing"),
+            eq(imports.compensationStatus, "none"),
+            importLifecycleExpiredOwnerPredicate("import", now),
+          ),
+          and(
+            inArray(imports.status, ["staging", "failed", "expired"]),
+            eq(imports.compensationStatus, "running"),
+            importLifecycleExpiredOwnerPredicate("cleanup", now),
+          ),
+        ),
         cursorCondition,
       ),
     )
@@ -345,14 +370,14 @@ export function createImportCleanupHandler(
         },
       );
       if (!row) return;
-      await cleanupOne(deps, row, cutoff, signal, true, job, now, leaseSeconds);
+      await cleanupOne(deps, row, cutoff, signal, "one", job, now, leaseSeconds);
       return;
     }
 
-    const rows = await stagingRows(deps.database, payload, cutoff);
+    const rows = await stagingRows(deps.database, payload, cutoff, now);
     for (const row of rows) {
       checkAborted(signal);
-      await cleanupOne(deps, row, cutoff, signal, false, job, now, leaseSeconds);
+      await cleanupOne(deps, row, cutoff, signal, "staging", job, now, leaseSeconds);
     }
     if (rows.length === payload.batchSize) {
       const last = rows[rows.length - 1]!;

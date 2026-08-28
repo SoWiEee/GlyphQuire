@@ -63,3 +63,19 @@ rejected before expiry and reclaims the crashed `processing` owner exactly at ex
 - Verification used the isolated database's migration role because that database does not include
   the deployment workflow's normal runtime grants. Production grant/readiness validation remains
   an integration/deployment review item.
+
+## Max-Attempt Orphan Recovery Follow-up
+
+The queue deliberately dead-letters a stale reclaim whose incremented attempt is above the
+persisted maximum without invoking its handler. The staging cleanup scan now recovers the two
+durable orphan shapes this can leave behind: `processing/none` with an expired import owner, and
+`staging|failed|expired/running` with an expired cleanup owner. Eligibility still requires the
+configured, bounded import staging grace to have elapsed. The scan validates the complete owner
+shape and timestamp before selection; cleanup then acquires the import advisory lock and replaces
+the exact persisted status, compensation state, and lifecycle owner with a cleanup owner.
+
+Real-PostgreSQL RED reproduced both orphan shapes with lifecycle attempt 5: each scan completed
+without deleting its staged source. GREEN deleted both sources and completed compensation. The
+same regression proves active import and cleanup leases, plus terminal completed imports, remain
+untouched. Final verification on the isolated `glyphquire_task5b_import` database passed all 14/14
+import recovery cases, worker typecheck, targeted ESLint, targeted Prettier, and `git diff --check`.
