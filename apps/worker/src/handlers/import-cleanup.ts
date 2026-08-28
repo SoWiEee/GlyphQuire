@@ -12,6 +12,18 @@ import { PostgresJobDispatcher, type JobHandler } from "@glyphquire/queue";
 import type { ObjectStoragePort } from "@glyphquire/storage";
 import { and, asc, eq, gt, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { isOwnedImportResource } from "./import.js";
+import {
+  createImportLifecycleOwner,
+  importLeaseSeconds,
+  importLifecycleLeaseExpired,
+  importLifecycleOwnerPredicate,
+  importLifecycleUnownedPredicate,
+  readImportLifecycleOwner,
+  withImportLifecycleLock,
+  withImportLifecycleOwner,
+  withoutImportLifecycleOwner,
+  type ImportLifecycleOwner,
+} from "./import-lifecycle.js";
 
 const DEFAULT_STAGING_GRACE_SECONDS = 3_600;
 const MAX_STAGING_GRACE_SECONDS = 31_536_000;
@@ -21,6 +33,7 @@ export interface ImportCleanupHandlerDeps {
   database: Database;
   storage: ObjectStoragePort;
   graceSeconds?: number;
+  leaseSeconds?: number;
   clock?: () => number;
 }
 
@@ -83,12 +96,44 @@ async function resourceIsLive(
   return Boolean(note);
 }
 
-async function recordCleanupFailure(database: Database, row: Import): Promise<void> {
+async function recordCleanupFailure(
+  database: Database,
+  row: Import,
+  owner: ImportLifecycleOwner,
+): Promise<void> {
   await database
     .update(imports)
     .set({ compensationStatus: "failed", status: "failed", lastError: "JOB_FAILED" })
-    .where(and(eq(imports.id, row.id), eq(imports.workspaceId, row.workspaceId)))
+    .where(
+      and(
+        eq(imports.id, row.id),
+        eq(imports.workspaceId, row.workspaceId),
+        ne(imports.status, "completed"),
+        eq(imports.compensationStatus, "running"),
+        importLifecycleOwnerPredicate(owner),
+      ),
+    )
     .catch(() => undefined);
+}
+
+async function requireCleanupOwnership(
+  database: Database,
+  row: Pick<Import, "id" | "workspaceId">,
+  owner: ImportLifecycleOwner,
+): Promise<void> {
+  const [owned] = await database
+    .select({ id: imports.id })
+    .from(imports)
+    .where(
+      and(
+        eq(imports.id, row.id),
+        eq(imports.workspaceId, row.workspaceId),
+        eq(imports.compensationStatus, "running"),
+        importLifecycleOwnerPredicate(owner),
+      ),
+    )
+    .limit(1);
+  if (!owned) throw new Error("JOB_FAILED");
 }
 
 async function cleanupOne(
@@ -97,84 +142,151 @@ async function cleanupOne(
   cutoff: Date,
   signal: AbortSignal,
   allowRunningRetry: boolean,
+  job: JobEnvelope<"import.cleanup">,
+  now: number,
+  leaseSeconds: number,
 ): Promise<void> {
-  if (row.status === "completed" || row.compensationStatus === "completed") return;
-  if (row.createdAt > cutoff) return;
+  return withImportLifecycleLock(deps.database, row.id, signal, async () => {
+    const current = await loadOwnedImport(deps.database, row.workspaceId, row.id);
+    if (!current || current.status === "completed" || current.compensationStatus === "completed") {
+      return;
+    }
+    if (current.createdAt > cutoff) return;
+    const previous = readImportLifecycleOwner(current.manifest);
+    const owner = createImportLifecycleOwner("cleanup", job, now, leaseSeconds);
+    const staleRunning =
+      current.compensationStatus === "running" &&
+      allowRunningRetry &&
+      ((previous?.kind === "cleanup" &&
+        importLifecycleLeaseExpired(previous, now) &&
+        (previous.jobId !== owner.jobId || previous.attempt < owner.attempt)) ||
+        (!previous && current.updatedAt.getTime() + leaseSeconds * MILLISECONDS_PER_SECOND <= now));
+    const claimable =
+      current.compensationStatus === "required" ||
+      current.compensationStatus === "failed" ||
+      staleRunning;
+    if (!claimable) {
+      if (current.compensationStatus === "running") throw new Error("JOB_FAILED");
+      return;
+    }
 
-  try {
-    const [claimed] = await deps.database
-      .update(imports)
-      .set({ compensationStatus: "running", lastError: null })
-      .where(
-        and(
-          eq(imports.id, row.id),
-          eq(imports.workspaceId, row.workspaceId),
-          inArray(imports.status, ["staging", "failed", "expired"]),
-          inArray(
-            imports.compensationStatus,
-            allowRunningRetry ? ["required", "failed", "running"] : ["required", "failed"],
+    try {
+      const [claimed] = await deps.database
+        .update(imports)
+        .set({
+          compensationStatus: "running",
+          manifest: withImportLifecycleOwner(current.manifest, owner),
+          lastError: null,
+        })
+        .where(
+          and(
+            eq(imports.id, current.id),
+            eq(imports.workspaceId, current.workspaceId),
+            inArray(imports.status, ["staging", "failed", "expired"]),
+            eq(imports.compensationStatus, current.compensationStatus),
+            previous ? importLifecycleOwnerPredicate(previous) : importLifecycleUnownedPredicate(),
           ),
-        ),
-      )
-      .returning({ id: imports.id });
-    if (!claimed) return;
+        )
+        .returning({ id: imports.id });
+      if (!claimed) throw new Error("JOB_FAILED");
 
-    const resources = await deps.database
-      .select()
-      .from(importResources)
-      .where(
-        and(eq(importResources.importId, row.id), eq(importResources.workspaceId, row.workspaceId)),
-      )
-      .orderBy(asc(importResources.createdAt), asc(importResources.id));
-    for (const resource of resources) {
-      checkAborted(signal);
-      if (!isOwnedImportResource(resource)) {
-        throw new Error("JOB_INVALID: import.cleanup resource ownership mismatch");
-      }
-      if (resource.state === "cleaned" || resource.state === "promoted") continue;
-      if (await resourceIsLive(deps.database, resource)) {
-        await deps.database
+      const resources = await deps.database
+        .select()
+        .from(importResources)
+        .where(
+          and(
+            eq(importResources.importId, current.id),
+            eq(importResources.workspaceId, current.workspaceId),
+          ),
+        )
+        .orderBy(asc(importResources.createdAt), asc(importResources.id));
+      for (const resource of resources) {
+        checkAborted(signal);
+        await requireCleanupOwnership(deps.database, current, owner);
+        if (!isOwnedImportResource(resource)) {
+          throw new Error("JOB_INVALID: import.cleanup resource ownership mismatch");
+        }
+        if (resource.state === "cleaned" || resource.state === "promoted") continue;
+        if (await resourceIsLive(deps.database, resource)) {
+          const [promoted] = await deps.database
+            .update(importResources)
+            .set({ state: "promoted" })
+            .where(
+              and(
+                eq(importResources.id, resource.id),
+                eq(importResources.importId, current.id),
+                eq(importResources.workspaceId, current.workspaceId),
+                ne(importResources.state, "cleaned"),
+                sql`exists (
+                select 1 from ${imports}
+                where ${and(
+                  eq(imports.id, current.id),
+                  eq(imports.workspaceId, current.workspaceId),
+                  eq(imports.compensationStatus, "running"),
+                  importLifecycleOwnerPredicate(owner),
+                )}
+              )`,
+              ),
+            )
+            .returning({ id: importResources.id });
+          if (!promoted) throw new Error("JOB_FAILED");
+          continue;
+        }
+        await deps.storage.delete(resource.objectKey);
+        const [cleaned] = await deps.database
           .update(importResources)
-          .set({ state: "promoted" })
+          .set({ state: "cleaned" })
           .where(
             and(
               eq(importResources.id, resource.id),
-              eq(importResources.importId, row.id),
-              eq(importResources.workspaceId, row.workspaceId),
-              ne(importResources.state, "cleaned"),
+              eq(importResources.importId, current.id),
+              eq(importResources.workspaceId, current.workspaceId),
+              inArray(importResources.state, ["declared", "uploaded"]),
+              sql`exists (
+              select 1 from ${imports}
+              where ${and(
+                eq(imports.id, current.id),
+                eq(imports.workspaceId, current.workspaceId),
+                eq(imports.compensationStatus, "running"),
+                importLifecycleOwnerPredicate(owner),
+              )}
+            )`,
             ),
-          );
-        continue;
+          )
+          .returning({ id: importResources.id });
+        if (!cleaned) throw new Error("JOB_FAILED");
       }
-      await deps.storage.delete(resource.objectKey);
-      await deps.database
-        .update(importResources)
-        .set({ state: "cleaned" })
+
+      checkAborted(signal);
+      await requireCleanupOwnership(deps.database, current, owner);
+      await deps.storage.delete(current.sourceObjectKey);
+      const [completed] = await deps.database
+        .update(imports)
+        .set({
+          status: current.status === "failed" ? "failed" : "expired",
+          compensationStatus: "completed",
+          manifest: withoutImportLifecycleOwner(current.manifest),
+          lastError:
+            current.status === "failed"
+              ? (current.lastError ?? "IMPORT_INVALID")
+              : "IMPORT_INVALID",
+        })
         .where(
           and(
-            eq(importResources.id, resource.id),
-            eq(importResources.importId, row.id),
-            eq(importResources.workspaceId, row.workspaceId),
-            inArray(importResources.state, ["declared", "uploaded"]),
+            eq(imports.id, current.id),
+            eq(imports.workspaceId, current.workspaceId),
+            eq(imports.compensationStatus, "running"),
+            importLifecycleOwnerPredicate(owner),
           ),
-        );
+        )
+        .returning({ id: imports.id });
+      if (!completed) throw new Error("JOB_FAILED");
+    } catch (error) {
+      await recordCleanupFailure(deps.database, current, owner);
+      if (error instanceof Error && error.message.startsWith("JOB_INVALID")) throw error;
+      throw new Error("JOB_FAILED");
     }
-
-    checkAborted(signal);
-    await deps.storage.delete(row.sourceObjectKey);
-    await deps.database
-      .update(imports)
-      .set({
-        status: row.status === "failed" ? "failed" : "expired",
-        compensationStatus: "completed",
-        lastError: row.status === "failed" ? (row.lastError ?? "IMPORT_INVALID") : "IMPORT_INVALID",
-      })
-      .where(and(eq(imports.id, row.id), eq(imports.workspaceId, row.workspaceId)));
-  } catch (error) {
-    await recordCleanupFailure(deps.database, row);
-    if (error instanceof Error && error.message.startsWith("JOB_INVALID")) throw error;
-    throw new Error("JOB_FAILED");
-  }
+  });
 }
 
 async function stagingRows(
@@ -216,6 +328,7 @@ export function createImportCleanupHandler(
   deps: ImportCleanupHandlerDeps,
 ): JobHandler<"import.cleanup"> {
   const cleanupGraceSeconds = graceSeconds(deps.graceSeconds ?? DEFAULT_STAGING_GRACE_SECONDS);
+  const leaseSeconds = importLeaseSeconds(deps.leaseSeconds ?? 300);
   const clock = deps.clock ?? Date.now;
 
   return async (job: JobEnvelope<"import.cleanup">, signal: AbortSignal) => {
@@ -232,14 +345,14 @@ export function createImportCleanupHandler(
         },
       );
       if (!row) return;
-      await cleanupOne(deps, row, cutoff, signal, true);
+      await cleanupOne(deps, row, cutoff, signal, true, job, now, leaseSeconds);
       return;
     }
 
     const rows = await stagingRows(deps.database, payload, cutoff);
     for (const row of rows) {
       checkAborted(signal);
-      await cleanupOne(deps, row, cutoff, signal, false);
+      await cleanupOne(deps, row, cutoff, signal, false, job, now, leaseSeconds);
     }
     if (rows.length === payload.batchSize) {
       const last = rows[rows.length - 1]!;

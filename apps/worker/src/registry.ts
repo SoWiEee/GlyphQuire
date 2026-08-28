@@ -101,12 +101,14 @@ export function createJobRegistry(
     maxAssetBytes: dependencies.environment.ASSET_MAX_BYTES,
     workspaceQuotaBytes: dependencies.environment.ASSET_WORKSPACE_QUOTA_BYTES,
     stagingGraceSeconds: dependencies.environment.IMPORT_STAGING_GRACE_SECONDS,
+    leaseSeconds: dependencies.environment.JOB_LOCK_TIMEOUT_SECONDS,
   });
 
   const importCleanup = createImportCleanupHandler({
     database: dependencies.database,
     storage: dependencies.storage,
     graceSeconds: dependencies.environment.IMPORT_STAGING_GRACE_SECONDS,
+    leaseSeconds: dependencies.environment.JOB_LOCK_TIMEOUT_SECONDS,
   });
 
   return Object.freeze({

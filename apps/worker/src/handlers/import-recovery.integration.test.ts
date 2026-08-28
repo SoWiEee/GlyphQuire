@@ -22,16 +22,45 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
 const describeWithPostgres = databaseUrl ? describe : describe.skip;
 const MARKDOWN = "---\nglyphquire-spec: 1\n---\n\n# Imported note\n\nbody";
 
-function importJob(workspaceId: string, importId: string, actorId: string): JobEnvelope<"import"> {
+function importJob(
+  workspaceId: string,
+  importId: string,
+  actorId: string,
+  options: { id?: string; attempts?: number } = {},
+): JobEnvelope<"import"> {
   return {
-    id: randomUUID(),
+    id: options.id ?? randomUUID(),
     workspaceId,
     type: "import",
     version: 1,
-    attempts: 1,
+    attempts: options.attempts ?? 1,
     createdAt: new Date().toISOString(),
     payload: { workspaceId, importId, actorId },
   };
+}
+
+function cleanupJob(
+  workspaceId: string,
+  importId: string,
+  options: { id?: string; attempts?: number } = {},
+): JobEnvelope<"import.cleanup"> {
+  return {
+    id: options.id ?? randomUUID(),
+    workspaceId,
+    type: "import.cleanup",
+    version: 1,
+    attempts: options.attempts ?? 1,
+    createdAt: new Date().toISOString(),
+    payload: { workspaceId, scope: "one", importId },
+  };
+}
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
 }
 
 describeWithPostgres("import crash recovery", () => {
@@ -232,6 +261,7 @@ describeWithPostgres("import crash recovery", () => {
       })
       .where(eq(imports.id, staged.importId));
     let crashed = false;
+    const jobId = randomUUID();
     const handler = createImportHandler({
       database: db,
       storage,
@@ -247,7 +277,7 @@ describeWithPostgres("import crash recovery", () => {
 
     await expect(
       handler(
-        importJob(staged.workspaceId, staged.importId, staged.actorId),
+        importJob(staged.workspaceId, staged.importId, staged.actorId, { id: jobId, attempts: 1 }),
         new AbortController().signal,
       ),
     ).rejects.toThrow("JOB_FAILED");
@@ -259,7 +289,7 @@ describeWithPostgres("import crash recovery", () => {
     expect(declared && storage.has(declared.objectKey)).toBe(true);
 
     await handler(
-      importJob(staged.workspaceId, staged.importId, staged.actorId),
+      importJob(staged.workspaceId, staged.importId, staged.actorId, { id: jobId, attempts: 2 }),
       new AbortController().signal,
     );
 
@@ -352,6 +382,282 @@ describeWithPostgres("import crash recovery", () => {
       status: "expired",
       compensationStatus: "required",
       lastError: "IMPORT_INVALID",
+    });
+  });
+
+  it("reclaims a crashed processing owner only after its persisted lease expires", async () => {
+    const startedAt = Date.now();
+    let now = startedAt;
+    const storage = new InMemoryObjectStorage();
+    const staged = await stagedImport(storage);
+    const [row] = await db.select().from(imports).where(eq(imports.id, staged.importId));
+    const jobId = randomUUID();
+    await db
+      .update(imports)
+      .set({
+        status: "processing",
+        manifest: {
+          ...row!.manifest,
+          _lifecycle: {
+            kind: "import",
+            jobId,
+            attempt: 1,
+            leaseExpiresAt: new Date(startedAt + 300_000).toISOString(),
+          },
+        },
+      })
+      .where(eq(imports.id, staged.importId));
+    const handler = createImportHandler({ database: db, storage, clock: () => now });
+
+    await expect(
+      handler(
+        importJob(staged.workspaceId, staged.importId, staged.actorId, {
+          id: jobId,
+          attempts: 2,
+        }),
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("JOB_FAILED");
+
+    now = startedAt + 300_000;
+    await handler(
+      importJob(staged.workspaceId, staged.importId, staged.actorId, {
+        id: jobId,
+        attempts: 3,
+      }),
+      new AbortController().signal,
+    );
+
+    const [completed] = await db.select().from(imports).where(eq(imports.id, staged.importId));
+    expect(completed).toMatchObject({ status: "completed", compensationStatus: "none" });
+    expect(completed!.manifest).not.toHaveProperty("_lifecycle");
+  });
+
+  it("fences a reclaimed import attempt and cleanup while the original handler is active", async () => {
+    const now = Date.now();
+    const storage = new InMemoryObjectStorage();
+    const staged = await stagedImport(storage, new Date(now - 3_600_000));
+    const reachedFinalization = deferred();
+    const releaseFinalization = deferred();
+    const jobId = randomUUID();
+    const first = createImportHandler({
+      database: db,
+      storage,
+      hooks: {
+        async beforeFinalization() {
+          reachedFinalization.resolve();
+          await releaseFinalization.promise;
+        },
+      },
+    });
+    const reclaimed = createImportHandler({ database: db, storage });
+    const cleanup = createImportCleanupHandler({
+      database: db,
+      storage,
+      graceSeconds: 3_600,
+      clock: () => now,
+    });
+    const firstRun = first(
+      importJob(staged.workspaceId, staged.importId, staged.actorId, { id: jobId, attempts: 1 }),
+      new AbortController().signal,
+    );
+    await reachedFinalization.promise;
+
+    try {
+      await expect(
+        reclaimed(
+          importJob(staged.workspaceId, staged.importId, staged.actorId, {
+            id: jobId,
+            attempts: 2,
+          }),
+          new AbortController().signal,
+        ),
+      ).rejects.toThrow("JOB_FAILED");
+      await expect(
+        cleanup(cleanupJob(staged.workspaceId, staged.importId), new AbortController().signal),
+      ).rejects.toThrow("JOB_FAILED");
+    } finally {
+      releaseFinalization.resolve();
+      await firstRun.catch(() => undefined);
+    }
+
+    const [row] = await db.select().from(imports).where(eq(imports.id, staged.importId));
+    expect(row).toMatchObject({ status: "completed", compensationStatus: "none" });
+    expect(storage.has(staged.sourceObjectKey)).toBe(true);
+  });
+
+  it("rejects a cleaned resource after put, removes the orphan, and requires compensation", async () => {
+    const storage = new InMemoryObjectStorage();
+    const staged = await stagedImport(storage);
+    const archive = Buffer.from(
+      zipSync({
+        "note.md": strToU8("---\nglyphquire-spec: 1\n---\n\n# ZIP import\n\n![pixel](pixel.png)"),
+        "pixel.png": new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]),
+      }),
+    );
+    const sha256 = createHash("sha256").update(archive).digest("hex");
+    await storage.put({
+      key: staged.sourceObjectKey,
+      body: archive,
+      contentType: "application/zip",
+      contentLength: archive.byteLength,
+      sha256,
+    });
+    await db
+      .update(imports)
+      .set({
+        manifest: {
+          version: 1,
+          source: {
+            sizeBytes: archive.byteLength,
+            sha256,
+            contentType: "application/zip",
+            kind: "zip",
+          },
+          progress: { completedItems: 0, totalItems: 0, processedBytes: 0, totalBytes: 0 },
+        },
+      })
+      .where(eq(imports.id, staged.importId));
+    let resourceKey: string | undefined;
+    const handler = createImportHandler({
+      database: db,
+      storage,
+      hooks: {
+        async afterResourcePut(resourceId) {
+          const [resource] = await db
+            .select()
+            .from(importResources)
+            .where(eq(importResources.id, resourceId));
+          resourceKey = resource?.objectKey;
+          await db
+            .update(importResources)
+            .set({ state: "cleaned" })
+            .where(eq(importResources.id, resourceId));
+        },
+      },
+    });
+
+    await expect(
+      handler(
+        importJob(staged.workspaceId, staged.importId, staged.actorId),
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("JOB_FAILED");
+
+    expect(resourceKey).toBeDefined();
+    expect(storage.has(resourceKey!)).toBe(false);
+    const [row] = await db.select().from(imports).where(eq(imports.id, staged.importId));
+    expect(row).toMatchObject({ status: "failed", compensationStatus: "required" });
+  });
+
+  it("lets only one cleanup attempt delete an import", async () => {
+    const now = Date.now();
+    const enteredDelete = deferred();
+    const releaseDelete = deferred();
+    let paused = false;
+    const resource = { key: "" };
+    const deleteCounts = new Map<string, number>();
+    const storage = new InMemoryObjectStorage({
+      async beforeDelete(key) {
+        deleteCounts.set(key, (deleteCounts.get(key) ?? 0) + 1);
+        if (key === resource.key && !paused) {
+          paused = true;
+          enteredDelete.resolve();
+          await releaseDelete.promise;
+        }
+      },
+    });
+    const staged = await stagedImport(storage, new Date(now - 3_600_000));
+    await db
+      .update(imports)
+      .set({ status: "failed", compensationStatus: "required" })
+      .where(eq(imports.id, staged.importId));
+    const resourceId = randomUUID();
+    resource.key = `workspace/${staged.workspaceId}/imports/${staged.importId}/resources/${resourceId}`;
+    await db.insert(importResources).values({
+      id: resourceId,
+      importId: staged.importId,
+      workspaceId: staged.workspaceId,
+      assetId: randomUUID(),
+      objectKey: resource.key,
+      state: "uploaded",
+      createdAt: new Date(now - 3_600_000),
+      updatedAt: new Date(now - 3_600_000),
+    });
+    const body = Buffer.from("resource");
+    await storage.put({
+      key: resource.key,
+      body,
+      contentType: "application/octet-stream",
+      contentLength: body.byteLength,
+      sha256: createHash("sha256").update(body).digest("hex"),
+    });
+    const cleanup = createImportCleanupHandler({
+      database: db,
+      storage,
+      graceSeconds: 3_600,
+      clock: () => now,
+    });
+    const jobId = randomUUID();
+    const firstRun = cleanup(
+      cleanupJob(staged.workspaceId, staged.importId, { id: jobId, attempts: 1 }),
+      new AbortController().signal,
+    );
+    await enteredDelete.promise;
+
+    try {
+      await expect(
+        cleanup(
+          cleanupJob(staged.workspaceId, staged.importId, { id: jobId, attempts: 2 }),
+          new AbortController().signal,
+        ),
+      ).rejects.toThrow("JOB_FAILED");
+    } finally {
+      releaseDelete.resolve();
+      await firstRun;
+    }
+
+    expect(deleteCounts.get(resource.key)).toBe(1);
+    expect(deleteCounts.get(staged.sourceObjectKey)).toBe(1);
+    const [row] = await db.select().from(imports).where(eq(imports.id, staged.importId));
+    expect(row).toMatchObject({ compensationStatus: "completed" });
+  });
+
+  it("does not let cleanup failure overwrite a terminal completed state", async () => {
+    const now = Date.now();
+    const stagedRef: { value?: Awaited<ReturnType<typeof stagedImport>> } = {};
+    const storage = new InMemoryObjectStorage({
+      async beforeDelete(key) {
+        if (key !== stagedRef.value?.sourceObjectKey) return;
+        await db
+          .update(imports)
+          .set({ status: "completed", compensationStatus: "completed", lastError: null })
+          .where(eq(imports.id, stagedRef.value.importId));
+        throw new Error("simulated delete failure after terminal transition");
+      },
+    });
+    const staged = await stagedImport(storage, new Date(now - 3_600_000));
+    stagedRef.value = staged;
+    await db
+      .update(imports)
+      .set({ status: "failed", compensationStatus: "required" })
+      .where(eq(imports.id, staged.importId));
+    const cleanup = createImportCleanupHandler({
+      database: db,
+      storage,
+      graceSeconds: 3_600,
+      clock: () => now,
+    });
+
+    await expect(
+      cleanup(cleanupJob(staged.workspaceId, staged.importId), new AbortController().signal),
+    ).rejects.toThrow("JOB_FAILED");
+
+    const [row] = await db.select().from(imports).where(eq(imports.id, staged.importId));
+    expect(row).toMatchObject({
+      status: "completed",
+      compensationStatus: "completed",
+      lastError: null,
     });
   });
 });

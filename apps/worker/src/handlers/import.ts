@@ -17,6 +17,19 @@ import { PostgresJobDispatcher, type JobHandler } from "@glyphquire/queue";
 import type { ObjectStoragePort } from "@glyphquire/storage";
 import { and, eq, inArray, isNull, ne, sql, sum } from "drizzle-orm";
 import { strFromU8, unzipSync } from "fflate";
+import {
+  createImportLifecycleOwner,
+  importLeaseSeconds,
+  importLifecycleLeaseExpired,
+  importLifecycleOwnerPredicate,
+  importLifecycleOwnersEqual,
+  importLifecycleUnownedPredicate,
+  importOwnedProcessingPredicate,
+  readImportLifecycleOwner,
+  withImportLifecycleLock,
+  withImportLifecycleOwner,
+  type ImportLifecycleOwner,
+} from "./import-lifecycle.js";
 
 const MAX_ARCHIVE_BYTES = 25 * 1024 * 1024;
 const MAX_ARCHIVE_FILES = 256;
@@ -74,6 +87,7 @@ interface WorkerManifest extends ImportManifest {
   };
   resources: ImportResourceManifest[];
   result?: { noteId: string; revision: number };
+  _lifecycle?: ImportLifecycleOwner;
 }
 
 interface ArchiveEntryMetadata {
@@ -106,6 +120,7 @@ export interface ImportHandlerDeps {
   maxAssetBytes?: number;
   workspaceQuotaBytes?: number;
   stagingGraceSeconds?: number;
+  leaseSeconds?: number;
   clock?: () => number;
   hooks?: ImportHandlerHooks;
 }
@@ -590,6 +605,7 @@ function cleanManifest(
   completedResources: number,
   processedResourceBytes: number,
   result?: { noteId: string; revision: number },
+  owner?: ImportLifecycleOwner,
 ): WorkerManifest {
   const source = sourceManifest(row);
   const totalItems = 1 + parsed.resources.length;
@@ -607,7 +623,21 @@ function cleanManifest(
     },
     resources: parsed.resources.map(publicResource),
     ...(result ? { result } : {}),
+    ...(owner ? { _lifecycle: owner } : {}),
   };
+}
+
+async function requireImportOwnership(
+  db: Database,
+  row: Pick<Import, "id" | "workspaceId">,
+  owner: ImportLifecycleOwner,
+): Promise<void> {
+  const [owned] = await db
+    .select({ id: imports.id })
+    .from(imports)
+    .where(importOwnedProcessingPredicate(row.id, row.workspaceId, owner))
+    .limit(1);
+  if (!owned) throw new Error("JOB_FAILED");
 }
 
 async function declareResources(
@@ -615,8 +645,15 @@ async function declareResources(
   row: Import,
   parsed: ParsedImport,
   hooks: ImportHandlerHooks,
+  owner: ImportLifecycleOwner,
 ): Promise<void> {
   await db.transaction(async (tx) => {
+    const [ownedImport] = await tx
+      .select({ id: imports.id })
+      .from(imports)
+      .where(importOwnedProcessingPredicate(row.id, row.workspaceId, owner))
+      .limit(1);
+    if (!ownedImport) throw new Error("JOB_FAILED");
     if (parsed.resources.length > 0) {
       await tx
         .insert(importResources)
@@ -657,10 +694,14 @@ async function declareResources(
     const completedBytes = parsed.resources
       .filter((resource) => completedIds.has(resource.id))
       .reduce((total, resource) => total + resource.sizeBytes, 0);
-    await tx
+    const [manifestUpdated] = await tx
       .update(imports)
-      .set({ manifest: cleanManifest(row, parsed, completed.length, completedBytes) })
-      .where(and(eq(imports.id, row.id), eq(imports.workspaceId, row.workspaceId)));
+      .set({
+        manifest: cleanManifest(row, parsed, completed.length, completedBytes, undefined, owner),
+      })
+      .where(importOwnedProcessingPredicate(row.id, row.workspaceId, owner))
+      .returning({ id: imports.id });
+    if (!manifestUpdated) throw new Error("JOB_FAILED");
     await hooks.afterResourceDeclaration?.();
   });
 }
@@ -672,11 +713,13 @@ async function uploadResources(
   parsed: ParsedImport,
   hooks: ImportHandlerHooks,
   signal: AbortSignal,
+  owner: ImportLifecycleOwner,
 ): Promise<void> {
   let completed = 0;
   let completedBytes = 0;
   for (const resource of parsed.resources) {
     checkAborted(signal);
+    await requireImportOwnership(db, row, owner);
     const [current] = await db
       .select()
       .from(importResources)
@@ -705,7 +748,7 @@ async function uploadResources(
         sha256: resource.sha256,
       });
       await hooks.afterResourcePut?.(resource.id);
-      await db
+      const [uploaded] = await db
         .update(importResources)
         .set({ state: "uploaded" })
         .where(
@@ -714,15 +757,59 @@ async function uploadResources(
             eq(importResources.importId, row.id),
             eq(importResources.workspaceId, row.workspaceId),
             eq(importResources.state, "declared"),
+            sql`exists (
+              select 1
+              from ${imports}
+              where ${importOwnedProcessingPredicate(row.id, row.workspaceId, owner)}
+            )`,
           ),
-        );
+        )
+        .returning({ id: importResources.id });
+      if (!uploaded) {
+        const [afterPut] = await db
+          .select({ state: importResources.state })
+          .from(importResources)
+          .where(
+            and(
+              eq(importResources.id, resource.id),
+              eq(importResources.importId, row.id),
+              eq(importResources.workspaceId, row.workspaceId),
+            ),
+          )
+          .limit(1);
+        if (afterPut?.state === "cleaned") {
+          try {
+            await storage.delete(resource.objectKey);
+          } catch {
+            await db
+              .update(importResources)
+              .set({ state: "uploaded" })
+              .where(
+                and(
+                  eq(importResources.id, resource.id),
+                  eq(importResources.importId, row.id),
+                  eq(importResources.workspaceId, row.workspaceId),
+                  eq(importResources.state, "cleaned"),
+                  sql`exists (
+                    select 1
+                    from ${imports}
+                    where ${importOwnedProcessingPredicate(row.id, row.workspaceId, owner)}
+                  )`,
+                ),
+              );
+          }
+        }
+        throw new Error("JOB_FAILED");
+      }
     }
     completed += 1;
     completedBytes += resource.sizeBytes;
-    await db
+    const [progressUpdated] = await db
       .update(imports)
-      .set({ manifest: cleanManifest(row, parsed, completed, completedBytes) })
-      .where(and(eq(imports.id, row.id), eq(imports.workspaceId, row.workspaceId)));
+      .set({ manifest: cleanManifest(row, parsed, completed, completedBytes, undefined, owner) })
+      .where(importOwnedProcessingPredicate(row.id, row.workspaceId, owner))
+      .returning({ id: imports.id });
+    if (!progressUpdated) throw new Error("JOB_FAILED");
   }
 }
 
@@ -752,6 +839,7 @@ async function finalizeImport(
     Pick<ImportHandlerDeps, "database" | "hooks">,
   row: Import,
   parsed: ParsedImport,
+  owner: ImportLifecycleOwner,
 ): Promise<{ noteId: string; revision: number }> {
   const db = deps.database;
   return db.transaction(async (tx) => {
@@ -772,6 +860,13 @@ async function finalizeImport(
       typeof priorResult.revision === "number"
     ) {
       return { noteId: priorResult.noteId, revision: priorResult.revision };
+    }
+    if (
+      current.status !== "processing" ||
+      current.compensationStatus !== "none" ||
+      !importLifecycleOwnersEqual(readImportLifecycleOwner(current.manifest), owner)
+    ) {
+      throw new Error("JOB_FAILED");
     }
 
     const resources = await tx
@@ -924,7 +1019,7 @@ async function finalizeImport(
         manifest: cleanManifest(row, parsed, parsed.resources.length, importedBytes, result),
         lastError: null,
       })
-      .where(and(eq(imports.id, row.id), eq(imports.workspaceId, row.workspaceId)))
+      .where(importOwnedProcessingPredicate(row.id, row.workspaceId, owner))
       .returning({ id: imports.id });
     if (!completed) invalidImport();
     await deps.hooks?.beforeFinalizationCommit?.();
@@ -954,22 +1049,30 @@ async function markCompensationRequired(
   clock: () => number,
   status: "failed" | "expired",
   errorCode: "IMPORT_INVALID" | "JOB_FAILED",
-): Promise<void> {
+  owner?: ImportLifecycleOwner,
+): Promise<boolean> {
   const now = new Date(clock());
-  await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     const [updated] = await tx
       .update(imports)
       .set({ status, compensationStatus: "required", lastError: errorCode })
       .where(
-        and(
-          eq(imports.id, row.id),
-          eq(imports.workspaceId, row.workspaceId),
-          ne(imports.status, "completed"),
-          ne(imports.compensationStatus, "completed"),
-        ),
+        owner
+          ? importOwnedProcessingPredicate(row.id, row.workspaceId, owner)
+          : and(
+              eq(imports.id, row.id),
+              eq(imports.workspaceId, row.workspaceId),
+              eq(imports.status, row.status),
+              eq(imports.compensationStatus, row.compensationStatus),
+              readImportLifecycleOwner(row.manifest)
+                ? importLifecycleOwnerPredicate(readImportLifecycleOwner(row.manifest)!)
+                : importLifecycleUnownedPredicate(),
+              ne(imports.status, "completed"),
+              ne(imports.compensationStatus, "completed"),
+            ),
       )
       .returning({ id: imports.id });
-    if (!updated) return;
+    if (!updated) return false;
     const graceAt = new Date(
       row.createdAt.getTime() + stagingGraceSeconds * MILLISECONDS_PER_SECOND,
     );
@@ -980,7 +1083,53 @@ async function markCompensationRequired(
       idempotencyKey: `import-cleanup-${row.id}`,
       runAt: graceAt > now ? graceAt : now,
     });
+    return true;
   });
+}
+
+async function claimImport(
+  db: Database,
+  row: Import,
+  owner: ImportLifecycleOwner,
+  now: number,
+  leaseSeconds: number,
+): Promise<boolean> {
+  const previous = readImportLifecycleOwner(row.manifest);
+  const legacyStale =
+    !previous && row.updatedAt.getTime() + leaseSeconds * MILLISECONDS_PER_SECOND <= now;
+  const sameNewerAttempt =
+    previous?.kind === "import" &&
+    previous.jobId === owner.jobId &&
+    previous.attempt < owner.attempt;
+  const eligible =
+    (row.status === "pending" && row.compensationStatus === "none" && !previous) ||
+    (row.status === "failed" &&
+      (row.compensationStatus === "required" || row.compensationStatus === "failed") &&
+      (sameNewerAttempt || legacyStale)) ||
+    (row.status === "processing" &&
+      row.compensationStatus === "none" &&
+      ((sameNewerAttempt && previous && importLifecycleLeaseExpired(previous, now)) ||
+        legacyStale));
+  if (!eligible) return false;
+  const [claimed] = await db
+    .update(imports)
+    .set({
+      status: "processing",
+      compensationStatus: "none",
+      manifest: withImportLifecycleOwner(row.manifest, owner),
+      lastError: null,
+    })
+    .where(
+      and(
+        eq(imports.id, row.id),
+        eq(imports.workspaceId, row.workspaceId),
+        eq(imports.status, row.status),
+        eq(imports.compensationStatus, row.compensationStatus),
+        previous ? importLifecycleOwnerPredicate(previous) : importLifecycleUnownedPredicate(),
+      ),
+    )
+    .returning({ id: imports.id });
+  return Boolean(claimed);
 }
 
 export function createImportHandler(deps: ImportHandlerDeps): JobHandler<"import"> {
@@ -999,90 +1148,85 @@ export function createImportHandler(deps: ImportHandlerDeps): JobHandler<"import
     31_536_000,
     "import staging grace",
   );
+  const leaseSeconds = importLeaseSeconds(deps.leaseSeconds ?? 300);
   const clock = deps.clock ?? Date.now;
   const hooks = deps.hooks ?? {};
 
-  return async (job: JobEnvelope<"import">, signal: AbortSignal) => {
-    const payload = job.payload;
-    const row = await loadOwnedImport(deps.database, payload).catch((error) => {
-      if (error instanceof Error && error.message.startsWith("JOB_INVALID")) throw error;
-      throw new Error("JOB_FAILED");
-    });
-    if (!row || row.status === "completed" || row.status === "expired") return;
-    if (row.compensationStatus === "running" || row.compensationStatus === "completed") return;
+  return async (job: JobEnvelope<"import">, signal: AbortSignal) =>
+    withImportLifecycleLock(deps.database, job.payload.importId, signal, async () => {
+      const payload = job.payload;
+      const row = await loadOwnedImport(deps.database, payload).catch((error) => {
+        if (error instanceof Error && error.message.startsWith("JOB_INVALID")) throw error;
+        throw new Error("JOB_FAILED");
+      });
+      if (!row || row.status === "completed" || row.status === "expired") return;
+      if (row.compensationStatus === "running" || row.compensationStatus === "completed") return;
 
-    try {
       checkAborted(signal);
       const now = clock();
       if (!Number.isFinite(now)) throw new Error("JOB_FAILED");
-      if (row.expiresAt.getTime() <= now) {
-        await markCompensationRequired(
-          deps.database,
-          row,
-          stagingGraceSeconds,
-          clock,
-          "expired",
-          "IMPORT_INVALID",
-        );
-        return;
-      }
-      const [claimed] = await deps.database
-        .update(imports)
-        .set({ status: "processing", compensationStatus: "none", lastError: null })
-        .where(
-          and(
-            eq(imports.id, row.id),
-            eq(imports.workspaceId, row.workspaceId),
-            inArray(imports.status, ["pending", "processing", "failed"]),
-            inArray(imports.compensationStatus, ["none", "required", "failed"]),
-          ),
-        )
-        .returning();
-      if (!claimed) return;
-
-      const stream = await deps.storage.get(row.sourceObjectKey);
-      const source = await readBoundedStream(stream, MAX_ARCHIVE_BYTES);
-      const parsed = parseImportSource(row, source, maxAssetBytes);
-      await declareResources(deps.database, row, parsed, hooks);
-      await uploadResources(deps.database, deps.storage, row, parsed, hooks, signal);
-      checkAborted(signal);
-      await hooks.beforeFinalization?.();
-      await finalizeImport(
-        { database: deps.database, hooks, maxAssetBytes, workspaceQuotaBytes },
-        row,
-        parsed,
-      );
+      const owner = createImportLifecycleOwner("import", job, now, leaseSeconds);
       try {
-        await hooks.afterFinalizationCommit?.();
-      } catch {
+        if (row.expiresAt.getTime() <= now) {
+          await markCompensationRequired(
+            deps.database,
+            row,
+            stagingGraceSeconds,
+            clock,
+            "expired",
+            "IMPORT_INVALID",
+          );
+          return;
+        }
+        if (!(await claimImport(deps.database, row, owner, now, leaseSeconds))) {
+          throw new Error("JOB_FAILED");
+        }
+
+        const stream = await deps.storage.get(row.sourceObjectKey);
+        const source = await readBoundedStream(stream, MAX_ARCHIVE_BYTES);
+        const parsed = parseImportSource(row, source, maxAssetBytes);
+        await declareResources(deps.database, row, parsed, hooks, owner);
+        await uploadResources(deps.database, deps.storage, row, parsed, hooks, signal, owner);
+        checkAborted(signal);
+        await hooks.beforeFinalization?.();
+        await finalizeImport(
+          { database: deps.database, hooks, maxAssetBytes, workspaceQuotaBytes },
+          row,
+          parsed,
+          owner,
+        );
+        try {
+          await hooks.afterFinalizationCommit?.();
+        } catch {
+          const [completed] = await deps.database
+            .select({ status: imports.status })
+            .from(imports)
+            .where(and(eq(imports.id, row.id), eq(imports.workspaceId, row.workspaceId)))
+            .limit(1);
+          if (completed?.status === "completed") return;
+          throw new Error("JOB_FAILED");
+        }
+      } catch (error) {
         const [completed] = await deps.database
           .select({ status: imports.status })
           .from(imports)
           .where(and(eq(imports.id, row.id), eq(imports.workspaceId, row.workspaceId)))
-          .limit(1);
+          .limit(1)
+          .catch(() => []);
         if (completed?.status === "completed") return;
-        throw new Error("JOB_FAILED");
+        const permanent = error instanceof ImportInvalidError;
+        const compensationRequired = await markCompensationRequired(
+          deps.database,
+          row,
+          stagingGraceSeconds,
+          clock,
+          "failed",
+          permanent ? "IMPORT_INVALID" : "JOB_FAILED",
+          owner,
+        ).catch(() => undefined);
+        if (!permanent || compensationRequired !== true) throw new Error("JOB_FAILED");
       }
-    } catch (error) {
-      const [completed] = await deps.database
-        .select({ status: imports.status })
-        .from(imports)
-        .where(and(eq(imports.id, row.id), eq(imports.workspaceId, row.workspaceId)))
-        .limit(1)
-        .catch(() => []);
-      if (completed?.status === "completed") return;
-      const permanent = error instanceof ImportInvalidError;
-      await markCompensationRequired(
-        deps.database,
-        row,
-        stagingGraceSeconds,
-        clock,
-        "failed",
-        permanent ? "IMPORT_INVALID" : "JOB_FAILED",
-      ).catch(() => undefined);
-      if (!permanent) throw new Error("JOB_FAILED");
-    }
-  };
+    });
 }
 
 export function isOwnedImportResource(
