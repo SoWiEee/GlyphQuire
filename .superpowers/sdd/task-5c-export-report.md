@@ -79,3 +79,17 @@ database was not modified because its migration-baseline journal was stale.
   should instead be owner/editor-only, tighten `resolveScope` and add the corresponding denial case.
 - `export.expire` scheduling and object deletion are deliberately not implemented in this slice;
   they remain a release dependency of the maintenance task.
+
+## Post-review Remediation
+
+The fresh verifier found an Important stale-attempt race: a reclaimed worker could overwrite the
+canonical artifact after a newer attempt completed. The handler now records a bounded processing
+owner token, uploads each attempt to a private candidate key, and performs a row-locked owner
+recheck before canonical publication and completion. Superseded attempts cannot publish or mark the
+row failed; their candidate object is deleted on normal exit. The deterministic PostgreSQL race
+regression went RED before the fix and GREEN afterward (export integration 7/7, worker full suite
+89 passed/40 skipped, root typecheck/lint/build/test and cross-package 58/58 passed).
+
+Operational assumptions: workers must be drained during rollout so pre-fix binaries cannot publish
+unfenced artifacts, and a storage lifecycle rule should eventually reap candidate objects left by a
+hard process crash.

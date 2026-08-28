@@ -81,6 +81,7 @@ describe("createSearchRebuildNoteHandler", () => {
       "asset.thumbnail",
       "import",
       "import.cleanup",
+      "export",
     ]);
     expect(Object.isFrozen(jobRegistry)).toBe(true);
   });

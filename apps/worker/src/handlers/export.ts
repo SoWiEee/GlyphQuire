@@ -19,6 +19,10 @@ const MAX_EXPORT_FILES = 256;
 const MAX_EXPORT_SOURCE_BYTES = 100 * 1024 * 1024;
 const MAX_HTML_SOURCE_BYTES = 25 * 1024 * 1024;
 const MAX_EXPORT_ARTIFACT_BYTES = 140 * 1024 * 1024;
+const CANONICAL_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const EXPORT_PROCESSING_OWNER_PATTERN =
+  /^EXPORT_PROCESSING:([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}):([1-9][0-9]*)$/u;
 const UUID_ASSET_URI =
   /^asset:\/\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
 const ZIP_EPOCH = new Date("1980-01-01T00:00:00.000Z");
@@ -44,6 +48,12 @@ interface ExportArtifact {
   contentType: string;
 }
 
+interface ExportAttemptOwner {
+  jobId: string;
+  attempt: number;
+  token: string;
+}
+
 export interface ExportHandlerDeps {
   database: Database;
   storage: ObjectStoragePort;
@@ -52,6 +62,62 @@ export interface ExportHandlerDeps {
 
 function expectedObjectKey(row: Pick<Export, "id" | "workspaceId">): string {
   return `workspace/${row.workspaceId}/exports/${row.id}/artifact`;
+}
+
+function attemptObjectKey(
+  row: Pick<Export, "id" | "workspaceId">,
+  owner: ExportAttemptOwner,
+): string {
+  return `workspace/${row.workspaceId}/exports/${row.id}/attempts/${owner.jobId}/${owner.attempt}`;
+}
+
+function exportAttemptOwner(job: JobEnvelope<"export">): ExportAttemptOwner {
+  if (
+    !CANONICAL_UUID_PATTERN.test(job.id) ||
+    !Number.isSafeInteger(job.attempts) ||
+    job.attempts < 1
+  ) {
+    throw new Error("JOB_FAILED");
+  }
+  return {
+    jobId: job.id,
+    attempt: job.attempts,
+    token: `EXPORT_PROCESSING:${job.id}:${job.attempts}`,
+  };
+}
+
+function readExportAttemptOwner(value: string | null): ExportAttemptOwner | undefined {
+  if (value === null) return undefined;
+  const match = EXPORT_PROCESSING_OWNER_PATTERN.exec(value);
+  if (!match?.[1] || !match[2]) return undefined;
+  const attempt = Number.parseInt(match[2], 10);
+  if (!Number.isSafeInteger(attempt)) return undefined;
+  return { jobId: match[1], attempt, token: value };
+}
+
+function nextUpdatedAt(previous: Date, now: number): Date {
+  const next = Math.max(now, previous.getTime() + 1);
+  if (!Number.isFinite(next)) throw new Error("JOB_FAILED");
+  return new Date(next);
+}
+
+function observedExportPredicate(row: Export) {
+  return and(
+    eq(exports.id, row.id),
+    eq(exports.workspaceId, row.workspaceId),
+    eq(exports.status, row.status),
+    eq(exports.updatedAt, row.updatedAt),
+    row.lastError === null ? isNull(exports.lastError) : eq(exports.lastError, row.lastError),
+  );
+}
+
+function ownedProcessingPredicate(row: Pick<Export, "id" | "workspaceId">, token: string) {
+  return and(
+    eq(exports.id, row.id),
+    eq(exports.workspaceId, row.workspaceId),
+    eq(exports.status, "processing"),
+    eq(exports.lastError, token),
+  );
 }
 
 function checkAborted(signal: AbortSignal): void {
@@ -437,18 +503,156 @@ function buildArtifact(
   throw new Error("JOB_FAILED");
 }
 
-async function markFailed(database: Database, row: Export, failedAt: Date): Promise<void> {
+function mayClaimExport(row: Export, owner: ExportAttemptOwner): boolean {
+  if (row.status === "pending" || row.status === "failed") return true;
+  if (row.status !== "processing") return false;
+  if (row.lastError === null) return true;
+  const previous = readExportAttemptOwner(row.lastError);
+  return (
+    previous !== undefined && previous.jobId === owner.jobId && previous.attempt < owner.attempt
+  );
+}
+
+async function claimExport(
+  database: Database,
+  row: Export,
+  owner: ExportAttemptOwner,
+  now: number,
+): Promise<Export | undefined> {
+  return database.transaction(async (transaction) => {
+    const [current] = await transaction
+      .select()
+      .from(exports)
+      .where(and(eq(exports.id, row.id), eq(exports.workspaceId, row.workspaceId)))
+      .limit(1)
+      .for("update");
+    if (!current || current.status === "completed" || current.status === "expired") {
+      return undefined;
+    }
+    if (current.objectKey !== expectedObjectKey(current)) throw new Error("JOB_FAILED");
+    if (current.expiresAt.getTime() <= now) {
+      await transaction
+        .update(exports)
+        .set({
+          status: "expired",
+          lastError: null,
+          updatedAt: nextUpdatedAt(current.updatedAt, now),
+        })
+        .where(and(observedExportPredicate(current), lte(exports.expiresAt, new Date(now))));
+      return undefined;
+    }
+    if (!mayClaimExport(current, owner)) return undefined;
+    const [claimed] = await transaction
+      .update(exports)
+      .set({
+        status: "processing",
+        lastError: owner.token,
+        updatedAt: nextUpdatedAt(current.updatedAt, now),
+      })
+      .where(and(observedExportPredicate(current), gt(exports.expiresAt, new Date(now))))
+      .returning();
+    return claimed;
+  });
+}
+
+async function expireObservedExport(database: Database, row: Export, now: number): Promise<void> {
   await database
     .update(exports)
-    .set({ status: "failed", lastError: "JOB_FAILED", updatedAt: failedAt })
-    .where(
-      and(
-        eq(exports.id, row.id),
-        eq(exports.workspaceId, row.workspaceId),
-        eq(exports.status, "processing"),
-      ),
-    )
+    .set({
+      status: "expired",
+      lastError: null,
+      updatedAt: nextUpdatedAt(row.updatedAt, now),
+    })
+    .where(and(observedExportPredicate(row), lte(exports.expiresAt, new Date(now))));
+}
+
+async function markFailed(
+  database: Database,
+  row: Export,
+  owner: ExportAttemptOwner,
+  failedAt: number,
+): Promise<void> {
+  await database
+    .update(exports)
+    .set({
+      status: "failed",
+      lastError: "JOB_FAILED",
+      updatedAt: nextUpdatedAt(row.updatedAt, failedAt),
+    })
+    .where(ownedProcessingPredicate(row, owner.token))
     .catch(() => undefined);
+}
+
+async function publishArtifact(
+  deps: ExportHandlerDeps,
+  claimed: Export,
+  owner: ExportAttemptOwner,
+  artifact: ExportArtifact,
+  signal: AbortSignal,
+  clock: () => number,
+): Promise<void> {
+  await deps.database.transaction(async (transaction) => {
+    const [current] = await transaction
+      .select()
+      .from(exports)
+      .where(and(eq(exports.id, claimed.id), eq(exports.workspaceId, claimed.workspaceId)))
+      .limit(1)
+      .for("update");
+    if (!current || current.status !== "processing" || current.lastError !== owner.token) {
+      return;
+    }
+    if (current.objectKey !== expectedObjectKey(current)) throw new Error("JOB_FAILED");
+    checkAborted(signal);
+    const beforePutAt = clock();
+    if (!Number.isFinite(beforePutAt)) throw new Error("JOB_FAILED");
+    if (current.expiresAt.getTime() <= beforePutAt) {
+      await transaction
+        .update(exports)
+        .set({
+          status: "expired",
+          lastError: null,
+          updatedAt: nextUpdatedAt(current.updatedAt, beforePutAt),
+        })
+        .where(ownedProcessingPredicate(current, owner.token));
+      return;
+    }
+    await deps.storage.put({
+      key: expectedObjectKey(current),
+      body: artifact.body,
+      contentType: artifact.contentType,
+      contentLength: artifact.body.byteLength,
+      sha256: createHash("sha256").update(artifact.body).digest("hex"),
+    });
+    checkAborted(signal);
+    const completedAt = clock();
+    if (!Number.isFinite(completedAt)) throw new Error("JOB_FAILED");
+    if (current.expiresAt.getTime() <= completedAt) {
+      await transaction
+        .update(exports)
+        .set({
+          status: "expired",
+          lastError: null,
+          updatedAt: nextUpdatedAt(current.updatedAt, completedAt),
+        })
+        .where(ownedProcessingPredicate(current, owner.token));
+      return;
+    }
+    const [completed] = await transaction
+      .update(exports)
+      .set({
+        status: "completed",
+        lastError: null,
+        updatedAt: nextUpdatedAt(current.updatedAt, completedAt),
+      })
+      .where(
+        and(
+          ownedProcessingPredicate(current, owner.token),
+          gt(exports.expiresAt, new Date(completedAt)),
+        ),
+      )
+      .returning({ id: exports.id });
+    if (!completed) throw new Error("JOB_FAILED");
+  });
 }
 
 export function createExportHandler(deps: ExportHandlerDeps): JobHandler<"export"> {
@@ -477,13 +681,15 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler<"export
     const now = clock();
     if (!Number.isFinite(now)) throw new Error("JOB_FAILED");
     if (row.expiresAt.getTime() <= now) {
-      await deps.database
-        .update(exports)
-        .set({ status: "expired", lastError: null, updatedAt: new Date(now) })
-        .where(and(eq(exports.id, row.id), eq(exports.workspaceId, row.workspaceId)));
+      await expireObservedExport(deps.database, row, now).catch(() => {
+        throw new Error("JOB_FAILED");
+      });
       return;
     }
 
+    const owner = exportAttemptOwner(job);
+    let claimed: Export | undefined;
+    let candidateKey: string | undefined;
     try {
       checkAborted(signal);
       const [member] = await deps.database
@@ -497,39 +703,9 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler<"export
         )
         .limit(1);
       if (!member) throw new Error("JOB_FAILED");
-      const [claimed] = await deps.database
-        .update(exports)
-        .set({ status: "processing", lastError: null, updatedAt: new Date(now) })
-        .where(
-          and(
-            eq(exports.id, row.id),
-            eq(exports.workspaceId, row.workspaceId),
-            inArray(exports.status, ["pending", "processing", "failed"]),
-            gt(exports.expiresAt, new Date(now)),
-          ),
-        )
-        .returning();
+      claimed = await claimExport(deps.database, row, owner, now);
       if (!claimed) {
-        const [current] = await deps.database
-          .select({ status: exports.status, expiresAt: exports.expiresAt })
-          .from(exports)
-          .where(and(eq(exports.id, row.id), eq(exports.workspaceId, row.workspaceId)))
-          .limit(1);
-        if (!current || current.status === "completed" || current.status === "expired") return;
-        if (current.expiresAt.getTime() <= now) {
-          await deps.database
-            .update(exports)
-            .set({ status: "expired", lastError: null, updatedAt: new Date(now) })
-            .where(
-              and(
-                eq(exports.id, row.id),
-                eq(exports.workspaceId, row.workspaceId),
-                lte(exports.expiresAt, new Date(now)),
-              ),
-            );
-          return;
-        }
-        throw new Error("JOB_FAILED");
+        return;
       }
       const exportNotes = await loadNotes(deps.database, claimed);
       const loadedAssets = await loadAssets(
@@ -542,54 +718,21 @@ export function createExportHandler(deps: ExportHandlerDeps): JobHandler<"export
       const artifact = buildArtifact(claimed, exportNotes, loadedAssets);
       if (artifact.body.byteLength > MAX_EXPORT_ARTIFACT_BYTES) throw new Error("JOB_FAILED");
       checkAborted(signal);
+      candidateKey = attemptObjectKey(claimed, owner);
       await deps.storage.put({
-        key: expectedObjectKey(claimed),
+        key: candidateKey,
         body: artifact.body,
         contentType: artifact.contentType,
         contentLength: artifact.body.byteLength,
         sha256: createHash("sha256").update(artifact.body).digest("hex"),
       });
       checkAborted(signal);
-      const completedAt = clock();
-      if (!Number.isFinite(completedAt)) throw new Error("JOB_FAILED");
-      const [completed] = await deps.database
-        .update(exports)
-        .set({ status: "completed", lastError: null, updatedAt: new Date(completedAt) })
-        .where(
-          and(
-            eq(exports.id, claimed.id),
-            eq(exports.workspaceId, claimed.workspaceId),
-            eq(exports.status, "processing"),
-            gt(exports.expiresAt, new Date(completedAt)),
-          ),
-        )
-        .returning({ id: exports.id });
-      if (!completed) {
-        const [current] = await deps.database
-          .select({ status: exports.status, expiresAt: exports.expiresAt })
-          .from(exports)
-          .where(and(eq(exports.id, claimed.id), eq(exports.workspaceId, claimed.workspaceId)))
-          .limit(1);
-        if (!current || current.status === "completed" || current.status === "expired") return;
-        if (current.expiresAt.getTime() <= completedAt) {
-          await deps.database
-            .update(exports)
-            .set({ status: "expired", lastError: null, updatedAt: new Date(completedAt) })
-            .where(
-              and(
-                eq(exports.id, claimed.id),
-                eq(exports.workspaceId, claimed.workspaceId),
-                eq(exports.status, "processing"),
-                lte(exports.expiresAt, new Date(completedAt)),
-              ),
-            );
-          return;
-        }
-        throw new Error("JOB_FAILED");
-      }
+      await publishArtifact(deps, claimed, owner, artifact, signal, clock);
     } catch {
-      await markFailed(deps.database, row, new Date(now));
+      if (claimed) await markFailed(deps.database, claimed, owner, now);
       throw new Error("JOB_FAILED");
+    } finally {
+      if (candidateKey) await deps.storage.delete(candidateKey).catch(() => undefined);
     }
   };
 }
