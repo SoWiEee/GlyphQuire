@@ -19,6 +19,16 @@ export interface ImportLifecycleOwner {
   leaseExpiresAt: string;
 }
 
+function canonicalUtcMilliseconds(value: unknown): number | undefined {
+  if (typeof value !== "string" || !CANONICAL_UTC_ISO_PATTERN.test(value)) return undefined;
+  if (Number.parseInt(value.slice(0, 4), 10) < 1) return undefined;
+  const milliseconds = Date.parse(value);
+  if (!Number.isFinite(milliseconds) || new Date(milliseconds).toISOString() !== value) {
+    return undefined;
+  }
+  return milliseconds;
+}
+
 export function importLeaseSeconds(value: number): number {
   if (!Number.isInteger(value) || value < 1 || value > MAX_LEASE_SECONDS) {
     throw new Error("Invalid import lifecycle lease seconds");
@@ -52,13 +62,8 @@ export function readImportLifecycleOwner(
     !canonicalUuidSchema.safeParse(owner.jobId).success ||
     !Number.isInteger(owner.attempt) ||
     (owner.attempt as number) < 1 ||
-    typeof owner.leaseExpiresAt !== "string" ||
-    !CANONICAL_UTC_ISO_PATTERN.test(owner.leaseExpiresAt)
+    canonicalUtcMilliseconds(owner.leaseExpiresAt) === undefined
   ) {
-    return undefined;
-  }
-  const leaseTime = Date.parse(owner.leaseExpiresAt);
-  if (!Number.isFinite(leaseTime) || new Date(leaseTime).toISOString() !== owner.leaseExpiresAt) {
     return undefined;
   }
   return owner as unknown as ImportLifecycleOwner;
@@ -89,24 +94,11 @@ export function importLifecycleOwnersEqual(
   );
 }
 
-export function importLifecycleOwnerPredicate(owner: ImportLifecycleOwner) {
-  return and(
-    sql`${imports.manifest} -> '_lifecycle' ->> 'kind' = ${owner.kind}`,
-    sql`${imports.manifest} -> '_lifecycle' ->> 'jobId' = ${owner.jobId}`,
-    sql`${imports.manifest} -> '_lifecycle' ->> 'attempt' = ${String(owner.attempt)}`,
-    sql`${imports.manifest} -> '_lifecycle' ->> 'leaseExpiresAt' = ${owner.leaseExpiresAt}`,
-  );
-}
-
-export function importLifecycleUnownedPredicate() {
-  return sql`not (${imports.manifest} ? '_lifecycle')`;
-}
-
-export function importLifecycleExpiredOwnerPredicate(kind: ImportLifecycleKind, now: number) {
-  const leaseCutoff = new Date(now).toISOString();
+function importLifecycleCanonicalOwnerPredicate() {
   return and(
     sql`jsonb_typeof(${imports.manifest} -> '_lifecycle') = 'object'`,
-    sql`${imports.manifest} -> '_lifecycle' ->> 'kind' = ${kind}`,
+    sql`jsonb_typeof(${imports.manifest} -> '_lifecycle' -> 'kind') = 'string'`,
+    sql`${imports.manifest} -> '_lifecycle' ->> 'kind' in ('import', 'cleanup')`,
     sql`jsonb_typeof(${imports.manifest} -> '_lifecycle' -> 'jobId') = 'string'`,
     sql`${imports.manifest} -> '_lifecycle' ->> 'jobId'
       ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`,
@@ -124,7 +116,35 @@ export function importLifecycleExpiredOwnerPredicate(kind: ImportLifecycleKind, 
             at time zone 'UTC',
           'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
         ) = ${imports.manifest} -> '_lifecycle' ->> 'leaseExpiresAt'
-        and (${imports.manifest} -> '_lifecycle' ->> 'leaseExpiresAt')::timestamptz
+      else false
+    end`,
+  );
+}
+
+export function importLifecycleOwnerPredicate(owner: ImportLifecycleOwner) {
+  return and(
+    importLifecycleCanonicalOwnerPredicate(),
+    sql`${imports.manifest} -> '_lifecycle' ->> 'kind' = ${owner.kind}`,
+    sql`${imports.manifest} -> '_lifecycle' ->> 'jobId' = ${owner.jobId}`,
+    sql`${imports.manifest} -> '_lifecycle' ->> 'attempt' = ${String(owner.attempt)}`,
+    sql`${imports.manifest} -> '_lifecycle' ->> 'leaseExpiresAt' = ${owner.leaseExpiresAt}`,
+  );
+}
+
+export function importLifecycleUnownedPredicate() {
+  return sql`not (${imports.manifest} ? '_lifecycle')`;
+}
+
+export function importLifecycleExpiredOwnerPredicate(kind: ImportLifecycleKind, now: number) {
+  const leaseCutoff = new Date(now).toISOString();
+  return and(
+    importLifecycleCanonicalOwnerPredicate(),
+    sql`${imports.manifest} -> '_lifecycle' ->> 'kind' = ${kind}`,
+    sql`case
+      when pg_input_is_valid(
+        ${imports.manifest} -> '_lifecycle' ->> 'leaseExpiresAt',
+        'timestamp with time zone'
+      ) then (${imports.manifest} -> '_lifecycle' ->> 'leaseExpiresAt')::timestamptz
           <= ${leaseCutoff}::timestamptz
       else false
     end`,

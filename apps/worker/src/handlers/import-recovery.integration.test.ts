@@ -12,7 +12,7 @@ import {
   type Database,
 } from "@glyphquire/database";
 import { InMemoryObjectStorage } from "@glyphquire/storage";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { strToU8, zipSync } from "fflate";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createImportCleanupHandler } from "./import-cleanup.js";
@@ -82,7 +82,19 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
-const malformedLifecycleOwners = [
+interface MalformedLifecycleOwnerFixture {
+  name: string;
+  create(now: number): {
+    kind: "cleanup";
+    jobId: string;
+    attempt: number;
+    leaseExpiresAt: string;
+  };
+  serialize?(owner: ReturnType<MalformedLifecycleOwnerFixture["create"]>): string;
+  expectedAttemptText?: string;
+}
+
+const malformedLifecycleOwners: readonly MalformedLifecycleOwnerFixture[] = [
   {
     name: "empty job id",
     create(now: number) {
@@ -117,6 +129,21 @@ const malformedLifecycleOwners = [
     },
   },
   {
+    name: "decimal-form integer attempt",
+    create(now: number) {
+      return {
+        kind: "cleanup",
+        jobId: randomUUID(),
+        attempt: 1,
+        leaseExpiresAt: new Date(now - 1).toISOString(),
+      };
+    },
+    serialize(owner) {
+      return `{"kind":"cleanup","jobId":"${owner.jobId}","attempt":1.0,"leaseExpiresAt":"${owner.leaseExpiresAt}"}`;
+    },
+    expectedAttemptText: "1.0",
+  },
+  {
     name: "non-canonical lease timestamp",
     create(now: number) {
       return {
@@ -127,7 +154,18 @@ const malformedLifecycleOwners = [
       };
     },
   },
-] as const;
+  {
+    name: "PostgreSQL-invalid year-zero lease timestamp",
+    create() {
+      return {
+        kind: "cleanup",
+        jobId: randomUUID(),
+        attempt: 1,
+        leaseExpiresAt: "0000-01-01T00:00:00.000Z",
+      };
+    },
+  },
+];
 
 describeWithPostgres("import crash recovery", () => {
   let db: Database;
@@ -492,21 +530,35 @@ describeWithPostgres("import crash recovery", () => {
   for (const scope of ["one", "staging"] as const) {
     it.each(malformedLifecycleOwners)(
       `keeps a $name lifecycle owner fail-closed for scope:${scope}`,
-      async ({ create }) => {
+      async ({ create, serialize, expectedAttemptText }) => {
         const now = Date.now();
         const storage = new InMemoryObjectStorage();
         const staged = await stagedImport(storage, new Date(now - 3_600_001));
-        const [row] = await db.select().from(imports).where(eq(imports.id, staged.importId));
         const malformedOwner = create(now);
+        const serializedOwner = serialize?.(malformedOwner) ?? JSON.stringify(malformedOwner);
         await db
           .update(imports)
           .set({
             status: "failed",
             compensationStatus: "running",
-            manifest: { ...row!.manifest, _lifecycle: malformedOwner },
+            manifest: sql`jsonb_set(
+              ${imports.manifest},
+              '{_lifecycle}',
+              ${serializedOwner}::jsonb,
+              true
+            )`,
             updatedAt: new Date(now - 3_600_001),
           })
           .where(eq(imports.id, staged.importId));
+        if (expectedAttemptText) {
+          const [stored] = await db
+            .select({
+              attemptText: sql<string>`${imports.manifest} -> '_lifecycle' ->> 'attempt'`,
+            })
+            .from(imports)
+            .where(eq(imports.id, staged.importId));
+          expect(stored?.attemptText).toBe(expectedAttemptText);
+        }
         const cleanup = createImportCleanupHandler({
           database: db,
           storage,
