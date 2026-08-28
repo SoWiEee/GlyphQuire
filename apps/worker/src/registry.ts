@@ -24,6 +24,7 @@ import {
 } from "./handlers/search-rebuild-note.js";
 import { createImportCleanupHandler } from "./handlers/import-cleanup.js";
 import { createImportHandler } from "./handlers/import.js";
+import { createExportHandler } from "./handlers/export.js";
 
 export interface JobRegistryDependencies {
   database: Database;
@@ -50,6 +51,7 @@ export const jobRegistry: JobRegistry = Object.freeze({
   "asset.thumbnail": unboundHandler,
   import: unboundHandler,
   "import.cleanup": unboundHandler,
+  export: unboundHandler,
 });
 
 /**
@@ -111,6 +113,11 @@ export function createJobRegistry(
     leaseSeconds: dependencies.environment.JOB_LOCK_TIMEOUT_SECONDS,
   });
 
+  const exportArtifact = createExportHandler({
+    database: dependencies.database,
+    storage: dependencies.storage,
+  });
+
   return Object.freeze({
     ...baseRegistry,
     "search.index": searchIndex,
@@ -120,5 +127,6 @@ export function createJobRegistry(
     "asset.thumbnail": assetThumbnail,
     import: importNote,
     "import.cleanup": importCleanup,
+    export: exportArtifact,
   });
 }
