@@ -2,6 +2,7 @@ import { pathToFileURL } from "node:url";
 import {
   createDb,
   IdempotencyStore,
+  workspaces,
   type Database,
   type IdempotencyStoreOptions,
 } from "@glyphquire/database";
@@ -20,8 +21,12 @@ import {
   type Phase5Env,
 } from "@glyphquire/shared";
 import type { ObjectStoragePort, S3EnvLike } from "@glyphquire/storage";
-import { sql } from "drizzle-orm";
-import { WorkerRuntime, type WorkerRuntimeOptions } from "./runtime.js";
+import { asc, sql } from "drizzle-orm";
+import {
+  DEFAULT_MAINTENANCE_INTERVAL_MS,
+  WorkerRuntime,
+  type WorkerRuntimeOptions,
+} from "./runtime.js";
 
 export { WorkerRuntime, type WorkerRuntimeOptions } from "./runtime.js";
 
@@ -134,6 +139,34 @@ async function closeInitializedResources(
   if (firstError) throw firstError;
 }
 
+async function enqueueImportStagingCleanup(
+  database: Database,
+  dispatcher: JobDispatcher,
+  batchSize: number,
+  intervalMs: number,
+  scheduledAt: number,
+  signal: AbortSignal,
+): Promise<void> {
+  const maintenanceWindow = Math.floor(scheduledAt / intervalMs);
+  const workspaceRows = await database
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .orderBy(asc(workspaces.id));
+  for (const workspace of workspaceRows) {
+    if (signal.aborted) throw new Error("JOB_FAILED");
+    await dispatcher.enqueue({
+      workspaceId: workspace.id,
+      type: "import.cleanup",
+      payload: {
+        workspaceId: workspace.id,
+        scope: "staging",
+        batchSize,
+      },
+      idempotencyKey: `import-cleanup-staging-window-${maintenanceWindow}`,
+    });
+  }
+}
+
 export async function startWorker(options: StartWorkerOptions = {}): Promise<StartedWorker> {
   const env = parseWorkerEnv(options.source === undefined ? process.env : options.source);
   // Keep the entrypoint importable before optional provider packages load so
@@ -181,8 +214,21 @@ export async function startWorker(options: StartWorkerOptions = {}): Promise<Sta
           staticRegistry,
         );
     assertRegistryComplete(registry);
+    const readyDatabase = database;
+    const maintenanceIntervalMs =
+      options.runtime?.maintenanceIntervalMs ?? DEFAULT_MAINTENANCE_INTERVAL_MS;
     const runtime = new WorkerRuntime(dispatcher, registry, {
       ...options.runtime,
+      maintenance: (scheduledAt, maintenanceSignal) =>
+        enqueueImportStagingCleanup(
+          readyDatabase,
+          dispatcher,
+          env.IMPORT_CLEANUP_BATCH_SIZE,
+          maintenanceIntervalMs,
+          scheduledAt,
+          maintenanceSignal,
+        ),
+      maintenanceIntervalMs,
       signal,
     });
     let closeResult: Promise<void> | undefined;

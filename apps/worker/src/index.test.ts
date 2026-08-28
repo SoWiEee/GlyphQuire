@@ -126,7 +126,16 @@ function fakeSearch(): SearchPort & DerivedSearchMutationPort {
 
 function fakeFactories() {
   const databaseEnd = vi.fn().mockResolvedValue(undefined);
-  const database = { marker: "database", $client: { end: databaseEnd } };
+  const workspaceRows: { id: string }[] = [];
+  const database = {
+    marker: "database",
+    $client: { end: databaseEnd },
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        orderBy: vi.fn(async () => workspaceRows),
+      })),
+    })),
+  };
   const storage = fakeStorage();
   const search = fakeSearch();
   const dispatcher = fakeDispatcher();
@@ -150,6 +159,7 @@ function fakeFactories() {
   return {
     database,
     databaseEnd,
+    workspaceRows,
     storage,
     search,
     dispatcher,
@@ -258,6 +268,42 @@ describe("production worker startup", () => {
     expect(started.idempotencyStore).toBe(idempotencyStore);
     expect(started.runtime).toBeInstanceOf(workerEntrypoint.WorkerRuntime);
     expect(started.runtime).toHaveProperty("dispatcher", dispatcher);
+    await started.close();
+  });
+
+  it("enqueues an initial idempotent staging cleanup scan before the first claim", async () => {
+    const workspaceId = "11111111-1111-4111-8111-111111111111";
+    const controller = new AbortController();
+    const { dispatcher, factories, workspaceRows } = fakeFactories();
+    workspaceRows.push({ id: workspaceId });
+    const started = await getStartWorker()({
+      source: { ...baseEnvironment, IMPORT_CLEANUP_BATCH_SIZE: "37" },
+      registry: completeRegistry(),
+      factories,
+      runtime: {
+        clock: () => 10_500,
+        maintenanceIntervalMs: 1_000,
+        pollIntervalMs: 1,
+        wait: abortableWait,
+      },
+      signal: controller.signal,
+    });
+
+    const running = started.runtime.run();
+    await vi.waitFor(() => expect(dispatcher.enqueue).toHaveBeenCalledTimes(1));
+
+    expect(dispatcher.enqueue).toHaveBeenCalledWith({
+      workspaceId,
+      type: "import.cleanup",
+      payload: { workspaceId, scope: "staging", batchSize: 37 },
+      idempotencyKey: "import-cleanup-staging-window-10",
+    });
+    expect(vi.mocked(dispatcher.enqueue).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(dispatcher.dispatchBatch).mock.invocationCallOrder[0]!,
+    );
+
+    controller.abort();
+    await expect(running).resolves.toBeUndefined();
     await started.close();
   });
 

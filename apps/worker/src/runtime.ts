@@ -7,14 +7,19 @@ import {
 
 export interface WorkerRuntimeOptions {
   clock?: () => number;
+  maintenance?: WorkerMaintenance;
+  maintenanceIntervalMs?: number;
   pollIntervalMs?: number;
   signal?: AbortSignal;
   wait?: WorkerWait;
 }
 
+export type WorkerMaintenance = (scheduledAt: number, signal: AbortSignal) => Promise<void>;
 export type WorkerWait = (milliseconds: number, signal: AbortSignal) => Promise<void>;
 
+export const DEFAULT_MAINTENANCE_INTERVAL_MS = 60_000;
 const DEFAULT_POLL_INTERVAL_MS = 1_000;
+const MAX_MAINTENANCE_INTERVAL_MS = 86_400_000;
 const MAX_POLL_INTERVAL_MS = 60_000;
 
 function defaultWait(milliseconds: number, signal: AbortSignal): Promise<void> {
@@ -35,12 +40,15 @@ function defaultWait(milliseconds: number, signal: AbortSignal): Promise<void> {
 export class WorkerRuntime {
   private readonly controller = new AbortController();
   private readonly clock: () => number;
+  private readonly maintenance: WorkerMaintenance | undefined;
+  private readonly maintenanceIntervalMs: number;
   private readonly pollIntervalMs: number;
   private readonly wait: WorkerWait;
   private readonly externalSignal: AbortSignal | undefined;
   private inFlight: Promise<DispatchSummary> | undefined;
   private loop: Promise<void> | undefined;
   private shutdownResult: Promise<void> | undefined;
+  private maintenanceWindow: number | undefined;
   private stopped = false;
 
   constructor(
@@ -49,6 +57,15 @@ export class WorkerRuntime {
     options: WorkerRuntimeOptions = {},
   ) {
     this.clock = options.clock ?? Date.now;
+    this.maintenance = options.maintenance;
+    this.maintenanceIntervalMs = options.maintenanceIntervalMs ?? DEFAULT_MAINTENANCE_INTERVAL_MS;
+    if (
+      !Number.isInteger(this.maintenanceIntervalMs) ||
+      this.maintenanceIntervalMs < 1 ||
+      this.maintenanceIntervalMs > MAX_MAINTENANCE_INTERVAL_MS
+    ) {
+      throw new Error("Invalid worker maintenance interval");
+    }
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     if (
       !Number.isInteger(this.pollIntervalMs) ||
@@ -100,10 +117,22 @@ export class WorkerRuntime {
     return this.loop;
   }
 
+  private async runMaintenanceIfDue(): Promise<void> {
+    if (!this.maintenance) return;
+    const scheduledAt = this.clock();
+    if (!Number.isFinite(scheduledAt)) throw new Error("Invalid worker clock");
+    const maintenanceWindow = Math.floor(scheduledAt / this.maintenanceIntervalMs);
+    if (maintenanceWindow === this.maintenanceWindow) return;
+    await this.maintenance(scheduledAt, this.signal);
+    this.maintenanceWindow = maintenanceWindow;
+  }
+
   private async runLoop(): Promise<void> {
     this.assertCanActivate();
     while (!this.stopped) {
       try {
+        await this.runMaintenanceIfDue();
+        if (this.stopped) return;
         await this.dispatchOnce();
       } catch (error) {
         if (this.stopped) return;

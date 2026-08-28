@@ -82,6 +82,53 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
+const malformedLifecycleOwners = [
+  {
+    name: "empty job id",
+    create(now: number) {
+      return {
+        kind: "cleanup",
+        jobId: "",
+        attempt: 1,
+        leaseExpiresAt: new Date(now - 1).toISOString(),
+      };
+    },
+  },
+  {
+    name: "non-canonical job id",
+    create(now: number) {
+      return {
+        kind: "cleanup",
+        jobId: randomUUID().toUpperCase(),
+        attempt: 1,
+        leaseExpiresAt: new Date(now - 1).toISOString(),
+      };
+    },
+  },
+  {
+    name: "non-integer attempt",
+    create(now: number) {
+      return {
+        kind: "cleanup",
+        jobId: randomUUID(),
+        attempt: 1.5,
+        leaseExpiresAt: new Date(now - 1).toISOString(),
+      };
+    },
+  },
+  {
+    name: "non-canonical lease timestamp",
+    create(now: number) {
+      return {
+        kind: "cleanup",
+        jobId: randomUUID(),
+        attempt: 1,
+        leaseExpiresAt: new Date(now - 1).toISOString().replace("Z", "+00:00"),
+      };
+    },
+  },
+] as const;
+
 describeWithPostgres("import crash recovery", () => {
   let db: Database;
 
@@ -441,6 +488,48 @@ describeWithPostgres("import crash recovery", () => {
     expect(recovered).toMatchObject({ status: "failed", compensationStatus: "completed" });
     expect(recovered!.manifest).not.toHaveProperty("_lifecycle");
   });
+
+  for (const scope of ["one", "staging"] as const) {
+    it.each(malformedLifecycleOwners)(
+      `keeps a $name lifecycle owner fail-closed for scope:${scope}`,
+      async ({ create }) => {
+        const now = Date.now();
+        const storage = new InMemoryObjectStorage();
+        const staged = await stagedImport(storage, new Date(now - 3_600_001));
+        const [row] = await db.select().from(imports).where(eq(imports.id, staged.importId));
+        const malformedOwner = create(now);
+        await db
+          .update(imports)
+          .set({
+            status: "failed",
+            compensationStatus: "running",
+            manifest: { ...row!.manifest, _lifecycle: malformedOwner },
+            updatedAt: new Date(now - 3_600_001),
+          })
+          .where(eq(imports.id, staged.importId));
+        const cleanup = createImportCleanupHandler({
+          database: db,
+          storage,
+          graceSeconds: 3_600,
+          clock: () => now,
+        });
+
+        const cleanupRun = cleanup(
+          scope === "one"
+            ? cleanupJob(staged.workspaceId, staged.importId)
+            : stagingCleanupJob(staged.workspaceId),
+          new AbortController().signal,
+        );
+        if (scope === "one") await expect(cleanupRun).rejects.toThrow("JOB_FAILED");
+        else await expect(cleanupRun).resolves.toBeUndefined();
+
+        expect(storage.has(staged.sourceObjectKey)).toBe(true);
+        const [preserved] = await db.select().from(imports).where(eq(imports.id, staged.importId));
+        expect(preserved).toMatchObject({ status: "failed", compensationStatus: "running" });
+        expect(preserved!.manifest).toHaveProperty("_lifecycle", malformedOwner);
+      },
+    );
+  }
 
   it("keeps active lifecycle owners and completed imports out of the staging cleanup scan", async () => {
     const now = Date.now();

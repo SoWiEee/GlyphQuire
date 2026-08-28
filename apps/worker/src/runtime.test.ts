@@ -168,6 +168,34 @@ describe("WorkerRuntime", () => {
     expect(dispatcher.dispatchBatch).toHaveBeenCalledTimes(1);
   });
 
+  it("runs maintenance immediately and once per configured interval in the polling loop", async () => {
+    let now = 10_000;
+    let waits = 0;
+    const externalController = new AbortController();
+    const dispatcher = fakeDispatcher();
+    const maintenance = vi.fn(async (_scheduledAt: number, _signal: AbortSignal) => undefined);
+    const wait = vi.fn(async () => {
+      waits += 1;
+      if (waits === 1) now += 99;
+      else if (waits === 2) now += 1;
+      else externalController.abort();
+    });
+    const complete = Object.fromEntries(P0_JOB_TYPES.map((type) => [type, vi.fn()])) as JobRegistry;
+    const runtime = new WorkerRuntime(dispatcher, complete, {
+      clock: () => now,
+      maintenance,
+      maintenanceIntervalMs: 100,
+      pollIntervalMs: 1,
+      signal: externalController.signal,
+      wait,
+    });
+
+    await expect(runtime.run()).resolves.toBeUndefined();
+
+    expect(maintenance.mock.calls.map(([scheduledAt]) => scheduledAt)).toEqual([10_000, 10_100]);
+    expect(dispatcher.dispatchBatch).toHaveBeenCalledTimes(3);
+  });
+
   it("aborts and drains an in-flight batch before shutdown resolves", async () => {
     let activeSignal: AbortSignal | undefined;
     let releaseBatch: (() => void) | undefined;

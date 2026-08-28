@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { canonicalUuidSchema } from "@glyphquire/api-contract";
 import type { JobEnvelope, JobType } from "@glyphquire/api-contract/jobs";
 import { imports, type Database, type ImportManifest } from "@glyphquire/database";
 import { and, eq, sql } from "drizzle-orm";
@@ -6,6 +7,8 @@ import { and, eq, sql } from "drizzle-orm";
 const LIFECYCLE_FIELD = "_lifecycle";
 const MAX_LEASE_SECONDS = 3_600;
 const MILLISECONDS_PER_SECOND = 1_000;
+const CANONICAL_UTC_ISO_PATTERN =
+  /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{3}Z$/;
 
 export type ImportLifecycleKind = "import" | "cleanup";
 
@@ -46,12 +49,16 @@ export function readImportLifecycleOwner(
   const owner = value as Record<string, unknown>;
   if (
     (owner.kind !== "import" && owner.kind !== "cleanup") ||
-    typeof owner.jobId !== "string" ||
+    !canonicalUuidSchema.safeParse(owner.jobId).success ||
     !Number.isInteger(owner.attempt) ||
     (owner.attempt as number) < 1 ||
     typeof owner.leaseExpiresAt !== "string" ||
-    !Number.isFinite(Date.parse(owner.leaseExpiresAt))
+    !CANONICAL_UTC_ISO_PATTERN.test(owner.leaseExpiresAt)
   ) {
+    return undefined;
+  }
+  const leaseTime = Date.parse(owner.leaseExpiresAt);
+  if (!Number.isFinite(leaseTime) || new Date(leaseTime).toISOString() !== owner.leaseExpiresAt) {
     return undefined;
   }
   return owner as unknown as ImportLifecycleOwner;
@@ -101,7 +108,8 @@ export function importLifecycleExpiredOwnerPredicate(kind: ImportLifecycleKind, 
     sql`jsonb_typeof(${imports.manifest} -> '_lifecycle') = 'object'`,
     sql`${imports.manifest} -> '_lifecycle' ->> 'kind' = ${kind}`,
     sql`jsonb_typeof(${imports.manifest} -> '_lifecycle' -> 'jobId') = 'string'`,
-    sql`char_length(${imports.manifest} -> '_lifecycle' ->> 'jobId') > 0`,
+    sql`${imports.manifest} -> '_lifecycle' ->> 'jobId'
+      ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`,
     sql`jsonb_typeof(${imports.manifest} -> '_lifecycle' -> 'attempt') = 'number'`,
     sql`${imports.manifest} -> '_lifecycle' ->> 'attempt' ~ '^[1-9][0-9]*$'`,
     sql`jsonb_typeof(${imports.manifest} -> '_lifecycle' -> 'leaseExpiresAt') = 'string'`,
@@ -111,8 +119,13 @@ export function importLifecycleExpiredOwnerPredicate(kind: ImportLifecycleKind, 
       when pg_input_is_valid(
         ${imports.manifest} -> '_lifecycle' ->> 'leaseExpiresAt',
         'timestamp with time zone'
-      ) then (${imports.manifest} -> '_lifecycle' ->> 'leaseExpiresAt')::timestamptz
-        <= ${leaseCutoff}::timestamptz
+      ) then to_char(
+          (${imports.manifest} -> '_lifecycle' ->> 'leaseExpiresAt')::timestamptz
+            at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'
+        ) = ${imports.manifest} -> '_lifecycle' ->> 'leaseExpiresAt'
+        and (${imports.manifest} -> '_lifecycle' ->> 'leaseExpiresAt')::timestamptz
+          <= ${leaseCutoff}::timestamptz
       else false
     end`,
   );
