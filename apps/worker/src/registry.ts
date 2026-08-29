@@ -25,6 +25,41 @@ import {
 import { createImportCleanupHandler } from "./handlers/import-cleanup.js";
 import { createImportHandler } from "./handlers/import.js";
 import { createExportHandler } from "./handlers/export.js";
+import {
+  createPostgresShareCleanupHandler,
+  type ShareCleanupAudit,
+  type ShareCleanupAuditEvent,
+} from "./handlers/share-cleanup.js";
+
+type AuditWriteCallback = (error?: Error | null) => void;
+type AuditWriter = (chunk: string, callback: AuditWriteCallback) => boolean | void;
+
+/**
+ * Write audit records only after stderr acknowledges the write. Console APIs
+ * intentionally hide stream callback failures, which would otherwise let a
+ * cleanup transaction commit without durable audit evidence.
+ */
+export function createStructuredShareCleanupAudit(
+  writer: AuditWriter = (chunk, callback) => process.stderr.write(chunk, callback),
+): ShareCleanupAudit {
+  return Object.freeze({
+    record(event: ShareCleanupAuditEvent) {
+      const chunk = `${JSON.stringify(event)}\n`;
+      return new Promise<void>((resolve, reject) => {
+        try {
+          writer(chunk, (error) => {
+            if (error) reject(error);
+            else resolve();
+          });
+        } catch (error) {
+          reject(error);
+        }
+      });
+    },
+  });
+}
+
+const structuredShareCleanupAudit = createStructuredShareCleanupAudit();
 
 export interface JobRegistryDependencies {
   database: Database;
@@ -52,6 +87,7 @@ export const jobRegistry: JobRegistry = Object.freeze({
   import: unboundHandler,
   "import.cleanup": unboundHandler,
   export: unboundHandler,
+  "share.cleanup": unboundHandler,
 });
 
 /**
@@ -118,6 +154,12 @@ export function createJobRegistry(
     storage: dependencies.storage,
   });
 
+  const shareCleanup = createPostgresShareCleanupHandler({
+    database: dependencies.database,
+    audit: structuredShareCleanupAudit,
+    graceSeconds: dependencies.environment.SHARE_DELETE_GRACE_SECONDS,
+  });
+
   return Object.freeze({
     ...baseRegistry,
     "search.index": searchIndex,
@@ -128,5 +170,6 @@ export function createJobRegistry(
     import: importNote,
     "import.cleanup": importCleanup,
     export: exportArtifact,
+    "share.cleanup": shareCleanup,
   });
 }

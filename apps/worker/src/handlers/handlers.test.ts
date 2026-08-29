@@ -223,6 +223,7 @@ describe("Phase 5 worker consumer modules", () => {
       "import",
       "import.cleanup",
       "export",
+      "share.cleanup",
     ]);
     expect(Object.values(jobRegistry).every((handler) => typeof handler === "function")).toBe(true);
     expect(Object.isFrozen(jobRegistry)).toBe(true);

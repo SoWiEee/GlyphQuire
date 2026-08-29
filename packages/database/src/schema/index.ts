@@ -56,3 +56,4 @@ export {
   type ExportFormat,
   type ExportStatus,
 } from "./exports.js";
+export { shareLinks, shareLinksRelations, type ShareLinkScopeType } from "./share-links.js";

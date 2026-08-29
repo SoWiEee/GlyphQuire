@@ -41,6 +41,8 @@ export {
   importResourcesRelations,
   exports,
   exportsRelations,
+  shareLinks,
+  shareLinksRelations,
   MAX_SEARCH_TEXT_BYTES,
   type WorkspaceRole,
   type NoteVisibility,
@@ -57,6 +59,7 @@ export {
   type ExportScopeType,
   type ExportFormat,
   type ExportStatus,
+  type ShareLinkScopeType,
 } from "./schema/index.js";
 
 export {
@@ -78,6 +81,7 @@ import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import type {
   assets,
   exports,
+  shareLinks,
   importResources,
   imports,
   documentJobs,
@@ -123,3 +127,5 @@ export type ImportResource = InferSelectModel<typeof importResources>;
 export type NewImportResource = InferInsertModel<typeof importResources>;
 export type Export = InferSelectModel<typeof exports>;
 export type NewExport = InferInsertModel<typeof exports>;
+export type ShareLink = InferSelectModel<typeof shareLinks>;
+export type NewShareLink = InferInsertModel<typeof shareLinks>;
