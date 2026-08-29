@@ -167,7 +167,7 @@
         },
         "account_id": {
           "name": "account_id",
-          "type": "text",
+          "type": "varchar(200)",
           "primaryKey": false,
           "notNull": true
         },
@@ -314,7 +314,7 @@
         },
         "account_deletions_workspace_ids_check": {
           "name": "account_deletions_workspace_ids_check",
-          "value": "jsonb_typeof(\"account_deletions\".\"workspace_ids\") = 'array' and octet_length(\"account_deletions\".\"workspace_ids\"::text) <= 65536"
+          "value": "public.validate_account_deletion_workspace_ids(\"account_deletions\".\"workspace_ids\")"
         },
         "account_deletions_manifest_check": {
           "name": "account_deletions_manifest_check",
@@ -324,9 +324,13 @@
           "name": "account_deletions_idempotency_key_check",
           "value": "char_length(\"account_deletions\".\"idempotency_key\") > 0"
         },
+        "account_deletions_account_id_check": {
+          "name": "account_deletions_account_id_check",
+          "value": "char_length(\"account_deletions\".\"account_id\") > 0 and octet_length(\"account_deletions\".\"account_id\") <= 200"
+        },
         "account_deletions_execute_after_check": {
           "name": "account_deletions_execute_after_check",
-          "value": "\"account_deletions\".\"execute_after\" >= \"account_deletions\".\"confirmed_at\""
+          "value": "\"account_deletions\".\"execute_after\" >= \"account_deletions\".\"confirmed_at\" + interval '86400 seconds'"
         }
       },
       "isRLSEnabled": false
@@ -3783,6 +3787,10 @@
           "name": "workspace_deletions_status_check",
           "value": "\"workspace_deletions\".\"status\" in ('pending', 'processing', 'completed', 'failed')"
         },
+        "workspace_deletions_active_identity_check": {
+          "name": "workspace_deletions_active_identity_check",
+          "value": "\"workspace_deletions\".\"status\" = 'completed' or (\"workspace_deletions\".\"workspace_id\" is not null and \"workspace_deletions\".\"requested_by\" is not null and char_length(\"workspace_deletions\".\"requested_by\") > 0 and octet_length(\"workspace_deletions\".\"requested_by\") <= 200)"
+        },
         "workspace_deletions_manifest_check": {
           "name": "workspace_deletions_manifest_check",
           "value": "jsonb_typeof(\"workspace_deletions\".\"manifest\") = 'object' and octet_length(\"workspace_deletions\".\"manifest\"::text) <= 1048576"
@@ -3793,7 +3801,7 @@
         },
         "workspace_deletions_execute_after_check": {
           "name": "workspace_deletions_execute_after_check",
-          "value": "\"workspace_deletions\".\"execute_after\" >= \"workspace_deletions\".\"confirmed_at\""
+          "value": "\"workspace_deletions\".\"status\" = 'completed' or \"workspace_deletions\".\"execute_after\" >= \"workspace_deletions\".\"confirmed_at\" + interval '86400 seconds'"
         }
       },
       "isRLSEnabled": false

@@ -60,11 +60,21 @@ export const workspaceDeletions = pgTable(
       sql`${table.status} in ('pending', 'processing', 'completed', 'failed')`,
     ),
     check(
+      "workspace_deletions_active_identity_check",
+      sql`${table.status} = 'completed' or (${table.workspaceId} is not null and ${table.requestedBy} is not null and char_length(${table.requestedBy}) > 0 and octet_length(${table.requestedBy}) <= 200)`,
+    ),
+    check(
       "workspace_deletions_manifest_check",
       sql`jsonb_typeof(${table.manifest}) = 'object' and octet_length(${table.manifest}::text) <= 1048576`,
     ),
-    check("workspace_deletions_idempotency_key_check", sql`char_length(${table.idempotencyKey}) > 0`),
-    check("workspace_deletions_execute_after_check", sql`${table.executeAfter} >= ${table.confirmedAt}`),
+    check(
+      "workspace_deletions_idempotency_key_check",
+      sql`char_length(${table.idempotencyKey}) > 0`,
+    ),
+    check(
+      "workspace_deletions_execute_after_check",
+      sql`${table.status} = 'completed' or ${table.executeAfter} >= ${table.confirmedAt} + interval '86400 seconds'`,
+    ),
   ],
 );
 

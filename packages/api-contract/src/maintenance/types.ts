@@ -16,16 +16,10 @@ import type {
 
 export type DeletionConfirmation = z.infer<typeof deletionConfirmationSchema>;
 export type DeletionResponse = z.infer<typeof deletionResponseSchema>;
-export type MaintenanceCapabilitiesResponse = z.infer<
-  typeof maintenanceCapabilitiesResponseSchema
->;
-export type MaintenanceSearchRebuildRequest = z.infer<
-  typeof maintenanceSearchRebuildRequestSchema
->;
+export type MaintenanceCapabilitiesResponse = z.infer<typeof maintenanceCapabilitiesResponseSchema>;
+export type MaintenanceSearchRebuildRequest = z.infer<typeof maintenanceSearchRebuildRequestSchema>;
 export type AssetCleanupRequest = z.infer<typeof assetCleanupRequestSchema>;
-export type MaintenanceJobMutationResponse = z.infer<
-  typeof maintenanceJobMutationResponseSchema
->;
+export type MaintenanceJobMutationResponse = z.infer<typeof maintenanceJobMutationResponseSchema>;
 export type DeadLetterQuery = z.infer<typeof deadLetterQuerySchema>;
 export type DeadLetterItem = z.infer<typeof deadLetterItemSchema>;
 export type DeadLetterResponse = z.infer<typeof deadLetterResponseSchema>;

@@ -84,9 +84,7 @@ export const deadLetterQuerySchema = cursorPaginationQuerySchema.extend({
   cursor: phase5CursorSchema.optional(),
 });
 
-export const deadLetterReplayParamsSchema = z
-  .object({ id: canonicalUuidSchema })
-  .strict();
+export const deadLetterReplayParamsSchema = z.object({ id: canonicalUuidSchema }).strict();
 
 export const deadLetterItemSchema = z
   .object({
@@ -106,7 +104,18 @@ export const deadLetterResponseSchema = z
     items: z.array(deadLetterItemSchema).max(100),
     nextCursor: phase5CursorSchema.nullable(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    value.items.forEach((item, index) => {
+      if (item.attempts > item.maxAttempts) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["items", index, "attempts"],
+          message: "Dead-letter attempts cannot exceed maxAttempts",
+        });
+      }
+    });
+  });
 
 export const backupVerificationQuerySchema = cursorPaginationQuerySchema.extend({
   pageSize: pageSizeSchema,
