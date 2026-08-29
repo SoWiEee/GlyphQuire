@@ -99,9 +99,9 @@ describe("Phase 5 assets migration artifacts", () => {
       "0005_phase5_jobs",
       "0006_phase5_assets",
     ]);
-    expect(
-      await readFile(new URL("./meta/0006_snapshot.json", import.meta.url), "utf8"),
-    ).toContain('"public.assets"');
+    expect(await readFile(new URL("./meta/0006_snapshot.json", import.meta.url), "utf8")).toContain(
+      '"public.assets"',
+    );
   });
 });
 
@@ -250,7 +250,10 @@ describeWithPostgres("Phase 5 assets PostgreSQL migration", () => {
           insert into assets (workspace_id, owner_id, object_key, original_name, mime_type, size_bytes, sha256)
           values (${workspace!.id}, ${actorId}, ${objectKey}, 'file.png', 'image/png', 0, ${sha})
         `,
-      ).rejects.toMatchObject({ code: "23514", constraint_name: "assets_size_bytes_positive_check" });
+      ).rejects.toMatchObject({
+        code: "23514",
+        constraint_name: "assets_size_bytes_positive_check",
+      });
 
       await expect(
         client`

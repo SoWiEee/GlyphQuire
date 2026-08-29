@@ -30,7 +30,10 @@ async function findMinioContainerId(): Promise<string | undefined> {
     ["ps", "--filter", "name=minio", "--format", "{{.ID}}"],
     { timeout: EXEC_TIMEOUT_MS },
   );
-  return stdout.split("\n").map((line) => line.trim()).find((line) => line.length > 0);
+  return stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
 }
 
 async function mc(containerId: string, ...args: string[]): Promise<void> {
@@ -67,7 +70,15 @@ describe("S3ObjectStorage bucket-policy privilege boundary (MinIO)", () => {
       containerId = await findMinioContainerId();
       if (!containerId) return;
 
-      await mc(containerId, "alias", "set", "gqpriv", "http://127.0.0.1:9000", "glyphquire", "glyphquire_dev");
+      await mc(
+        containerId,
+        "alias",
+        "set",
+        "gqpriv",
+        "http://127.0.0.1:9000",
+        "glyphquire",
+        "glyphquire_dev",
+      );
       await mc(containerId, "mb", "--ignore-existing", `gqpriv/${allowedBucket}`);
       await mc(containerId, "mb", "--ignore-existing", `gqpriv/${deniedBucket}`);
       await mc(containerId, "admin", "user", "add", "gqpriv", scopedUser, scopedPassword);
@@ -85,7 +96,16 @@ describe("S3ObjectStorage bucket-policy privilege boundary (MinIO)", () => {
       const policyPath = `/tmp/${policyName}.json`;
       await writeFileInContainer(containerId, policyPath, policyJson);
       await mc(containerId, "admin", "policy", "create", "gqpriv", policyName, policyPath);
-      await mc(containerId, "admin", "policy", "attach", "gqpriv", policyName, "--user", scopedUser);
+      await mc(
+        containerId,
+        "admin",
+        "policy",
+        "attach",
+        "gqpriv",
+        policyName,
+        "--user",
+        scopedUser,
+      );
       ready = true;
     } catch {
       ready = false;
@@ -95,7 +115,16 @@ describe("S3ObjectStorage bucket-policy privilege boundary (MinIO)", () => {
   afterAll(async () => {
     if (!containerId || !ready) return;
     try {
-      await mc(containerId, "admin", "policy", "detach", "gqpriv", policyName, "--user", scopedUser);
+      await mc(
+        containerId,
+        "admin",
+        "policy",
+        "detach",
+        "gqpriv",
+        policyName,
+        "--user",
+        scopedUser,
+      );
     } catch {
       /* best-effort cleanup */
     }

@@ -18,7 +18,12 @@ import { notes } from "./notes.js";
 import { workspaces } from "./workspaces.js";
 
 export type ImportStatus =
-  "staging" | "pending" | "processing" | "completed" | "failed" | "expired";
+  | "staging"
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "expired";
 
 export type ImportCompensationStatus = "none" | "required" | "running" | "completed" | "failed";
 

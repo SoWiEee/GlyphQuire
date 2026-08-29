@@ -11,7 +11,9 @@ function invalidRequest(): never {
   throw new PublicApiError("ASSET_INVALID", 400);
 }
 
-function requireIdempotencyKey(context: { req: { header(name: string): string | undefined } }): string {
+function requireIdempotencyKey(context: {
+  req: { header(name: string): string | undefined };
+}): string {
   const key = context.req.header("idempotency-key");
   if (
     !key ||

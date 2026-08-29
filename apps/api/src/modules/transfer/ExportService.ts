@@ -22,7 +22,8 @@ type DbTransaction = Parameters<Database["transaction"]>[0] extends (tx: infer T
   : never;
 
 export type ExportStartScope =
-  { workspaceId: string; noteId?: never } | { noteId: string; workspaceId?: never };
+  | { workspaceId: string; noteId?: never }
+  | { noteId: string; workspaceId?: never };
 
 export interface ExportService {
   start(

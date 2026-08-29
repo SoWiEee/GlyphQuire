@@ -25,7 +25,10 @@ class FakeRepository implements AssetThumbnailRepository {
     this.rows.set(`${workspaceId}:${assetId}`, row);
   }
 
-  async loadActiveAsset(workspaceId: string, assetId: string): Promise<AssetThumbnailRow | undefined> {
+  async loadActiveAsset(
+    workspaceId: string,
+    assetId: string,
+  ): Promise<AssetThumbnailRow | undefined> {
     return this.rows.get(`${workspaceId}:${assetId}`);
   }
 
@@ -192,9 +195,7 @@ describe("asset.thumbnail handler", () => {
     });
     await handler(jobFor(workspaceId, assetId), new AbortController().signal);
 
-    expect(repository.failedCalls).toEqual([
-      { workspaceId, assetId, reason: "source_too_large" },
-    ]);
+    expect(repository.failedCalls).toEqual([{ workspaceId, assetId, reason: "source_too_large" }]);
   });
 
   it("fails closed when the decoded pixel count exceeds the decoder cap", async () => {

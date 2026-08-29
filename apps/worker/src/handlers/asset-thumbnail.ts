@@ -29,11 +29,7 @@ export interface AssetThumbnailRepository {
     thumbnailHeight: number;
     thumbnailBytes: number;
   }): Promise<void>;
-  markMetadataOnly(input: {
-    workspaceId: string;
-    assetId: string;
-    reason: string;
-  }): Promise<void>;
+  markMetadataOnly(input: { workspaceId: string; assetId: string; reason: string }): Promise<void>;
   markFailed(input: { workspaceId: string; assetId: string; reason: string }): Promise<void>;
 }
 
@@ -134,7 +130,10 @@ export function createAssetThumbnailHandler(
     let output: Buffer;
     try {
       output = await sharp(sourceBytes, { limitInputPixels: deps.limits.maxPixels })
-        .resize(THUMBNAIL_DIMENSION, THUMBNAIL_DIMENSION, { fit: "inside", withoutEnlargement: true })
+        .resize(THUMBNAIL_DIMENSION, THUMBNAIL_DIMENSION, {
+          fit: "inside",
+          withoutEnlargement: true,
+        })
         .webp({ quality: 80 })
         .toBuffer();
     } catch {

@@ -15,7 +15,13 @@ import { notes } from "./notes.js";
 import { workspaces } from "./workspaces.js";
 
 export type NoteOperationKind =
-  "create" | "rename" | "save" | "delete" | "restore" | "checkpoint" | "restore_version";
+  | "create"
+  | "rename"
+  | "save"
+  | "delete"
+  | "restore"
+  | "checkpoint"
+  | "restore_version";
 
 export const noteOperations = pgTable(
   "note_operations",

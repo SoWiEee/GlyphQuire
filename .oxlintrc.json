@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "no-unused-expressions": "off",
+    "unicorn/no-new-array": "off"
+  },
+  "env": {
+    "builtin": true
+  },
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/node_modules/**",
+    ".superpowers/**",
+    "README.md",
+    "AGENTS.md",
+    "packages/document-engine/tests/fixtures/**",
+    "packages/database/src/migrations/meta/**"
+  ]
+}

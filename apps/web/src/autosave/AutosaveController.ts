@@ -8,7 +8,13 @@ import { NoteApiError, NoteConflictError, NoteOfflineError } from "../api/NoteCl
 import type { NoteConflict } from "@glyphquire/api-contract";
 
 export type AutosaveStatus =
-  "clean" | "dirty" | "saving" | "saved" | "offline" | "error" | "conflict";
+  | "clean"
+  | "dirty"
+  | "saving"
+  | "saved"
+  | "offline"
+  | "error"
+  | "conflict";
 
 export interface AutosaveErrorInfo {
   readonly code: string;
