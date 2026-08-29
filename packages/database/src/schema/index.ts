@@ -57,3 +57,14 @@ export {
   type ExportStatus,
 } from "./exports.js";
 export { shareLinks, shareLinksRelations, type ShareLinkScopeType } from "./share-links.js";
+export {
+  workspaceDeletions,
+  workspaceDeletionsRelations,
+  type WorkspaceDeletionStatus,
+  type WorkspaceDeletionManifest,
+} from "./workspace-deletions.js";
+export {
+  accountDeletions,
+  type AccountDeletionStatus,
+  type AccountDeletionManifest,
+} from "./account-deletions.js";

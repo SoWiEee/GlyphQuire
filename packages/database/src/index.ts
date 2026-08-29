@@ -43,6 +43,9 @@ export {
   exportsRelations,
   shareLinks,
   shareLinksRelations,
+  workspaceDeletions,
+  workspaceDeletionsRelations,
+  accountDeletions,
   MAX_SEARCH_TEXT_BYTES,
   type WorkspaceRole,
   type NoteVisibility,
@@ -60,6 +63,10 @@ export {
   type ExportFormat,
   type ExportStatus,
   type ShareLinkScopeType,
+  type WorkspaceDeletionStatus,
+  type WorkspaceDeletionManifest,
+  type AccountDeletionStatus,
+  type AccountDeletionManifest,
 } from "./schema/index.js";
 
 export {
@@ -95,6 +102,8 @@ import type {
   userThemes,
   workspaceMembers,
   workspaces,
+  workspaceDeletions,
+  accountDeletions,
 } from "./schema/index.js";
 
 export type Workspace = InferSelectModel<typeof workspaces>;
@@ -129,3 +138,7 @@ export type Export = InferSelectModel<typeof exports>;
 export type NewExport = InferInsertModel<typeof exports>;
 export type ShareLink = InferSelectModel<typeof shareLinks>;
 export type NewShareLink = InferInsertModel<typeof shareLinks>;
+export type WorkspaceDeletion = InferSelectModel<typeof workspaceDeletions>;
+export type NewWorkspaceDeletion = InferInsertModel<typeof workspaceDeletions>;
+export type AccountDeletion = InferSelectModel<typeof accountDeletions>;
+export type NewAccountDeletion = InferInsertModel<typeof accountDeletions>;

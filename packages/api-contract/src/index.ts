@@ -22,6 +22,8 @@ export * from "./transfer/schemas.js";
 export * from "./transfer/types.js";
 export * from "./share-links/schemas.js";
 export * from "./share-links/types.js";
+export * from "./maintenance/schemas.js";
+export * from "./maintenance/types.js";
 
 export function createApiClient(transport: ApiClientTransport): ApiClient {
   return {
