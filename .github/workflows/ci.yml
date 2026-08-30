@@ -62,6 +62,9 @@ jobs:
       - name: Integration tests
         run: pnpm test:integration
 
+      - name: Phase 6 deterministic integration tests
+        run: pnpm test:integration:phase6
+
       - name: Cross-package scaffold
         run: pnpm test:cross-package
 
@@ -87,3 +90,40 @@ jobs:
       # the deferred P0-08 thirty-minute workload.
       - name: Phase 2 autosave/conflict load profile
         run: pnpm test:load:phase2
+
+  phase6-release-candidate:
+    name: Phase 6 release candidate
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PHASE6_RELEASE_ENABLED == 'true' }}
+    needs: check
+    runs-on: ubuntu-latest
+    environment: phase6-release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build immutable Phase 6 service images
+        env:
+          IMAGE_TAG: phase6-${{ github.sha }}
+        run: |
+          docker build --file infra/phase6/images/api.Dockerfile --tag glyphquire-api:"$IMAGE_TAG" .
+          docker build --file infra/phase6/images/web.Dockerfile --tag glyphquire-web:"$IMAGE_TAG" .
+          docker build --file infra/phase6/images/worker.Dockerfile --tag glyphquire-worker:"$IMAGE_TAG" .
+      - name: Verify release target configuration
+        env:
+          PHASE6_BASE_URL: ${{ secrets.PHASE6_BASE_URL }}
+          PHASE6_HOSTED_ENV_FILE: ${{ secrets.PHASE6_HOSTED_ENV_FILE }}
+        run: test -n "$PHASE6_BASE_URL" && test -n "$PHASE6_HOSTED_ENV_FILE"
+      - name: Phase 6 observability evidence
+        run: pnpm test:integration:phase6-observability
+        env:
+          PHASE6_ALERT_EVIDENCE_HOST_PATH: ${{ secrets.PHASE6_ALERT_EVIDENCE_HOST_PATH }}
+      - name: Phase 6 release gate
+        run: pnpm test:release:phase6
+        env:
+          PHASE6_BASE_URL: ${{ secrets.PHASE6_BASE_URL }}
+          PHASE6_HOSTED_ENV_FILE: ${{ secrets.PHASE6_HOSTED_ENV_FILE }}

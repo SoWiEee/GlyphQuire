@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GlyphQuire Phase 6 release decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rows", "artifactManifest", "evidencePublicationSha"],
+  "properties": {
+    "rows": { "type": "array", "minItems": 14, "maxItems": 14, "items": { "$ref": "#/$defs/row" } },
+    "artifactManifest": { "$ref": "artifact-manifest.schema.json" },
+    "evidencePublicationSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" }
+  },
+  "$defs": {
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate", "status"],
+      "properties": {
+        "gate": {
+          "type": "string",
+          "enum": [
+            "P0-01",
+            "P0-02",
+            "P0-03",
+            "P0-04",
+            "P0-05",
+            "P0-06",
+            "P0-07",
+            "P0-08",
+            "P0-09",
+            "P0-10",
+            "P0-11",
+            "P0-12",
+            "P0-13",
+            "P0-14"
+          ]
+        },
+        "status": { "const": "passed" },
+        "area": { "type": "string" },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "command": { "type": "string" },
+        "owner": { "type": "string" },
+        "recordedAt": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}
