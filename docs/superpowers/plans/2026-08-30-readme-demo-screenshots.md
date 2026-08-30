@@ -52,7 +52,7 @@ async function assertDemoDomSafe(page: import("@playwright/test").Page): Promise
   }));
   const combined = [exposed.text, ...exposed.attributes].join("\n");
   expect(combined).not.toMatch(
-    /(?:token=|bearer |presigned|https?:\/\/|file:\/\/|mailto:|postgresql:\/\/|s3[.-]|password=|cookie|data:|raw markdown|fixture(?: payload| id)?|provider(?: diagnostic| error)|accessdenied|signaturedoesnotmatch|asset:\/\/|glyphquire-spec|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}|(?:ghp_|github_pat_|sk-(?:live|proj)-|xox[baprs]-|AIza[\w-]{20,})[\w-]+|(?:api[_-]?key|secret|access[_-]?key)\s*=|(?:^|\n)\s{0,3}(?:#{1,6}\s+\S|```|[-*+]\s+\S|>\s+\S)|\*\*[^*\n]+\*\*|\[[^\]\n]+\]\([^)]*\))/imu,
+    /(?:token=|bearer |presigned|https?:\/\/|\/\/[^\s]+|blob:|file:\/\/|mailto:|postgresql:\/\/|s3[.-]|password=|cookie|data:|raw markdown|fixture(?: payload| id)?|provider(?: diagnostic| error)|accessdenied|invalidaccesskeyid|signaturedoesnotmatch|asset:\/\/|glyphquire-spec|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}|(?:ghp_|github_pat_|sk-(?:live|proj)-|xox[baprs]-|AIza[\w-]{20,})[\w-]+|AKIA[\w]{16}|(?:api[_-]?key|secret|access[_-]?key)\s*=|(?:^|\n)\s{0,3}(?:#{1,6}\s+\S|```|[-*+]\s+\S|>\s+\S)|\*[^*\n]+\*|(?:^|\n)\s*\|[^|\n]+\|[^|\n]+\||\[[^\]\n]+\]\([^)]*\))/imu,
   );
 }
 
