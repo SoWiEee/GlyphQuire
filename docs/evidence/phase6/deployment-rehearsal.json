@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "status": "blocked",
+  "scrubbed": true,
+  "target": "isolated",
+  "mode": "dry-run",
+  "externalEvidenceAvailable": false,
+  "candidate": {
+    "sourceSha": "0000000000000000000000000000000000000000",
+    "api": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "web": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "worker": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "previous": {
+    "sourceSha": "0000000000000000000000000000000000000000",
+    "manifestSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "api": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "web": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "worker": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "migration": {
+    "journalSha256": "a3662853e91dcea9d934506e3863365f5fb35d58b433e0db9b1d59389c9bffb5",
+    "snapshotSha256": "d4b594dc725a5ca4d96814fa2e4c576b0f717fff92d0ca55b6f3eb6c4c16c166",
+    "artifacts": [
+      {
+        "version": "0000",
+        "sqlSha256": "7fbba803d17ce335f8acc41fd7027c3c1278d4af79225c48ac6d0ab885028863",
+        "snapshotSha256": "ddbdd01656f226667fc4e9b8533d946d8d57ed643d580ade86d4451a27c0be66"
+      },
+      {
+        "version": "0001",
+        "sqlSha256": "c0aac84d7bb3fd4766604dfa46d2f0df18b5b4f027e42e5ec6696e9386f1f162",
+        "snapshotSha256": "34bd5364fd4c17657b6caeaf1c6b04090274b1a01b04055c133c7fb384008519"
+      },
+      {
+        "version": "0002",
+        "sqlSha256": "7d4bb87aae2f390f35070ed3e696a92222d2613bef64de573f3314eddbae3f3c",
+        "snapshotSha256": "22fdf50455abb0cf543b06165540062c8aa10086699b551e7c03991b869634ad"
+      },
+      {
+        "version": "0003",
+        "sqlSha256": "6b612d6e34faad76b973a6fb0701168d28b34f78921be444c26e6485b3e61562",
+        "snapshotSha256": "e55a4b78b66207d3139fbad6fe17257341ca3a89ba9949c33ee7cb613f724c2d"
+      },
+      {
+        "version": "0004",
+        "sqlSha256": "49cdc8578e087d7c20db0e5d3cd55d6a11fd33767892bebe278a6d8b2f8c169e",
+        "snapshotSha256": "f93a9007498aa3aaa5d80c4814ee667c472d49d79241b214e6abf2d2dc95339b"
+      },
+      {
+        "version": "0005",
+        "sqlSha256": "6891de73469132b56f1b9292ab2a2b4fcc73c29095ef5373c901adc3da13bdd8",
+        "snapshotSha256": "589cc429233dabfabfcff97a416ab36d60194335ac7f7168a175b73e2108862a"
+      },
+      {
+        "version": "0006",
+        "sqlSha256": "8def4960a411f9f49fc1ee035065325bc9a5563bca2ac8d759c170e5a23b7285",
+        "snapshotSha256": "9d0382bfaf90dee341d95f4f1c4d9e4b480705e94593aac9fe7ff84ce01b9280"
+      },
+      {
+        "version": "0007",
+        "sqlSha256": "5a764469e55745b1daffb4fcc66d7ebf54e08d8bea823192d71a0b1b6d42873a",
+        "snapshotSha256": "c5f36fa27689bdf7ff6939d333cd81445b707b6960b7e5656f34ef1dfa8438a2"
+      },
+      {
+        "version": "0008",
+        "sqlSha256": "9a6ad7ed95a5e65b0dc0e2daba5e3720c28e822752b32ff254565e754b42b14e",
+        "snapshotSha256": "ded0f2c864ad7531011f6df4fc3a07a708a72e429b0b0bbc866bceb8a2ce73ef"
+      },
+      {
+        "version": "0009",
+        "sqlSha256": "cad40a10a1f8649a73b60b45d4cd27b2c8e03771d323028a90c451eaa8385fab",
+        "snapshotSha256": "def5267a8e12090d69f9caeff4bb86857f9094a46f6a044fa1417d4e0725c7f9"
+      },
+      {
+        "version": "0010",
+        "sqlSha256": "a9dd8e0fb7640e1f19ec8aac42f5b1a6c414f1ee2be10ec1c8ee09f707afba21",
+        "snapshotSha256": "083f0d9e77c2c53d2135c6f34b6b1496ef16eef02477b6b09fa7bd9e5772e727"
+      },
+      {
+        "version": "0011",
+        "sqlSha256": "b911d7eccb8482baa164898e5b9fbc359bdb79f23e480c82734ea7e68e4ea5be",
+        "snapshotSha256": "2e334c01d975eed6c0f12bc182ed47e3399c2ffb8c4d81583d385504ee6729f8"
+      }
+    ],
+    "frozenByteIdentical": true
+  },
+  "checks": {
+    "preflight": false,
+    "migration": false,
+    "candidateBoot": false,
+    "previousBoot": false,
+    "compatibility": false,
+    "noHistoryRewrite": true
+  },
+  "probes": { "read": false, "write": false },
+  "recordedAt": "2026-08-31T00:00:00.000Z"
+}

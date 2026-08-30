@@ -82,3 +82,48 @@ or artifact references.
 - For data loss or destructive migration failure, follow the checked-in restore
   drill, verify note/version/asset hashes and relationships, and retain the
   append-only drill record.
+
+## Phase 6 deployment and recovery rehearsal
+
+Phase 6 keeps the Phase 5 migration chain forward-only. The deployment
+rehearsal uses an explicitly isolated PostgreSQL/object-storage target, runs
+role and schema preflight before starting services, and applies only the
+frozen `0000`–`0011` migration and snapshot artifacts. Runtime connections use
+the canonical `glyphquire_app` role; migrations use the separate
+`glyphquire_migration` role. The rehearsal records SHA-256 hashes of every
+SQL, snapshot, and journal byte before and after both application images boot.
+It also runs bounded read/write compatibility probes against the candidate and
+the immediately previous immutable image digests. It never rewrites migration
+history.
+
+Run the deterministic contract checks from the repository root:
+
+```sh
+pnpm exec vitest run --config /dev/null tests/integration/phase6-deployment.test.ts tests/integration/phase6-preflight-route.test.ts
+bash -n infra/phase6/phase6-deploy.sh infra/phase6/phase6-rollback.sh infra/phase6/phase6-queue-recovery.sh infra/phase6/phase6-hosted-preflight.sh
+```
+
+For a real disposable target, set `PHASE6_TARGET=isolated`, explicit runtime
+and migration database URLs, canonical host/name, S3 endpoint/bucket, the
+candidate and previous API/web/worker `@sha256:` image references, and the
+verified previous-release source/manifest hashes before running
+`infra/phase6/phase6-deploy.sh`. A dry-run may validate the contract but is
+recorded as `blocked` and cannot satisfy release evidence. The generated
+record is `docs/evidence/phase6/deployment-rehearsal.json` and must validate
+against `docs/evidence/phase6/deployment-evidence.schema.json`.
+
+Rollback is application-image-only. Run
+`infra/phase6/phase6-rollback.sh` against the same explicitly isolated target
+with the previous immutable digests; it must pass readiness without invoking a
+migration or editing the journal. Queue recovery uses
+`infra/phase6/phase6-queue-recovery.sh` with a non-empty dead-letter ID file
+and `PHASE6_MAX_REPLAY` between 1 and 100. Payloads are never edited in place.
+
+Hosted preflight is a separate, post-mount release job. Set
+`PHASE6_HOSTED_ENV_FILE` to the vault-mounted file containing only the
+`PHASE6_HOSTED_*` database, S3, and probe values, then provide the expected
+runtime/migration roles, worker ID, bucket, image digest, and frozen journal
+hash as environment variables. `infra/phase6/phase6-hosted-preflight.sh`
+checks health, readiness, database roles, object storage, and the authenticated
+operator-only `/api/internal/phase6/preflight` response. It prints only fixed,
+scrubbed JSON status and never prints values read from the vault file.

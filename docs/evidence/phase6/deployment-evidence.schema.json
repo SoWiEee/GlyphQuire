@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GlyphQuire Phase 6 deployment and recovery evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "scrubbed",
+    "target",
+    "mode",
+    "externalEvidenceAvailable",
+    "candidate",
+    "previous",
+    "migration",
+    "checks",
+    "probes",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["blocked", "failed", "passed"] },
+    "scrubbed": { "const": true },
+    "target": { "const": "isolated" },
+    "mode": { "enum": ["dry-run", "compose", "hosted"] },
+    "externalEvidenceAvailable": { "type": "boolean" },
+    "candidate": { "$ref": "#/$defs/applicationIdentity" },
+    "previous": { "$ref": "#/$defs/previousIdentity" },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["journalSha256", "snapshotSha256", "artifacts", "frozenByteIdentical"],
+      "properties": {
+        "journalSha256": { "$ref": "#/$defs/sha256" },
+        "snapshotSha256": { "$ref": "#/$defs/sha256" },
+        "artifacts": {
+          "type": "array",
+          "minItems": 12,
+          "maxItems": 12,
+          "items": { "$ref": "#/$defs/migrationArtifact" }
+        },
+        "frozenByteIdentical": { "type": "boolean" }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preflight",
+        "migration",
+        "candidateBoot",
+        "previousBoot",
+        "compatibility",
+        "noHistoryRewrite"
+      ],
+      "properties": {
+        "preflight": { "type": "boolean" },
+        "migration": { "type": "boolean" },
+        "candidateBoot": { "type": "boolean" },
+        "previousBoot": { "type": "boolean" },
+        "compatibility": { "type": "boolean" },
+        "noHistoryRewrite": { "type": "boolean" }
+      }
+    },
+    "probes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["read", "write"],
+      "properties": {
+        "read": { "type": "boolean" },
+        "write": { "type": "boolean" }
+      }
+    },
+    "queueRecovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["replayed", "max", "bounded"],
+      "properties": {
+        "replayed": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "max": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "bounded": { "const": true }
+      }
+    },
+    "recordedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "gitSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "imageDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "applicationIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceSha", "api", "web", "worker"],
+      "properties": {
+        "sourceSha": { "$ref": "#/$defs/gitSha" },
+        "api": { "$ref": "#/$defs/imageDigest" },
+        "web": { "$ref": "#/$defs/imageDigest" },
+        "worker": { "$ref": "#/$defs/imageDigest" }
+      }
+    },
+    "previousIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceSha", "manifestSha256", "api", "web", "worker"],
+      "properties": {
+        "sourceSha": { "$ref": "#/$defs/gitSha" },
+        "manifestSha256": { "$ref": "#/$defs/sha256" },
+        "api": { "$ref": "#/$defs/imageDigest" },
+        "web": { "$ref": "#/$defs/imageDigest" },
+        "worker": { "$ref": "#/$defs/imageDigest" }
+      }
+    },
+    "migrationArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "sqlSha256", "snapshotSha256"],
+      "properties": {
+        "version": { "type": "string", "pattern": "^00(?:0[0-9]|1[01])$" },
+        "sqlSha256": { "$ref": "#/$defs/sha256" },
+        "snapshotSha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}
