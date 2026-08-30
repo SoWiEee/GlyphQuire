@@ -9,6 +9,7 @@ import type {
   SearchableNote,
 } from "@glyphquire/search";
 import { assertRegistryComplete } from "@glyphquire/queue";
+import { JOB_TYPES } from "@glyphquire/api-contract/jobs";
 import { InMemoryObjectStorage } from "@glyphquire/storage";
 import { describe, expect, it } from "vitest";
 import {
@@ -213,24 +214,14 @@ async function putObject(storage: InMemoryObjectStorage, key: string): Promise<v
 }
 
 describe("Phase 5 worker consumer modules", () => {
-  it("registers the reviewed Task 4 handlers and Task 5 transfer handlers statically", () => {
-    expect(Object.keys(jobRegistry)).toEqual([
-      "search.index",
-      "search.remove",
-      "search.rebuild",
-      "asset.cleanup",
-      "asset.thumbnail",
-      "import",
-      "import.cleanup",
-      "export",
-      "share.cleanup",
-    ]);
+  it("registers the complete reviewed Phase 5 handler set statically", () => {
+    expect(Object.keys(jobRegistry)).toEqual([...JOB_TYPES]);
     expect(Object.values(jobRegistry).every((handler) => typeof handler === "function")).toBe(true);
     expect(Object.isFrozen(jobRegistry)).toBe(true);
   });
 
-  it("keeps production activation closed while later P0 handlers are absent", () => {
-    expect(() => assertRegistryComplete(jobRegistry)).toThrow(/export\.expire/u);
+  it("opens production activation only after the final Task 7 P0 handoff", () => {
+    expect(() => assertRegistryComplete(jobRegistry)).not.toThrow();
   });
 
   it("exposes the search.index handler factory", async () => {

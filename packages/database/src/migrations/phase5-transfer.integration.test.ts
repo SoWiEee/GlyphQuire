@@ -156,10 +156,18 @@ describe("Phase 5 transfer schema and migration artifacts", () => {
 
   it("records the 0008 export and 0009 share migrations after the frozen 0007 migration", async () => {
     const migrations = await readRepositoryMigrations(migrationsDirectory);
-    expect(migrations.map((entry) => entry.tag).slice(-2)).toEqual([
-      "0008_phase5_exports",
-      "0009_phase5_share_links",
-    ]);
+    const tags = migrations.map((entry) => entry.tag);
+    expect(tags).toEqual(
+      expect.arrayContaining([
+        "0007_phase5_search",
+        "0008_phase5_exports",
+        "0009_phase5_share_links",
+      ]),
+    );
+    expect(tags.indexOf("0007_phase5_search")).toBeLessThan(tags.indexOf("0008_phase5_exports"));
+    expect(tags.indexOf("0008_phase5_exports")).toBeLessThan(
+      tags.indexOf("0009_phase5_share_links"),
+    );
     const snapshot = await readFile(new URL("./meta/0008_snapshot.json", import.meta.url), "utf8");
     expect(snapshot).toContain('"public.imports"');
     expect(snapshot).toContain('"public.import_resources"');

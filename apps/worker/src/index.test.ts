@@ -44,7 +44,7 @@ interface WorkerFactories {
 
 interface StartWorkerOptions {
   source: unknown;
-  registry: JobRegistry;
+  registry?: JobRegistry;
   factories: WorkerFactories;
   runtime?: WorkerRuntimeOptions;
   signal?: AbortSignal;
@@ -320,6 +320,20 @@ describe("production worker startup", () => {
       ),
     ).rejects.toThrow(/Missing required job handlers/u);
     expect(factories.createDatabase).not.toHaveBeenCalled();
+  });
+
+  it("fails closed before initialization when the production registry has no backup verifier", async () => {
+    const { factories } = fakeFactories();
+
+    await expect(
+      getStartWorker()({
+        source: baseEnvironment,
+        factories,
+      }),
+    ).rejects.toThrow("JOB_FAILED: backup verifier is not configured");
+
+    expect(factories.createDatabase).not.toHaveBeenCalled();
+    expect(factories.createStorage).not.toHaveBeenCalled();
   });
 
   it("awaits dependency readiness in order and makes no claim before all are ready", async () => {

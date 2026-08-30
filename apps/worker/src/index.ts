@@ -27,6 +27,7 @@ import {
   WorkerRuntime,
   type WorkerRuntimeOptions,
 } from "./runtime.js";
+import type { BackupVerifier } from "./handlers/backup-verification.js";
 
 export { WorkerRuntime, type WorkerRuntimeOptions } from "./runtime.js";
 
@@ -57,6 +58,11 @@ export interface StartWorkerOptions {
   factories?: WorkerFactories;
   runtime?: WorkerRuntimeOptions;
   signal?: AbortSignal;
+  /**
+   * Server-owned verifier for `backups/${backupId}/manifest.json`. Production
+   * startup fails closed unless this is supplied with the built-in registry.
+   */
+  backupVerifier?: BackupVerifier;
 }
 
 export interface StartedWorker {
@@ -175,6 +181,9 @@ export async function startWorker(options: StartWorkerOptions = {}): Promise<Sta
   const registryModule = options.registry ? undefined : await import("./registry.js");
   const staticRegistry = options.registry ?? registryModule!.jobRegistry;
   assertRegistryComplete(staticRegistry);
+  if (!options.registry && !options.backupVerifier) {
+    throw new Error("JOB_FAILED: backup verifier is not configured");
+  }
 
   const factories = options.factories ?? defaultFactories;
   const signal = options.signal ?? options.runtime?.signal;
@@ -210,7 +219,13 @@ export async function startWorker(options: StartWorkerOptions = {}): Promise<Sta
     const registry = options.registry
       ? options.registry
       : registryModule!.createJobRegistry(
-          { database, storage, search, environment: env },
+          {
+            database,
+            storage,
+            search,
+            environment: env,
+            backupVerifier: options.backupVerifier,
+          },
           staticRegistry,
         );
     assertRegistryComplete(registry);

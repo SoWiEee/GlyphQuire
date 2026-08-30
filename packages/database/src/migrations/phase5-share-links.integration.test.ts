@@ -139,10 +139,13 @@ describe("Phase 5 share-link schema and migration artifacts", () => {
     }
 
     const repository = await readRepositoryMigrations(migrationsDirectory);
-    expect(repository.map((entry) => entry.tag).slice(-2)).toEqual([
-      "0008_phase5_exports",
-      "0009_phase5_share_links",
-    ]);
+    const tags = repository.map((entry) => entry.tag);
+    expect(tags).toEqual(
+      expect.arrayContaining(["0008_phase5_exports", "0009_phase5_share_links"]),
+    );
+    expect(tags.indexOf("0008_phase5_exports")).toBeLessThan(
+      tags.indexOf("0009_phase5_share_links"),
+    );
     const snapshot = await readFile(new URL("./meta/0009_snapshot.json", import.meta.url), "utf8");
     expect(snapshot).toContain('"public.share_links"');
   });

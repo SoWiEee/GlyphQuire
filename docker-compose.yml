@@ -77,6 +77,30 @@ services:
       timeout: 3s
       retries: 5
 
+  # Optional Phase 5 worker profile. The image is supplied by the deployment
+  # pipeline and must include a real BackupVerifier; the worker intentionally
+  # fails closed when that verifier is not injected.
+  worker:
+    profiles: ["phase5"]
+    image: "${GLYPHQUIRE_WORKER_IMAGE:-glyphquire-worker:phase5}"
+    init: true
+    restart: on-failure
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "${WORKER_DATABASE_URL:-postgresql://glyphquire_app:glyphquire_app_dev@postgres:5432/glyphquire_dev}"
+      S3_ENDPOINT: "http://minio:9000"
+      S3_ACCESS_KEY: "${S3_ACCESS_KEY:-glyphquire}"
+      S3_SECRET_KEY: "${S3_SECRET_KEY:-}"
+      S3_BUCKET: "${S3_BUCKET:-glyphquire-assets}"
+      S3_REGION: "${S3_REGION:-us-east-1}"
+      IDEMPOTENCY_ENCRYPTION_KEY: "${IDEMPOTENCY_ENCRYPTION_KEY:-}"
+      BACKUP_ENCRYPTION_KEY: "${BACKUP_ENCRYPTION_KEY:-}"
+    command: ["node", "dist/index.js"]
+
   sandbox:
     build:
       context: .

@@ -35,6 +35,14 @@ import {
 } from "./modules/search/OperatorAuthorizer.js";
 import { SearchServiceImpl, type SearchService } from "./modules/search/SearchService.js";
 import {
+  AccountDeletionServiceImpl,
+  type AccountDeletionService,
+} from "./modules/lifecycle/AccountDeletionService.js";
+import {
+  WorkspaceDeletionServiceImpl,
+  type WorkspaceDeletionService,
+} from "./modules/lifecycle/WorkspaceDeletionService.js";
+import {
   WorkspaceService,
   type PersonalWorkspaceProvisioner,
 } from "./modules/workspaces/WorkspaceService.js";
@@ -45,6 +53,12 @@ import { createVersionRoutes } from "./routes/v1/versions.js";
 import { ThemeServiceImpl, type ThemeService } from "./modules/themes/ThemeService.js";
 import { createThemeRoutes } from "./routes/v1/themes.js";
 import { createSearchRoutes } from "./routes/v1/search.js";
+import { createDeletionRoutes } from "./routes/v1/deletion.js";
+import {
+  createMaintenanceRoutes,
+  MaintenanceServiceImpl,
+  type MaintenanceService,
+} from "./routes/v1/maintenance.js";
 
 type AuthErrorLogger = NonNullable<AuthOptions["errorLogger"]>;
 type AuthErrorLogEntry = Parameters<AuthErrorLogger["error"]>[0];
@@ -65,6 +79,9 @@ export interface AppDependencies {
   noteService?: NoteService;
   themeService?: ThemeService;
   searchService?: SearchService;
+  workspaceDeletionService?: WorkspaceDeletionService;
+  accountDeletionService?: AccountDeletionService;
+  maintenanceService?: MaintenanceService;
   operatorAuthorizer?: OperatorAuthorizer;
   jobDispatcher?: JobDispatcher;
   rateLimit?: RateLimitPort;
@@ -104,6 +121,15 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
   const searchService =
     dependencies.searchService ??
     new SearchServiceImpl(db, new PostgresSearchAdapter(db), jobDispatcher, operatorAuthorizer);
+  const workspaceDeletionService =
+    dependencies.workspaceDeletionService ??
+    new WorkspaceDeletionServiceImpl(db, jobDispatcher, { clock: dependencies.clock });
+  const accountDeletionService =
+    dependencies.accountDeletionService ??
+    new AccountDeletionServiceImpl(db, jobDispatcher, { clock: dependencies.clock });
+  const maintenanceService =
+    dependencies.maintenanceService ??
+    new MaintenanceServiceImpl(db, jobDispatcher, operatorAuthorizer);
   const logger = dependencies.logger ?? defaultAppLogger;
   const rateLimit =
     dependencies.rateLimit ??
@@ -151,6 +177,15 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
     context,
     next,
   ) => {
+    const path = context.req.path;
+    if (
+      path === "/api/v1/account/deletion" ||
+      path.startsWith("/api/v1/maintenance/") ||
+      /^\/api\/v1\/workspaces\/[^/]+\/deletion$/u.test(path)
+    ) {
+      await next();
+      return;
+    }
     try {
       await workspaceService.ensurePersonalWorkspace(getRequestContext(context).actorId);
     } catch {
@@ -190,7 +225,9 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
     .route("/api/v1", createNoteRoutes(noteService))
     .route("/api/v1", createVersionRoutes(noteService))
     .route("/api/v1", createThemeRoutes(themeService))
-    .route("/api/v1", createSearchRoutes(searchService, operatorAuthorizer));
+    .route("/api/v1", createSearchRoutes(searchService, operatorAuthorizer))
+    .route("/api/v1", createDeletionRoutes(workspaceDeletionService, accountDeletionService))
+    .route("/api/v1", createMaintenanceRoutes(maintenanceService, operatorAuthorizer));
 
   return {
     app,

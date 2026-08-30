@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { assertPhase5Complete, assertRegistryComplete } from "@glyphquire/queue";
 import { type ShareCleanupAuditEvent } from "./handlers/share-cleanup.js";
-import { createStructuredShareCleanupAudit } from "./registry.js";
+import { createStructuredShareCleanupAudit, jobRegistry } from "./registry.js";
 
 const event: ShareCleanupAuditEvent = {
   event: "share_link_deleted",
@@ -34,5 +35,12 @@ describe("structured share cleanup audit", () => {
     });
 
     await expect(audit.record(event)).rejects.toThrow("audit sink unavailable");
+  });
+});
+
+describe("Phase 5 static registry handoff", () => {
+  it("satisfies the P0 activation gate and the separate P1 diagnostic", () => {
+    expect(() => assertRegistryComplete(jobRegistry)).not.toThrow();
+    expect(assertPhase5Complete(jobRegistry)).toEqual({ complete: true, missing: [] });
   });
 });
