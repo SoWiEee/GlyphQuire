@@ -50,6 +50,10 @@ export const phase6ChecklistSchema = z
   })
   .strict();
 
+const phase6ReleaseDecisionRowSchema = phase6ChecklistSchema.extend({
+  status: z.literal("passed"),
+});
+
 export const phase6ArtifactManifestSchema = z
   .object({
     candidateSourceSha: gitSha,
@@ -63,7 +67,7 @@ export const phase6ArtifactManifestSchema = z
 
 export const phase6ReleaseDecisionSchema = z
   .object({
-    rows: z.array(phase6ChecklistSchema),
+    rows: z.array(phase6ReleaseDecisionRowSchema).length(phase6Gates.length),
     artifactManifest: phase6ArtifactManifestSchema,
     evidencePublicationSha: gitSha,
   })
@@ -85,14 +89,6 @@ export const phase6ReleaseDecisionSchema = z
         path: ["rows"],
         message: "P0-01 through P0-14 must appear exactly once",
       });
-    value.rows.forEach((row, index) => {
-      if (row.status !== "passed")
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["rows", index, "status"],
-          message: "release decisions require passed rows",
-        });
-    });
   });
 
 export type Phase6Checklist = z.infer<typeof phase6ChecklistSchema>;

@@ -5,7 +5,140 @@
   "additionalProperties": false,
   "required": ["rows", "artifactManifest", "evidencePublicationSha"],
   "properties": {
-    "rows": { "type": "array", "minItems": 14, "maxItems": 14, "items": { "$ref": "#/$defs/row" } },
+    "rows": {
+      "type": "array",
+      "minItems": 14,
+      "maxItems": 14,
+      "items": { "$ref": "#/$defs/row" },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "required": ["gate"],
+            "properties": { "gate": { "const": "P0-01" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["gate"],
+            "properties": { "gate": { "const": "P0-02" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["gate"],
+            "properties": { "gate": { "const": "P0-03" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["gate"],
+            "properties": { "gate": { "const": "P0-04" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["gate"],
+            "properties": { "gate": { "const": "P0-05" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["gate"],
+            "properties": { "gate": { "const": "P0-06" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["gate"],
+            "properties": { "gate": { "const": "P0-07" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["gate"],
+            "properties": { "gate": { "const": "P0-08" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["gate"],
+            "properties": { "gate": { "const": "P0-09" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["gate"],
+            "properties": { "gate": { "const": "P0-10" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["gate"],
+            "properties": { "gate": { "const": "P0-11" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["gate"],
+            "properties": { "gate": { "const": "P0-12" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["gate"],
+            "properties": { "gate": { "const": "P0-13" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["gate"],
+            "properties": { "gate": { "const": "P0-14" } }
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ]
+    },
     "artifactManifest": { "$ref": "artifact-manifest.schema.json" },
     "evidencePublicationSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" }
   },
