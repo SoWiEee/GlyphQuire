@@ -61,12 +61,15 @@ read_ids() {
   mapfile -t dead_letter_ids <"$PHASE6_DEAD_LETTER_IDS_FILE"
   ((${#dead_letter_ids[@]} > 0)) || fail "DEAD_LETTER_IDS_EMPTY"
   ((${#dead_letter_ids[@]} <= PHASE6_MAX_REPLAY)) || fail "DEAD_LETTER_IDS_EXCEED_BOUND"
-  local id
+  local index raw_id id
   local -A seen=()
-  for id in "${dead_letter_ids[@]}"; do
-    [[ "$id" =~ ^[0-9a-fA-F-]{36}$ ]] || fail "DEAD_LETTER_ID_INVALID"
+  for index in "${!dead_letter_ids[@]}"; do
+    raw_id="${dead_letter_ids[$index]}"
+    [[ "$raw_id" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || fail "DEAD_LETTER_ID_INVALID"
+    id="${raw_id,,}"
     [[ -z "${seen[$id]:-}" ]] || fail "DEAD_LETTER_ID_DUPLICATE"
     seen[$id]=1
+    dead_letter_ids[$index]="$id"
   done
 }
 

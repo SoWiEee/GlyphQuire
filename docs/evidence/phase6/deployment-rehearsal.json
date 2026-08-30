@@ -6,17 +6,17 @@
   "mode": "dry-run",
   "externalEvidenceAvailable": false,
   "candidate": {
-    "sourceSha": "0000000000000000000000000000000000000000",
-    "api": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    "web": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    "worker": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    "sourceSha": "1111111111111111111111111111111111111111",
+    "api": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "web": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "worker": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
   },
   "previous": {
-    "sourceSha": "0000000000000000000000000000000000000000",
-    "manifestSha256": "0000000000000000000000000000000000000000000000000000000000000000",
-    "api": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    "web": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    "worker": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    "sourceSha": "2222222222222222222222222222222222222222",
+    "manifestSha256": "3333333333333333333333333333333333333333333333333333333333333333",
+    "api": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "web": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "worker": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   },
   "migration": {
     "journalSha256": "a3662853e91dcea9d934506e3863365f5fb35d58b433e0db9b1d59389c9bffb5",
@@ -93,6 +93,9 @@
     "compatibility": false,
     "noHistoryRewrite": true
   },
-  "probes": { "read": false, "write": false },
-  "recordedAt": "2026-08-31T00:00:00.000Z"
+  "probes": {
+    "read": false,
+    "write": false
+  },
+  "recordedAt": "2026-08-30T20:00:27.080Z"
 }

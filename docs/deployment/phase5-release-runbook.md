@@ -104,13 +104,16 @@ bash -n infra/phase6/phase6-deploy.sh infra/phase6/phase6-rollback.sh infra/phas
 ```
 
 For a real disposable target, set `PHASE6_TARGET=isolated`, explicit runtime
-and migration database URLs, canonical host/name, S3 endpoint/bucket, the
+and migration database URLs, `PHASE6_ISOLATED_CONFIRMATION=isolated`, canonical
+host/name, S3 endpoint/bucket, the
 candidate and previous API/web/worker `@sha256:` image references, and the
 verified previous-release source/manifest hashes before running
 `infra/phase6/phase6-deploy.sh`. A dry-run may validate the contract but is
 recorded as `blocked` and cannot satisfy release evidence. The generated
 record is `docs/evidence/phase6/deployment-rehearsal.json` and must validate
 against `docs/evidence/phase6/deployment-evidence.schema.json`.
+The expected database host and name must also match the script's reserved
+isolated-target allowlist; production-like identities are rejected.
 
 Rollback is application-image-only. Run
 `infra/phase6/phase6-rollback.sh` against the same explicitly isolated target
