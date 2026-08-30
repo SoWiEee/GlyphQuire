@@ -24,6 +24,19 @@
 
 ## What is GlyphQuire
 
+## Product Demo
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/assets/readme/01-editor-modes.png" alt="Visual and Source editing modes" width="100%"><br><sub>Visual / Source editing</sub></td>
+    <td align="center"><img src="docs/assets/readme/02-semantic-blocks.png" alt="Semantic Markdown blocks" width="100%"><br><sub>Callout, Toggle, Tabs, Columns</sub></td>
+    <td align="center"><img src="docs/assets/readme/03-search-transfer.png" alt="Search and import/export tools" width="100%"><br><sub>Search and transfer</sub></td>
+    <td align="center"><img src="docs/assets/readme/04-sharing-maintenance.png" alt="Read-only sharing and maintenance" width="100%"><br><sub>Sharing and maintenance</sub></td>
+  </tr>
+</table>
+
+_Screenshots are deterministic local-demo captures; they contain no production data._
+
 GlyphQuire 是一套以 **Markdown 作為唯一文件來源格式（canonical format）** 的可擴充網頁筆記工具。
 
 它保留 Markdown 容易閱讀、容易備份、容易搬移的特性，同時加入語意化的延伸語法，讓使用者不需要直接撰寫 HTML、CSS 或 JavaScript，就能建立更豐富的筆記內容。
