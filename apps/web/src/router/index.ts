@@ -40,6 +40,15 @@ export const router = createRouter({
           component: () => import("@/pages/WorkbenchPage.vue"),
           meta: { fullBleed: true },
         },
+        ...(import.meta.env.DEV
+          ? [
+              {
+                path: "__readme-demo",
+                name: "readme-demo",
+                component: () => import("@/pages/ReadmeDemoPage.vue"),
+              },
+            ]
+          : []),
       ],
     },
   ],
