@@ -12,6 +12,7 @@ PHASE6_DATABASE_URL="${PHASE6_DATABASE_URL:-${PHASE6_RUNTIME_DATABASE_URL:-}}"
 PHASE6_RUNTIME_ROLE="${PHASE6_RUNTIME_ROLE:-${PHASE6_EXPECTED_RUNTIME_ROLE:-}}"
 PHASE6_EXPECTED_DATABASE_HOST="${PHASE6_EXPECTED_DATABASE_HOST:-${PHASE6_DATABASE_HOST:-}}"
 PHASE6_EXPECTED_DATABASE_NAME="${PHASE6_EXPECTED_DATABASE_NAME:-${PHASE6_DATABASE_NAME:-}}"
+PHASE6_ISOLATED_CONFIRMATION="${PHASE6_ISOLATED_CONFIRMATION:-}"
 
 fail() {
   printf 'PHASE6_QUEUE_RECOVERY_FAILED:%s\n' "${1:-QUEUE_RECOVERY_PRECONDITION_FAILED}" >&2
@@ -42,6 +43,19 @@ require_database_target() {
   require_value PHASE6_RUNTIME_ROLE
   require_value PHASE6_EXPECTED_DATABASE_HOST
   require_value PHASE6_EXPECTED_DATABASE_NAME
+  [[ "$PHASE6_ISOLATED_CONFIRMATION" == "isolated" ]] || fail "ISOLATED_CONFIRMATION_REQUIRED"
+  [[ "$PHASE6_EXPECTED_DATABASE_HOST" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ ]] || fail "DATABASE_HOST_NOT_CANONICAL"
+  [[ "$PHASE6_EXPECTED_DATABASE_NAME" =~ ^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$ ]] || fail "DATABASE_NAME_NOT_CANONICAL"
+  [[ ! "$PHASE6_EXPECTED_DATABASE_HOST" =~ (^|[.-])(prod|production|live|primary|main)([.-]|$) ]] || fail "DATABASE_HOST_NOT_ISOLATED"
+  [[ ! "$PHASE6_EXPECTED_DATABASE_NAME" =~ (^|[_-])(prod|production|live|primary|main)([_-]|$) ]] || fail "DATABASE_NAME_NOT_ISOLATED"
+  case "$PHASE6_EXPECTED_DATABASE_HOST" in
+    localhost|127.0.0.1|*.example|*.test|*.local) ;;
+    *) fail "DATABASE_HOST_NOT_ISOLATED" ;;
+  esac
+  case "$PHASE6_EXPECTED_DATABASE_NAME" in
+    glyphquire|glyphquire_*|phase6_*|*_test|*_drill) ;;
+    *) fail "DATABASE_NAME_NOT_ISOLATED" ;;
+  esac
   parse_database_url "$PHASE6_DATABASE_URL" runtime_user runtime_host runtime_name || fail "DATABASE_URL_INVALID"
   [[ "$runtime_host" == "$PHASE6_EXPECTED_DATABASE_HOST" ]] || fail "DATABASE_HOST_NOT_CANONICAL"
   [[ "$runtime_name" == "$PHASE6_EXPECTED_DATABASE_NAME" ]] || fail "DATABASE_NAME_NOT_CANONICAL"

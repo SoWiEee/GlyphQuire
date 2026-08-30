@@ -81,6 +81,64 @@ describe("Phase 6 deployment and recovery contracts", () => {
     expect(`${result.stdout}\n${result.stderr}`).toMatch(/isolated|digest|target/i);
   });
 
+  it("requires rollback isolation confirmation before any docker or curl action", async () => {
+    const temporaryRoot = await mkdtemp(resolve(tmpdir(), "glyphquire-phase6-rollback-isolation-"));
+    try {
+      const commandLog = resolve(temporaryRoot, "commands.log");
+      const composePath = resolve(temporaryRoot, "compose.yml");
+      const dockerPath = resolve(temporaryRoot, "docker");
+      const curlPath = resolve(temporaryRoot, "curl");
+      await writeFile(composePath, "services: {}\n");
+      await writeFile(
+        dockerPath,
+        '#!/bin/sh\nprintf "docker\\n" >> "$PHASE6_COMMAND_LOG"\n',
+      );
+      await writeFile(curlPath, '#!/bin/sh\nprintf "curl\\n" >> "$PHASE6_COMMAND_LOG"\n');
+      await Promise.all([chmod(dockerPath, 0o700), chmod(curlPath, 0o700)]);
+
+      const baseEnvironment: NodeJS.ProcessEnv = {
+        PHASE6_TARGET: "isolated",
+        PHASE6_DRY_RUN: "0",
+        PHASE6_DATABASE_URL: "postgresql://glyphquire_app:runtime@db.example/glyphquire",
+        PHASE6_RUNTIME_ROLE: "glyphquire_app",
+        PHASE6_EXPECTED_DATABASE_HOST: "db.example",
+        PHASE6_EXPECTED_DATABASE_NAME: "glyphquire",
+        PHASE6_PREVIOUS_API_IMAGE: `registry.example/api@sha256:${"b".repeat(64)}`,
+        PHASE6_PREVIOUS_WEB_IMAGE: `registry.example/web@sha256:${"b".repeat(64)}`,
+        PHASE6_PREVIOUS_WORKER_IMAGE: `registry.example/worker@sha256:${"b".repeat(64)}`,
+        PHASE6_PREVIOUS_RELEASE_SOURCE_SHA: "2".repeat(40),
+        PHASE6_PREVIOUS_RELEASE_MANIFEST_SHA256: "3".repeat(64),
+        PHASE6_COMPOSE_FILE: composePath,
+        PHASE6_API_BASE_URL: "https://api.example",
+        PHASE6_PROBE_TOKEN: "probe-token",
+        PHASE6_READINESS_PATH: "/ready",
+        PHASE6_COMMAND_LOG: commandLog,
+        PATH: `${temporaryRoot}:${process.env.PATH ?? ""}`,
+      };
+
+      const missingConfirmation = await runScript(rollbackScript, baseEnvironment);
+      expect(missingConfirmation.code).not.toBe(0);
+      expect(`${missingConfirmation.stdout}\n${missingConfirmation.stderr}`).toMatch(/isolat/i);
+      await expect(readFile(commandLog, "utf8")).rejects.toThrow();
+
+      const productionTarget = await runScript(rollbackScript, {
+        ...baseEnvironment,
+        PHASE6_ISOLATED_CONFIRMATION: "isolated",
+        PHASE6_DATABASE_URL:
+          "postgresql://glyphquire_app:runtime@prod-db.example/glyphquire_prod",
+        PHASE6_EXPECTED_DATABASE_HOST: "prod-db.example",
+        PHASE6_EXPECTED_DATABASE_NAME: "glyphquire_prod",
+      });
+      expect(productionTarget.code).not.toBe(0);
+      expect(`${productionTarget.stdout}\n${productionTarget.stderr}`).toMatch(
+        /production|isolat|target/i,
+      );
+      await expect(readFile(commandLog, "utf8")).rejects.toThrow();
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
   it("refuses an unbounded queue replay and accepts only an explicit bounded maximum", async () => {
     const missingBound = await runScript(queueRecoveryScript, {
       PHASE6_TARGET: "isolated",
@@ -88,6 +146,7 @@ describe("Phase 6 deployment and recovery contracts", () => {
       PHASE6_RUNTIME_ROLE: "glyphquire_app",
       PHASE6_EXPECTED_DATABASE_HOST: "db.example",
       PHASE6_EXPECTED_DATABASE_NAME: "glyphquire",
+      PHASE6_ISOLATED_CONFIRMATION: "isolated",
     });
     expect(missingBound.code).not.toBe(0);
     expect(`${missingBound.stdout}\n${missingBound.stderr}`).toMatch(/max|bound|replay/i);
@@ -98,6 +157,7 @@ describe("Phase 6 deployment and recovery contracts", () => {
       PHASE6_RUNTIME_ROLE: "glyphquire_app",
       PHASE6_EXPECTED_DATABASE_HOST: "db.example",
       PHASE6_EXPECTED_DATABASE_NAME: "glyphquire",
+      PHASE6_ISOLATED_CONFIRMATION: "isolated",
       PHASE6_MAX_REPLAY: "0",
     });
     expect(unbounded.code).not.toBe(0);
@@ -113,12 +173,61 @@ describe("Phase 6 deployment and recovery contracts", () => {
         PHASE6_RUNTIME_ROLE: "glyphquire_app",
         PHASE6_EXPECTED_DATABASE_HOST: "db.example",
         PHASE6_EXPECTED_DATABASE_NAME: "glyphquire",
+        PHASE6_ISOLATED_CONFIRMATION: "isolated",
         PHASE6_MAX_REPLAY: "1",
         PHASE6_DEAD_LETTER_IDS_FILE: idsPath,
         PHASE6_QUEUE_EVIDENCE_FILE: resolve(temporaryRoot, "queue-recovery.json"),
       });
       expect(bounded.code).toBe(0);
       expect(bounded.stdout).toContain('"max":1');
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("requires queue recovery isolation confirmation before any curl action", async () => {
+    const temporaryRoot = await mkdtemp(resolve(tmpdir(), "glyphquire-phase6-queue-isolation-"));
+    try {
+      const idsPath = resolve(temporaryRoot, "dead-letter-ids.txt");
+      const commandLog = resolve(temporaryRoot, "commands.log");
+      const curlPath = resolve(temporaryRoot, "curl");
+      await writeFile(idsPath, "00000000-0000-4000-8000-000000000001\n");
+      await writeFile(curlPath, '#!/bin/sh\nprintf "curl\\n" >> "$PHASE6_COMMAND_LOG"\n');
+      await chmod(curlPath, 0o700);
+
+      const baseEnvironment: NodeJS.ProcessEnv = {
+        PHASE6_TARGET: "isolated",
+        PHASE6_DRY_RUN: "0",
+        PHASE6_DATABASE_URL: "postgresql://glyphquire_app:runtime@db.example/glyphquire",
+        PHASE6_RUNTIME_ROLE: "glyphquire_app",
+        PHASE6_EXPECTED_DATABASE_HOST: "db.example",
+        PHASE6_EXPECTED_DATABASE_NAME: "glyphquire",
+        PHASE6_MAX_REPLAY: "1",
+        PHASE6_DEAD_LETTER_IDS_FILE: idsPath,
+        PHASE6_API_BASE_URL: "https://api.example",
+        PHASE6_OPERATOR_COOKIE: "operator-cookie",
+        PHASE6_COMMAND_LOG: commandLog,
+        PATH: `${temporaryRoot}:${process.env.PATH ?? ""}`,
+      };
+
+      const missingConfirmation = await runScript(queueRecoveryScript, baseEnvironment);
+      expect(missingConfirmation.code).not.toBe(0);
+      expect(`${missingConfirmation.stdout}\n${missingConfirmation.stderr}`).toMatch(/isolat/i);
+      await expect(readFile(commandLog, "utf8")).rejects.toThrow();
+
+      const productionTarget = await runScript(queueRecoveryScript, {
+        ...baseEnvironment,
+        PHASE6_ISOLATED_CONFIRMATION: "isolated",
+        PHASE6_DATABASE_URL:
+          "postgresql://glyphquire_app:runtime@prod-db.example/glyphquire_prod",
+        PHASE6_EXPECTED_DATABASE_HOST: "prod-db.example",
+        PHASE6_EXPECTED_DATABASE_NAME: "glyphquire_prod",
+      });
+      expect(productionTarget.code).not.toBe(0);
+      expect(`${productionTarget.stdout}\n${productionTarget.stderr}`).toMatch(
+        /production|isolat|target/i,
+      );
+      await expect(readFile(commandLog, "utf8")).rejects.toThrow();
     } finally {
       await rm(temporaryRoot, { recursive: true, force: true });
     }
@@ -264,6 +373,7 @@ describe("Phase 6 deployment and recovery contracts", () => {
         PHASE6_RUNTIME_ROLE: "glyphquire_app",
         PHASE6_EXPECTED_DATABASE_HOST: "db.example",
         PHASE6_EXPECTED_DATABASE_NAME: "glyphquire",
+        PHASE6_ISOLATED_CONFIRMATION: "isolated",
         PHASE6_MAX_REPLAY: "2",
         PHASE6_DEAD_LETTER_IDS_FILE: duplicateIds,
       });
@@ -290,6 +400,7 @@ describe("Phase 6 deployment and recovery contracts", () => {
         PHASE6_RUNTIME_ROLE: "glyphquire_app",
         PHASE6_EXPECTED_DATABASE_HOST: "db.example",
         PHASE6_EXPECTED_DATABASE_NAME: "glyphquire",
+        PHASE6_ISOLATED_CONFIRMATION: "isolated",
         PHASE6_MAX_REPLAY: "1",
         PHASE6_DEAD_LETTER_IDS_FILE: idsPath,
         PHASE6_API_BASE_URL: "https://api.example",

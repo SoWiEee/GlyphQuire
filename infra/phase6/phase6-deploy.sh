@@ -88,7 +88,7 @@ require_database_target() {
   [[ ! "$PHASE6_EXPECTED_DATABASE_HOST" =~ (^|[.-])(prod|production|live|primary|main)([.-]|$) ]] || fail "DATABASE_HOST_NOT_ISOLATED"
   [[ ! "$PHASE6_EXPECTED_DATABASE_NAME" =~ (^|[_-])(prod|production|live|primary|main)([_-]|$) ]] || fail "DATABASE_NAME_NOT_ISOLATED"
   case "$PHASE6_EXPECTED_DATABASE_HOST" in
-    localhost|127.0.0.1|*.example|*.test|*.local|*.internal) ;;
+    localhost|127.0.0.1|*.example|*.test|*.local) ;;
     *) fail "DATABASE_HOST_NOT_ISOLATED" ;;
   esac
   case "$PHASE6_EXPECTED_DATABASE_NAME" in

@@ -117,8 +117,10 @@ isolated-target allowlist; production-like identities are rejected.
 
 Rollback is application-image-only. Run
 `infra/phase6/phase6-rollback.sh` against the same explicitly isolated target
-with the previous immutable digests; it must pass readiness without invoking a
-migration or editing the journal. Queue recovery uses
+with `PHASE6_ISOLATED_CONFIRMATION=isolated` and the same reserved host/name
+allowlist, plus the previous immutable digests; it must pass readiness without
+invoking a migration or editing the journal. Queue recovery uses the same
+explicit isolation confirmation and allowlist, together with
 `infra/phase6/phase6-queue-recovery.sh` with a non-empty dead-letter ID file
 and `PHASE6_MAX_REPLAY` between 1 and 100. Payloads are never edited in place.
 
