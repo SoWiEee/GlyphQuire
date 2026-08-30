@@ -28,6 +28,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
 const describeWithPostgres = databaseUrl ? describe : describe.skip;
 const FRESHNESS_BOUND_MS = 60_000;
 const ACTOR_COUNT = 5;
+const CANONICAL_FRONTMATTER = "---\nglyphquire-spec: 1\n---\n\n";
 
 /**
  * A JobStore view restricted to this test's workspaces. Full integration runs
@@ -170,7 +171,7 @@ describeWithPostgres("Phase 5 five-actor search freshness", () => {
               workspaceId: workspace!.id,
               ownerId: actorId,
               title: `Freshness seed ${index}`,
-              contentMarkdown: "# Seed",
+              contentMarkdown: `${CANONICAL_FRONTMATTER}# Seed\n`,
               contentHash: "seed",
             })
             .returning({ id: notes.id, revision: notes.revision });
@@ -190,7 +191,7 @@ describeWithPostgres("Phase 5 five-actor search freshness", () => {
           writer.save(fixture.actorId, fixture.noteId, {
             operationId: randomUUID(),
             baseRevision: fixture.revision,
-            contentMarkdown: `# ${fixture.marker}\n\nCommitted search mutation.`,
+            contentMarkdown: `${CANONICAL_FRONTMATTER}# ${fixture.marker}\n\nCommitted search mutation.\n`,
           }),
         ),
       );
