@@ -70,7 +70,7 @@ Expected: 4 tests pass; each PNG is non-empty and `file docs/assets/readme/*.png
 - [ ] **Step 5: Commit the capture fixture and assets.**
 
 ```bash
-git add tests/e2e/readme-demo.spec.ts docs/assets/readme
+git add tests/e2e/readme-demo.spec.ts apps/web/src/pages/ReadmeDemoPage.vue apps/web/src/router/index.ts docs/assets/readme
 git commit -m "docs: capture README product demos"
 ```
 
@@ -128,6 +128,6 @@ Expected: four capture tests pass, Markdown formatting passes, and the diff is c
 
 - [ ] **Step 2: Inspect image metadata and secret safety.**
 
-Run: `file docs/assets/readme/*.png && rg -n -i 'token=|bearer |presigned|postgresql://|markdown=|secret|cookie' docs/assets/readme README.md`
+Run: `file docs/assets/readme/*.png && rg -n -i 'token=|bearer |presigned|postgresql://|markdown=|secret|cookie' docs/assets/readme README.md && pnpm exec playwright test tests/e2e/readme-gallery-render.spec.ts --project=e2e`
 
-Expected: all images are PNGs; the search returns no credential, URL, or raw-payload match.
+Expected: all images are PNGs; the search returns no credential, URL, or raw-payload match; the gallery's four links render at both 1440px and a 390px viewport with visible captions and no horizontal overflow.

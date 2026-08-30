@@ -24,21 +24,25 @@
 - Create: `docs/evidence/phase6/p0-release-checklist.md`
 - Create: `docs/evidence/phase6/artifact-manifest.schema.json`
 - Create: `packages/shared/src/phase6-checklist.ts`
+- Modify: `packages/shared/src/index.ts`
 - Modify: `.github/workflows/ci.yml`
 - Test: `tests/integration/phase6-release-checklist.test.ts`
 
 **Interfaces:**
 - Consume P0 rows from `docs/SPEC.md` §49 and existing Phase5 evidence paths.
-- Produce a schema-validated checklist row `{gate, command, artifact, owner, status}` and immutable build metadata `{commit, imageDigest, node, pnpm}` from `packages/shared/src/phase6-checklist.ts`.
+- Produce exported `phase6ChecklistSchema` rows whose status may be `blocked`, `in_progress`, or `passed`, plus `phase6ReleaseDecisionSchema` that accepts only fourteen `passed` rows and matching immutable build metadata from `packages/shared/src/phase6-checklist.ts`.
 
 - [ ] **Step 1: Write RED checklist tests.**
 
 ```ts
 import { expect, it } from "vitest";
-import { phase6ChecklistSchema } from "@glyphquire/shared";
+import { phase6ChecklistSchema, phase6ReleaseDecisionSchema } from "@glyphquire/shared";
 
-it("rejects a release checklist with a blocked P0 row or missing artifact", () => {
-  expect(() => phase6ChecklistSchema.parse({ gate: "P0-08", status: "blocked" })).toThrow();
+it("records blocked evidence but rejects it as a release decision", () => {
+  expect(phase6ChecklistSchema.parse({ gate: "P0-08", status: "blocked" })).toMatchObject({
+    status: "blocked",
+  });
+  expect(() => phase6ReleaseDecisionSchema.parse({ rows: [{ gate: "P0-08", status: "blocked" }] })).toThrow();
 });
 ```
 
@@ -50,7 +54,7 @@ Expected: FAIL because the schema and checklist are absent.
 
 - [ ] **Step 3: Implement schema, checklist, and CI artifact capture.**
 
-The checklist must enumerate P0-01 through P0-14 exactly once. CI must retain the commit SHA, lockfile hash, Node/pnpm versions, migration journal hash, and build/image digest without recording secrets. Keep the existing migration-before-tests ordering.
+The checklist must enumerate P0-01 through P0-14 exactly once. CI must retain the commit SHA, lockfile hash, Node/pnpm versions, migration journal hash, and build/image digest without recording secrets. Export both schemas from `packages/shared/src/index.ts`. Keep the existing migration-before-tests ordering.
 
 - [ ] **Step 4: Run GREEN checks.**
 
@@ -61,7 +65,7 @@ Expected: all checks pass.
 - [ ] **Step 5: Commit.**
 
 ```bash
-git add docs/evidence/phase6 .github/workflows/ci.yml tests/integration/phase6-release-checklist.test.ts
+git add docs/evidence/phase6 packages/shared/src/phase6-checklist.ts packages/shared/src/index.ts .github/workflows/ci.yml tests/integration/phase6-release-checklist.test.ts
 git commit -m "ops: define phase6 release checklist"
 ```
 
@@ -71,13 +75,14 @@ git commit -m "ops: define phase6 release checklist"
 - Create: `infra/phase6/phase6-deploy.sh`
 - Create: `infra/phase6/phase6-rollback.sh`
 - Create: `infra/phase6/phase6-queue-recovery.sh`
+- Create: `infra/phase6/phase6-hosted-preflight.sh`
 - Create: `tests/integration/phase6-deployment.test.ts`
 - Modify: `docs/deployment/phase5-release-runbook.md` with Phase6 links
 
 - [ ] **Step 1: Write RED isolated-target tests.** Assert deploy refuses missing migration/runtime role separation, rollback refuses a non-isolated target, and queue recovery refuses an unbounded replay.
 - [ ] **Step 2: Run RED.** `pnpm exec vitest run --config /dev/null tests/integration/phase6-deployment.test.ts` must fail before scripts exist.
-- [ ] **Step 3: Implement bounded scripts.** Each script accepts explicit target URLs from environment, validates canonical host/database names, runs preflight before service start, writes only scrubbed JSON events, and exits non-zero on any failed precondition. Rollback uses the prior immutable digest and never rewrites migration history.
-- [ ] **Step 4: Run GREEN in disposable Compose targets.** `PHASE6_TARGET=isolated pnpm exec vitest run --config /dev/null tests/integration/phase6-deployment.test.ts` must pass and leave no live target behind.
+- [ ] **Step 3: Implement bounded scripts.** Each script accepts explicit target URLs from environment, validates canonical host/database names, runs preflight before service start, writes only scrubbed JSON events, and exits non-zero on any failed precondition. `phase6-hosted-preflight.sh` checks the hosted `/api/health` and `/api/ready` endpoints, PostgreSQL migration/runtime role separation, S3 bucket access, worker readiness, and image digest before traffic. Rollback uses the prior immutable digest and never rewrites migration history.
+- [ ] **Step 4: Run GREEN in disposable Compose and hosted rehearsal targets.** `PHASE6_TARGET=isolated pnpm exec vitest run --config /dev/null tests/integration/phase6-deployment.test.ts` must pass and leave no live target behind; `PHASE6_HOSTED_BASE_URL=https://staging.example PHASE6_HOSTED_IMAGE_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000 infra/phase6/phase6-hosted-preflight.sh` must pass only after all hosted checks respond successfully.
 - [ ] **Step 5: Commit.** `git add infra/phase6 tests/integration/phase6-deployment.test.ts docs/deployment/phase5-release-runbook.md && git commit -m "ops: rehearse phase6 deployment recovery"`
 
 ### Task 3: Complete observability and alert delivery evidence
@@ -89,8 +94,8 @@ git commit -m "ops: define phase6 release checklist"
 
 - [ ] **Step 1: Write RED alert tests.** Cover probe cadence, three-failure threshold, queue age/dead-letter/backup conditions, five-minute notification deadline, recovery notification, and secret-free payloads.
 - [ ] **Step 2: Run RED.** `pnpm exec vitest run --config /dev/null tests/integration/phase6-observability.test.ts` must fail before rules/evidence exist.
-- [ ] **Step 3: Implement rules and adapter wiring.** Use stable event names, request/job correlation IDs, bounded counters, and redaction before transport. Never include document bodies, credentials, provider responses, or URLs.
-- [ ] **Step 4: Run GREEN with a configured operator-channel capture.** `PHASE6_ALERT_EVIDENCE_FILE=/secure/path/sanitized-alert.json pnpm test:alerting:phase5` must pass and the evidence file must validate against the strict schema.
+- [ ] **Step 3: Implement rules and adapter wiring.** Modify `apps/api/src/app.ts` logger construction, `apps/api/src/middleware/error-handler.ts` redaction, `apps/api/src/routes/health.ts` readiness metrics, and `apps/worker/src/scheduler.ts` alert emission. Use stable event names, request/job correlation IDs, bounded counters, and redaction before transport. Never include document bodies, credentials, provider responses, or URLs.
+- [ ] **Step 4: Run GREEN with a configured operator-channel capture.** `PHASE6_ALERT_EVIDENCE_FILE=/secure/path/sanitized-alert.json pnpm test:alerting:phase5 && pnpm exec vitest run --config /dev/null tests/integration/phase6-observability.test.ts` must pass and the evidence file must validate against the strict schema.
 - [ ] **Step 5: Commit.** `git add infra/observability docs/evidence/phase5 tests/integration/phase6-observability.test.ts && git commit -m "ops: finalize phase6 observability evidence"`
 
 ### Task 4: Execute encrypted backup and isolated restore drill
@@ -111,14 +116,16 @@ git commit -m "ops: define phase6 release checklist"
 
 **Files:**
 - Modify: `tests/load/phase5-product-services.ts` only for missing manifest/evidence fields
+- Create: `tests/load/phase6-environment.ts`
 - Create: `tests/performance/phase6-release.perf.spec.ts`
 - Create: `tests/e2e/phase6-browser-matrix.spec.ts`
+- Modify: `playwright.config.ts` to expose Chromium, Edge, Firefox, and WebKit projects
 - Modify: `docs/evidence/phase5/performance-load.md` and `docs/evidence/phase5/browser-accessibility.md`
 
 - [ ] **Step 1: Write RED evidence validators.** Reject smoke-only duration, fewer than five actors, fewer than 500 samples per route, p95 over the SPEC limits, browser version gaps, axe violations, missing keyboard flow, or missing VoiceOver/NVDA result.
 - [ ] **Step 2: Run RED with absent evidence.** `pnpm test:load:phase5 -- --duration=1s --users=1` must exit with `PHASE5_LOAD_SKIPPED_RELEASE_BLOCKER`; browser matrix must report every missing target.
-- [ ] **Step 3: Implement exact workload/matrix harnesses.** Keep retries disabled for performance, record host resources, commit/image digest, browser versions, queue drain and integrity counters, and redact all identifiers/content.
-- [ ] **Step 4: Run GREEN on the release environment.** `pnpm test:load:phase5 -- --duration=30m --users=5 && CI=1 pnpm test:e2e --project=e2e` plus the manual VoiceOver/NVDA checklist must produce immutable artifacts.
+- [ ] **Step 3: Implement exact workload/matrix harnesses.** `tests/load/phase6-environment.ts` must fail closed unless `PHASE6_CPU_CORES=4` and `PHASE6_MEMORY_GB=8` (or measured host values) are present and match the required environment. Keep retries disabled for performance, record host resources, commit/image digest, browser versions, queue drain and integrity counters, and redact all identifiers/content. `playwright.config.ts` must define explicit `chromium`, `msedge`, `firefox`, and `webkit` projects; the matrix test validates the exact target/version manifest.
+- [ ] **Step 4: Run GREEN on the release environment.** `PHASE6_CPU_CORES=4 PHASE6_MEMORY_GB=8 pnpm test:load:phase5 -- --duration=30m --users=5 && CI=1 pnpm exec playwright test tests/e2e/phase6-browser-matrix.spec.ts --project=chromium --project=msedge --project=firefox --project=webkit` plus release-owner command `pnpm exec playwright test tests/e2e/phase6-browser-matrix.spec.ts --project=previous-chromium --project=previous-firefox` and the manual VoiceOver/NVDA checklist must produce immutable artifacts. A missing previous-version, Safari, or screen-reader artifact keeps the P0 row blocked.
 - [ ] **Step 5: Commit.** `git add tests/load tests/performance tests/e2e docs/evidence/phase5 && git commit -m "test: capture phase6 release performance evidence"`
 
 ### Task 6: Rehearse and publish the P0 release decision
