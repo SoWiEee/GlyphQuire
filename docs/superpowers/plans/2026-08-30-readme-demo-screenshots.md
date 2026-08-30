@@ -52,7 +52,7 @@ async function assertDemoDomSafe(page: import("@playwright/test").Page): Promise
   }));
   const combined = [exposed.text, ...exposed.attributes].join("\n");
   expect(combined).not.toMatch(
-    /(?:token=|bearer |presigned|https?:\/\/|postgresql:\/\/|s3[.-]|password=|cookie|data:|raw markdown|fixture(?: payload| id)?|provider(?: diagnostic| error)|asset:\/\/|glyphquire-spec)/iu,
+    /(?:token=|bearer |presigned|https?:\/\/|postgresql:\/\/|s3[.-]|password=|cookie|data:|raw markdown|fixture(?: payload| id)?|provider(?: diagnostic| error)|asset:\/\/|glyphquire-spec|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}|(?:api[_-]?key|secret|access[_-]?key)\s*=|(?:^|\n)\s{0,3}(?:#{1,6}\s+\S|```|[-*+]\s+\S|>\s+\S))/imu,
   );
 }
 
@@ -226,7 +226,7 @@ function assertPngSafety(pathOrBytes: string | Buffer): void {
   expect(width).toBeGreaterThan(0);
   expect(height).toBeGreaterThan(0);
   expect(text.join("\n")).not.toMatch(
-    /(?:token=|bearer |presigned|postgresql:\/\/|https?:\/\/|password=|cookie|provider|diagnostic|document body|raw markdown|asset:\/\/|#\s|glyphquire-spec)/iu,
+    /(?:token=|bearer |presigned|postgresql:\/\/|https?:\/\/|s3[.-]|password=|cookie|provider|diagnostic|document body|raw markdown|fixture(?: payload| id)?|asset:\/\/|#\s|glyphquire-spec|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}|(?:api[_-]?key|secret|access[_-]?key)\s*=)/iu,
   );
 }
 
@@ -279,7 +279,7 @@ for (const viewport of [
     for (const [, caption] of images) await expect(page.getByText(caption)).toBeVisible();
     const renderedText = await page.locator("main").innerText();
     expect(renderedText).not.toMatch(
-      /(?:token=|bearer |presigned|https?:\/\/|postgresql:\/\/|s3[.-]|password=|cookie|data:|raw markdown|fixture(?: payload| id)?|provider(?: diagnostic| error)|asset:\/\/|glyphquire-spec)/iu,
+      /(?:token=|bearer |presigned|https?:\/\/|postgresql:\/\/|s3[.-]|password=|cookie|data:|raw markdown|fixture(?: payload| id)?|provider(?: diagnostic| error)|asset:\/\/|glyphquire-spec|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}|(?:api[_-]?key|secret|access[_-]?key)\s*=|(?:^|\n)\s{0,3}(?:#{1,6}\s+\S|```|[-*+]\s+\S|>\s+\S))/imu,
     );
     const bounds = await page.locator("main").evaluate((element) => ({
       scrollWidth: element.scrollWidth,

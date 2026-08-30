@@ -39,7 +39,7 @@ async function assertDemoDomSafe(page: import("@playwright/test").Page): Promise
   }));
   const combined = [exposed.text, ...exposed.visibleTextNodes, ...exposed.attributes].join("\n");
   expect(combined).not.toMatch(
-    /(?:token=|bearer |presigned|https?:\/\/|postgresql:\/\/|s3[.-]|password=|cookie|data:|raw markdown|fixture(?: payload| id)?|provider(?: diagnostic| error)|asset:\/\/|glyphquire-spec)/iu,
+    /(?:token=|bearer |presigned|https?:\/\/|postgresql:\/\/|s3[.-]|password=|cookie|data:|raw markdown|fixture(?: payload| id)?|provider(?: diagnostic| error)|asset:\/\/|glyphquire-spec|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}|(?:api[_-]?key|secret|access[_-]?key)\s*=|(?:^|\n)\s{0,3}(?:#{1,6}\s+\S|```|[-*+]\s+\S|>\s+\S))/imu,
   );
 }
 
@@ -111,7 +111,7 @@ test("captures the four README demo scenes", async ({ page }) => {
     });
   });
 
-  await page.goto(`/workspace/${WORKSPACE_ID}?noteId=${NOTE_ID}`);
+  await page.goto("/__readme-demo?scene=modes");
   await expect(page.getByRole("button", { name: "Open command palette" })).toBeVisible();
   await expect(page.getByRole("tabpanel", { name: /editor$/u })).toBeVisible();
   await expect(page.getByRole("radiogroup", { name: "Editor mode" })).toBeVisible();
@@ -142,17 +142,13 @@ test("captures the four README demo scenes", async ({ page }) => {
   await assertDemoDomSafe(page);
   await page.screenshot({ path: "docs/assets/readme/02-semantic-blocks.png", fullPage: false });
 
-  await page.goto(`/workspace/${WORKSPACE_ID}?noteId=${NOTE_ID}`);
-  await openTool(page, "Search notes");
-  const search = page.getByRole("dialog", { name: "Search notes" });
+  await page.goto("/__readme-demo?scene=tools");
+  const search = page.getByRole("region", { name: "Search notes" });
   await expect(search.getByRole("searchbox", { name: "Search notes" })).toBeVisible();
   await search.getByRole("searchbox", { name: "Search notes" }).fill("blocks");
   await search.getByRole("button", { name: "Run search" }).click();
   await expect(search.getByText("A focused result with a plain-text preview.")).toBeVisible();
-  await search.getByRole("button", { name: "Close Phase 5 tools" }).click();
-
-  await openTool(page, "Import or export");
-  const transfer = page.getByRole("dialog", { name: "Import and export" });
+  const transfer = page.getByRole("region", { name: "Import and export" });
   await expect(transfer).toBeVisible();
   await expect(transfer.getByLabel("Import Markdown or ZIP")).toBeVisible();
   await transfer.getByLabel("Import Markdown or ZIP").setInputFiles({
