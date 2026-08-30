@@ -51,13 +51,13 @@ jobs:
       - name: Format
         run: pnpm format:check
 
-      - name: Unit tests
-        run: pnpm -r test
-
       - name: Run database migrations
         run: pnpm db:migrate
         env:
           MIGRATION_DATABASE_URL: postgresql://glyphquire:glyphquire@localhost:5432/glyphquire_test
+
+      - name: Unit tests
+        run: pnpm -r test
 
       - name: Integration tests
         run: pnpm test:integration
