@@ -39,7 +39,7 @@ async function assertDemoDomSafe(page: import("@playwright/test").Page): Promise
   }));
   const combined = [exposed.text, ...exposed.visibleTextNodes, ...exposed.attributes].join("\n");
   expect(combined).not.toMatch(
-    /(?:token=|bearer |presigned|https?:\/\/|postgresql:\/\/|s3[.-]|password=|cookie|data:|raw markdown|fixture(?: payload| id)?|provider(?: diagnostic| error)|asset:\/\/|glyphquire-spec|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}|(?:api[_-]?key|secret|access[_-]?key)\s*=|(?:^|\n)\s{0,3}(?:#{1,6}\s+\S|```|[-*+]\s+\S|>\s+\S))/imu,
+    /(?:token=|bearer |presigned|https?:\/\/|file:\/\/|mailto:|postgresql:\/\/|s3[.-]|password=|cookie|data:|raw markdown|fixture(?: payload| id)?|provider(?: diagnostic| error)|accessdenied|signaturedoesnotmatch|asset:\/\/|glyphquire-spec|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}|(?:ghp_|github_pat_|sk-(?:live|proj)-|xox[baprs]-|AIza[\w-]{20,})[\w-]+|(?:api[_-]?key|secret|access[_-]?key)\s*=|(?:^|\n)\s{0,3}(?:#{1,6}\s+\S|```|[-*+]\s+\S|>\s+\S)|\*\*[^*\n]+\*\*|\[[^\]\n]+\]\([^)]*\))/imu,
   );
 }
 
@@ -112,6 +112,7 @@ test("captures the four README demo scenes", async ({ page }) => {
   });
 
   await page.goto("/__readme-demo?scene=modes");
+  await expect(page.getByLabel("Save status")).toHaveText("Saved · Revision 2");
   await expect(page.getByRole("button", { name: "Open command palette" })).toBeVisible();
   await expect(page.getByRole("tabpanel", { name: /editor$/u })).toBeVisible();
   await expect(page.getByRole("radiogroup", { name: "Editor mode" })).toBeVisible();

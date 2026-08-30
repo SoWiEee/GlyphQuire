@@ -37,7 +37,7 @@
 
 - [ ] **Step 1: Write the failing capture assertions.**
 
-```ts
+````ts
 import { deflateSync, inflateSync } from "node:zlib";
 import { expect, test } from "@playwright/test";
 
@@ -52,7 +52,7 @@ async function assertDemoDomSafe(page: import("@playwright/test").Page): Promise
   }));
   const combined = [exposed.text, ...exposed.attributes].join("\n");
   expect(combined).not.toMatch(
-    /(?:token=|bearer |presigned|https?:\/\/|postgresql:\/\/|s3[.-]|password=|cookie|data:|raw markdown|fixture(?: payload| id)?|provider(?: diagnostic| error)|asset:\/\/|glyphquire-spec|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}|(?:api[_-]?key|secret|access[_-]?key)\s*=|(?:^|\n)\s{0,3}(?:#{1,6}\s+\S|```|[-*+]\s+\S|>\s+\S))/imu,
+    /(?:token=|bearer |presigned|https?:\/\/|file:\/\/|mailto:|postgresql:\/\/|s3[.-]|password=|cookie|data:|raw markdown|fixture(?: payload| id)?|provider(?: diagnostic| error)|accessdenied|signaturedoesnotmatch|asset:\/\/|glyphquire-spec|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}|(?:ghp_|github_pat_|sk-(?:live|proj)-|xox[baprs]-|AIza[\w-]{20,})[\w-]+|(?:api[_-]?key|secret|access[_-]?key)\s*=|(?:^|\n)\s{0,3}(?:#{1,6}\s+\S|```|[-*+]\s+\S|>\s+\S)|\*\*[^*\n]+\*\*|\[[^\]\n]+\]\([^)]*\))/imu,
   );
 }
 
@@ -65,7 +65,7 @@ test("captures the four README demo scenes", async ({ page }) => {
   await assertDemoDomSafe(page);
   await page.screenshot({ path: "docs/assets/readme/01-editor-modes.png", fullPage: false });
 });
-```
+````
 
 - [ ] **Step 2: Run the capture spec to verify the missing-output failure.**
 
@@ -90,7 +90,7 @@ Capture scene 1 from the Workbench, scene 2 from a rendered canonical note conta
 
 Run: `pnpm exec playwright test tests/e2e/readme-demo.spec.ts --project=e2e`
 
-Expected: 4 tests pass; each PNG is non-empty and `file docs/assets/readme/*.png` reports PNG images at 1440×900 or a bounded crop.
+Expected: the capture test passes and emits four non-empty PNGs; `file docs/assets/readme/*.png` reports PNG images at 1440×900 or a bounded crop.
 
 - [ ] **Step 5: Commit the capture fixture and assets.**
 
@@ -138,7 +138,7 @@ Expected: formatting passes and exactly four image paths are found.
 
 - [ ] **Step 3: Add the desktop/narrow rendering test.**
 
-```ts
+````ts
 import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { unified } from "unified";
@@ -368,7 +368,7 @@ test("inflates valid iTXt and rejects text separators, flags, methods, ordering,
   ];
   for (const bytes of malformed) expect(() => assertPngSafety(bytes)).toThrow();
 });
-```
+````
 
 The helper must run the checked-in README through a GFM-compatible
 `remark-parse`/`remark-gfm`/`remark-rehype`/`rehype-raw`/`rehype-sanitize`

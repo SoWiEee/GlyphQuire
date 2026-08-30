@@ -11,114 +11,35 @@
         >
       </header>
 
-      <section v-if="scene === 'modes'" class="grid gap-6 lg:grid-cols-[0.72fr_1.28fr]">
-        <aside class="space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Workbench</p>
-          <h2 class="text-xl font-semibold">A calm place to write</h2>
-          <p class="text-sm leading-6 text-slate-600">
-            Switch between Source, Visual, and Split modes while the document stays canonical.
-          </p>
-          <div class="space-y-2 text-sm text-slate-600">
-            <p class="flex items-center gap-2">
-              <span class="h-2 w-2 rounded-full bg-cyan-500" />Canonical Markdown
-            </p>
-            <p class="flex items-center gap-2">
-              <span class="h-2 w-2 rounded-full bg-violet-500" />Optimistic autosave
-            </p>
-            <p class="flex items-center gap-2">
-              <span class="h-2 w-2 rounded-full bg-emerald-500" />Conflict-safe revisions
+      <section v-if="scene === 'modes'" class="space-y-4">
+        <div
+          class="flex items-end justify-between rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+        >
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wider text-cyan-700">Workbench</p>
+            <h2 class="mt-1 text-xl font-semibold">A calm place to write</h2>
+            <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              Switch between Source, Visual, and Split modes while one canonical document stays in
+              control.
             </p>
           </div>
-        </aside>
-        <section class="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
-          <div class="flex items-center justify-between border-b border-slate-200 pb-4">
-            <div>
-              <p class="text-xs uppercase tracking-wider text-slate-500">Welcome</p>
-              <h2 class="mt-1 text-lg font-semibold">Project notebook</h2>
-            </div>
-            <div
-              role="radiogroup"
-              aria-label="Editor mode"
-              class="flex rounded-md border border-slate-300 p-0.5 text-xs"
-            >
-              <button
-                type="button"
-                role="radio"
-                aria-checked="false"
-                class="rounded px-2 py-1 text-slate-600"
-              >
-                Source
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked="true"
-                class="rounded bg-slate-900 px-2 py-1 text-white"
-              >
-                Visual
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked="false"
-                class="rounded px-2 py-1 text-slate-600"
-              >
-                Split
-              </button>
-            </div>
-          </div>
-          <div
-            role="tabpanel"
-            aria-label="Project editor"
-            class="min-h-[320px] rounded-lg bg-slate-50 p-6"
+          <span
+            aria-label="Save status"
+            class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800"
           >
-            <p class="text-2xl font-semibold text-slate-900">Welcome to your notebook</p>
-            <p class="mt-4 max-w-xl text-slate-600">
-              Capture ideas, shape structured notes, and keep every edit portable.
-            </p>
-            <div class="mt-8 grid gap-3 sm:grid-cols-3">
-              <div class="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600">
-                Outline
-              </div>
-              <div class="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600">
-                Draft
-              </div>
-              <div class="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-600">
-                Review
-              </div>
-            </div>
-          </div>
-          <button
-            type="button"
-            aria-label="Open command palette"
-            class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
-            @click="paletteOpen = true"
-          >
-            Commands <kbd class="ml-1 rounded bg-slate-100 px-1 text-xs">⌘K</kbd>
-          </button>
-          <div
-            v-if="paletteOpen"
-            role="dialog"
-            aria-label="Command palette"
-            class="rounded-lg border border-slate-300 bg-white p-3 shadow-lg"
-          >
-            <input
-              aria-label="Filter commands"
-              placeholder="Filter commands"
-              class="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-            />
-            <ul role="listbox" aria-label="Commands" class="mt-2 space-y-1 text-sm">
-              <li
-                v-for="command in commands"
-                :key="command"
-                role="option"
-                class="rounded px-3 py-2 text-slate-700"
-              >
-                {{ command }}
-              </li>
-            </ul>
-          </div>
-        </section>
+            Saved · Revision 2
+          </span>
+        </div>
+        <div
+          class="h-[650px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+        >
+          <Workbench
+            :initial-notes="demoNotes"
+            :session-factory="demoSessionFactory"
+            :phase5-workspace-id="WORKSPACE_ID"
+            :phase5-note-id="NOTE_ID"
+          />
+        </div>
       </section>
 
       <section v-else-if="scene === 'semantic'" class="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
@@ -142,7 +63,7 @@
         <section
           data-testid="readme-semantic-editor"
           aria-label="Semantic editor"
-          class="rounded-xl bg-white p-6 shadow-xl"
+          class="readme-semantic-editor rounded-xl bg-white p-6 shadow-xl"
         >
           <VisualEditor :markdown="semanticMarkdown" :read-only="true" />
         </section>
@@ -189,23 +110,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import Phase5MaintenancePanel from "../components/admin/Phase5MaintenancePanel.vue";
 import SearchPalette from "../components/search/SearchPalette.vue";
 import TransferDialog from "../components/transfer/TransferDialog.vue";
 import VisualEditor from "../components/visual/VisualEditor.vue";
 import type { Phase5MaintenanceClient } from "../api/Phase5Client.js";
+import Workbench from "../components/workbench/Workbench.vue";
+import type { EditorSession, EditorSessionState } from "../editors/editor-session.types.js";
+import type { WorkbenchNote } from "../components/workbench/types.js";
 
 const WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
+const NOTE_ID = "22222222-2222-4222-8222-222222222222";
 const scene = computed(() => new URLSearchParams(window.location.search).get("scene"));
-const paletteOpen = ref(false);
-const commands = [
-  "Switch to Visual mode",
-  "Manage assets",
-  "Search notes",
-  "Import or export",
-  "Create read-only share link",
-];
 const title = computed(() =>
   scene.value === "modes"
     ? "Editor modes"
@@ -251,6 +168,72 @@ Visual blocks stay easy to scan.
 
 ::::
 `;
+
+const demoNotes: readonly WorkbenchNote[] = [
+  {
+    id: NOTE_ID,
+    title: "Project notebook",
+    markdown:
+      "Welcome to your notebook.\nCapture ideas, shape structured notes, and keep every edit portable.",
+  },
+];
+
+const demoSessionFactory = async (): Promise<EditorSession> => {
+  let current: EditorSessionState = {
+    noteId: NOTE_ID,
+    markdown: demoNotes[0]?.markdown ?? "",
+    baseRevision: 2,
+    dirty: false,
+    saveStatus: "clean",
+    conflict: null,
+    mode: "source",
+    activePane: "source",
+    diagnostics: [],
+    readOnly: false,
+    isReadOnly: false,
+    draftDurability: "persisted",
+    draftDurabilityError: null,
+    autosave: {
+      status: "clean",
+      revision: 2,
+      lastSavedAt: "2026-08-30T00:00:00.000Z",
+      lastError: null,
+      conflict: null,
+      pending: null,
+    },
+  };
+  const listeners = new Set<(state: EditorSessionState) => void>();
+  const notify = () => listeners.forEach((listener) => listener(current));
+  return {
+    snapshot: () => current,
+    edit(markdown) {
+      current = { ...current, markdown, dirty: true, saveStatus: "dirty" };
+      notify();
+    },
+    async switchMode(mode) {
+      current = { ...current, mode, activePane: mode === "visual" ? "visual" : "source" };
+      notify();
+      return { success: true, mode };
+    },
+    async attachModeAdapters() {
+      return () => undefined;
+    },
+    async saveNow() {
+      current = { ...current, dirty: false, saveStatus: "saved" };
+      notify();
+    },
+    async requestTakeover() {
+      return false;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    async dispose() {
+      listeners.clear();
+    },
+  };
+};
 const maintenanceClient: Phase5MaintenanceClient = {
   async getMaintenanceCapabilities() {
     return {
@@ -275,3 +258,50 @@ const maintenanceClient: Phase5MaintenanceClient = {
   },
 };
 </script>
+
+<style scoped>
+.readme-semantic-editor :deep([data-glyphquire-node] > header) {
+  display: none;
+}
+
+.readme-semantic-editor :deep([data-glyphquire-node="callout"]) {
+  border: 1px solid rgb(103 232 249 / 0.45);
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, rgb(236 254 255), rgb(239 246 255));
+  padding: 1rem 1.25rem;
+  color: rgb(15 23 42);
+}
+
+.readme-semantic-editor :deep([data-glyphquire-node="toggle"]) {
+  border: 1px solid rgb(196 181 253 / 0.55);
+  border-radius: 0.75rem;
+  background: rgb(250 245 255);
+  padding: 1rem 1.25rem;
+  color: rgb(30 27 75);
+}
+
+.readme-semantic-editor :deep([data-glyphquire-node="tabs"]) {
+  border: 1px solid rgb(251 191 36 / 0.55);
+  border-radius: 0.75rem;
+  background: rgb(255 251 235);
+  padding: 1rem 1.25rem;
+  color: rgb(69 26 3);
+}
+
+.readme-semantic-editor :deep([data-glyphquire-node="columns"]) {
+  display: flex;
+  gap: 1rem;
+  border-radius: 0.75rem;
+  background: rgb(248 250 252);
+  padding: 1rem;
+  color: rgb(30 41 59);
+}
+
+.readme-semantic-editor :deep([data-glyphquire-node="column"]) {
+  flex: 1;
+  border: 1px solid rgb(203 213 225);
+  border-radius: 0.5rem;
+  background: white;
+  padding: 0.875rem;
+}
+</style>
