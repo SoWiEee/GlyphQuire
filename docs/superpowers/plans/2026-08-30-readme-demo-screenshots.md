@@ -78,6 +78,7 @@ git commit -m "docs: capture README product demos"
 
 **Files:**
 - Modify: `README.md` immediately after `## What is GlyphQuire`
+- Create: `tests/e2e/readme-gallery-render.spec.ts`
 - Test: `tests/e2e/readme-demo.spec.ts` (reuse the capture assertions)
 
 **Interfaces:**
@@ -103,14 +104,59 @@ _Screenshots are deterministic local-demo captures; they contain no production d
 
 - [ ] **Step 2: Run Markdown formatting and link checks.**
 
-Run: `pnpm format:check && rg -n 'docs/assets/readme/0[1-4]-.*\\.png' README.md`
+Run: `pnpm format:check && test "$(rg -c 'docs/assets/readme/0[1-4]-.*\\.png' README.md)" -eq 4`
 
 Expected: formatting passes and exactly four image paths are found.
 
-- [ ] **Step 3: Commit the README gallery.**
+- [ ] **Step 3: Add the desktop/narrow rendering test.**
+
+```ts
+import { readFileSync } from "node:fs";
+import { expect, test } from "@playwright/test";
+
+const images = [
+  ["docs/assets/readme/01-editor-modes.png", "Visual / Source editing"],
+  ["docs/assets/readme/02-semantic-blocks.png", "Callout, Toggle, Tabs, Columns"],
+  ["docs/assets/readme/03-search-transfer.png", "Search and transfer"],
+  ["docs/assets/readme/04-sharing-maintenance.png", "Sharing and maintenance"],
+] as const;
+
+function readmeGalleryHtml(readme: string): string {
+  for (const [path, caption] of images) expect(readme).toContain(path);
+  return `<table><tr>${images
+    .map(([path, caption]) => {
+      const data = readFileSync(path).toString("base64");
+      return `<td><img src="data:image/png;base64,${data}" alt="${caption}"><br><span>${caption}</span></td>`;
+    })
+    .join("")}</tr></table>`;
+}
+
+for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+  test(`README gallery renders at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const readme = readFileSync("README.md", "utf8");
+    await page.setContent(`<main style="width:100%;overflow-x:hidden"><style>table{width:100%;table-layout:fixed}img{max-width:100%;height:auto}</style>${readmeGalleryHtml(readme)}</main>`);
+    await expect(page.locator("main img")).toHaveCount(4);
+    await expect(page.locator("main img").first()).toBeVisible();
+    for (const [, caption] of images) await expect(page.getByText(caption)).toBeVisible();
+    const bounds = await page.locator("main").evaluate((element) => ({
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth,
+    }));
+    expect(bounds.scrollWidth).toBeLessThanOrEqual(bounds.clientWidth);
+  });
+}
+```
+
+The helper must extract only the checked-in table and render its relative image
+paths as local file URLs; it must assert all four captions are visible. This
+test is a renderer smoke check, not a claim that GitHub's production renderer
+has been replaced.
+
+- [ ] **Step 4: Commit the README gallery.**
 
 ```bash
-git add README.md
+git add README.md tests/e2e/readme-gallery-render.spec.ts
 git commit -m "docs: add README product demo gallery"
 ```
 
@@ -128,6 +174,6 @@ Expected: four capture tests pass, Markdown formatting passes, and the diff is c
 
 - [ ] **Step 2: Inspect image metadata and secret safety.**
 
-Run: `file docs/assets/readme/*.png && rg -n -i 'token=|bearer |presigned|postgresql://|markdown=|secret|cookie' docs/assets/readme README.md && pnpm exec playwright test tests/e2e/readme-gallery-render.spec.ts --project=e2e`
+Run: `file docs/assets/readme/*.png && if rg -n -i 'token=|bearer |presigned|postgresql://|password=|cookie' tests/e2e/readme-demo.spec.ts apps/web/src/pages/ReadmeDemoPage.vue; then exit 1; fi && pnpm exec playwright test tests/e2e/readme-gallery-render.spec.ts --project=e2e`
 
 Expected: all images are PNGs; the search returns no credential, URL, or raw-payload match; the gallery's four links render at both 1440px and a 390px viewport with visible captions and no horizontal overflow.

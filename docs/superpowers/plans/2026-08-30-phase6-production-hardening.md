@@ -90,13 +90,17 @@ git commit -m "ops: define phase6 release checklist"
 **Files:**
 - Create: `infra/observability/phase6-alert-rules.yml`
 - Create: `tests/integration/phase6-observability.test.ts`
+- Modify: `apps/api/src/app.ts`
+- Modify: `apps/api/src/middleware/error-handler.ts`
+- Modify: `apps/api/src/routes/health.ts`
+- Modify: `apps/worker/src/scheduler.ts`
 - Modify: `docs/evidence/phase5/alert-delivery.md` and `docs/evidence/phase5/README.md`
 
 - [ ] **Step 1: Write RED alert tests.** Cover probe cadence, three-failure threshold, queue age/dead-letter/backup conditions, five-minute notification deadline, recovery notification, and secret-free payloads.
 - [ ] **Step 2: Run RED.** `pnpm exec vitest run --config /dev/null tests/integration/phase6-observability.test.ts` must fail before rules/evidence exist.
 - [ ] **Step 3: Implement rules and adapter wiring.** Modify `apps/api/src/app.ts` logger construction, `apps/api/src/middleware/error-handler.ts` redaction, `apps/api/src/routes/health.ts` readiness metrics, and `apps/worker/src/scheduler.ts` alert emission. Use stable event names, request/job correlation IDs, bounded counters, and redaction before transport. Never include document bodies, credentials, provider responses, or URLs.
 - [ ] **Step 4: Run GREEN with a configured operator-channel capture.** `PHASE6_ALERT_EVIDENCE_FILE=/secure/path/sanitized-alert.json pnpm test:alerting:phase5 && pnpm exec vitest run --config /dev/null tests/integration/phase6-observability.test.ts` must pass and the evidence file must validate against the strict schema.
-- [ ] **Step 5: Commit.** `git add infra/observability docs/evidence/phase5 tests/integration/phase6-observability.test.ts && git commit -m "ops: finalize phase6 observability evidence"`
+- [ ] **Step 5: Commit.** `git add infra/observability docs/evidence/phase5 tests/integration/phase6-observability.test.ts apps/api/src/app.ts apps/api/src/middleware/error-handler.ts apps/api/src/routes/health.ts apps/worker/src/scheduler.ts && git commit -m "ops: finalize phase6 observability evidence"`
 
 ### Task 4: Execute encrypted backup and isolated restore drill
 
@@ -119,14 +123,16 @@ git commit -m "ops: define phase6 release checklist"
 - Create: `tests/load/phase6-environment.ts`
 - Create: `tests/performance/phase6-release.perf.spec.ts`
 - Create: `tests/e2e/phase6-browser-matrix.spec.ts`
-- Modify: `playwright.config.ts` to expose Chromium, Edge, Firefox, and WebKit projects
+- Create: `tests/e2e/phase6-browserstack.ts`
+- Create: `configs/phase6-browser-matrix.json`
+- Modify: `playwright.config.ts` to expose current local Chromium/Edge/Firefox/WebKit projects
 - Modify: `docs/evidence/phase5/performance-load.md` and `docs/evidence/phase5/browser-accessibility.md`
 
 - [ ] **Step 1: Write RED evidence validators.** Reject smoke-only duration, fewer than five actors, fewer than 500 samples per route, p95 over the SPEC limits, browser version gaps, axe violations, missing keyboard flow, or missing VoiceOver/NVDA result.
 - [ ] **Step 2: Run RED with absent evidence.** `pnpm test:load:phase5 -- --duration=1s --users=1` must exit with `PHASE5_LOAD_SKIPPED_RELEASE_BLOCKER`; browser matrix must report every missing target.
-- [ ] **Step 3: Implement exact workload/matrix harnesses.** `tests/load/phase6-environment.ts` must fail closed unless `PHASE6_CPU_CORES=4` and `PHASE6_MEMORY_GB=8` (or measured host values) are present and match the required environment. Keep retries disabled for performance, record host resources, commit/image digest, browser versions, queue drain and integrity counters, and redact all identifiers/content. `playwright.config.ts` must define explicit `chromium`, `msedge`, `firefox`, and `webkit` projects; the matrix test validates the exact target/version manifest.
-- [ ] **Step 4: Run GREEN on the release environment.** `PHASE6_CPU_CORES=4 PHASE6_MEMORY_GB=8 pnpm test:load:phase5 -- --duration=30m --users=5 && CI=1 pnpm exec playwright test tests/e2e/phase6-browser-matrix.spec.ts --project=chromium --project=msedge --project=firefox --project=webkit` plus release-owner command `pnpm exec playwright test tests/e2e/phase6-browser-matrix.spec.ts --project=previous-chromium --project=previous-firefox` and the manual VoiceOver/NVDA checklist must produce immutable artifacts. A missing previous-version, Safari, or screen-reader artifact keeps the P0 row blocked.
-- [ ] **Step 5: Commit.** `git add tests/load tests/performance tests/e2e docs/evidence/phase5 && git commit -m "test: capture phase6 release performance evidence"`
+- [ ] **Step 3: Implement exact workload/matrix harnesses.** `tests/load/phase6-environment.ts` must measure Linux x86-64 host limits from `os.arch()`, `os.cpus()`, `/sys/fs/cgroup/cpu.max`, and `/sys/fs/cgroup/memory.max`; it fails closed when any value is unreadable or the measured quota is below 4 vCPU or 8 GiB. Self-declared CPU/memory environment variables are not accepted. Keep retries disabled for performance, record measured host resources, commit/image digest, queue drain and integrity counters, and redact all identifiers/content. `playwright.config.ts` must define explicit local `chromium`, `msedge`, `firefox`, and `webkit` projects; WebKit is diagnostic only and is never counted as Safari evidence. `configs/phase6-browser-matrix.json` must enumerate exactly eight BrowserStack targets: Chrome `latest`/`latest-1`, Firefox `latest`/`latest-1`, Edge `latest`/`latest-1`, and Safari `latest`/`latest-1`, each with the provider's OS/version fields.
+- [ ] **Step 4: Run GREEN on the release environment and BrowserStack.** `pnpm exec tsx tests/load/phase6-environment.ts && pnpm test:load:phase5 -- --duration=30m --users=5` must pass only on the measured 4-vCPU/8-GiB Linux x86-64 host. `BROWSERSTACK_USERNAME="$BROWSERSTACK_USERNAME" BROWSERSTACK_ACCESS_KEY="$BROWSERSTACK_ACCESS_KEY" PHASE6_BROWSERSTACK_BUILD="phase6-${GITHUB_SHA}" PHASE6_BASE_URL="https://staging.example" pnpm exec tsx tests/e2e/phase6-browserstack.ts --matrix configs/phase6-browser-matrix.json --spec tests/e2e/phase6-browser-matrix.spec.ts` connects with Playwright `chromium.connect` to BrowserStack's CDP endpoint, runs all eight actual Chrome/Firefox/Edge/Safari targets, records provider-reported browser versions and OS, and writes a schema-validated `docs/evidence/phase6/browser-matrix.json` without credentials. The repository Playwright projects (`chromium`, `msedge`, `firefox`, `webkit`) remain local smoke checks only; WebKit never substitutes for Safari. The release owner additionally runs the exact same BrowserStack matrix with VoiceOver on macOS and NVDA on Windows using the provider's screen-reader-capable sessions; a missing screen-reader artifact keeps P0-14 blocked.
+- [ ] **Step 5: Commit.** `git add tests/load tests/performance tests/e2e configs/phase6-browser-matrix.json playwright.config.ts docs/evidence/phase5 docs/evidence/phase6 && git commit -m "test: capture phase6 release performance evidence"`
 
 ### Task 6: Rehearse and publish the P0 release decision
 
