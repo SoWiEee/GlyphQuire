@@ -59,6 +59,8 @@ import type { WorkbenchCommand } from "./types.js";
 
 const props = defineProps<{
   commands: WorkbenchCommand[];
+  /** Commands supplied by a capability-gated surface, such as maintenance. */
+  additionalCommands?: WorkbenchCommand[];
 }>();
 
 const emit = defineEmits<{
@@ -69,10 +71,11 @@ const query = ref("");
 const highlightedIndex = ref(0);
 const inputRef = ref<HTMLInputElement | null>(null);
 
+const availableCommands = computed(() => [...props.commands, ...(props.additionalCommands ?? [])]);
 const filtered = computed(() => {
   const needle = query.value.trim().toLowerCase();
-  if (!needle) return props.commands;
-  return props.commands.filter((command) => command.label.toLowerCase().includes(needle));
+  if (!needle) return availableCommands.value;
+  return availableCommands.value.filter((command) => command.label.toLowerCase().includes(needle));
 });
 const activeDescendant = computed(() =>
   filtered.value[highlightedIndex.value]

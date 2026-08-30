@@ -1,23 +1,38 @@
 import {
   apiErrorEnvelopeSchema,
+  assetCleanupRequestSchema,
   assetResponseSchema,
+  backupVerificationQuerySchema,
+  backupVerificationResponseSchema,
   canonicalUuidSchema,
   createShareLinkInputSchema,
+  deadLetterQuerySchema,
+  deadLetterReplayParamsSchema,
+  deadLetterResponseSchema,
   exportFormatSchema,
   exportResultSchema,
   exportScopeSchema,
   idempotencyKeySchema,
   importJobResultSchema,
+  maintenanceCapabilitiesResponseSchema,
+  maintenanceJobMutationResponseSchema,
+  maintenanceSearchRebuildRequestSchema,
   requestIdSchema,
   searchQuerySchema,
   searchResponseSchema,
   shareLinkResponseSchema,
   type ApiErrorCode,
+  type AssetCleanupRequest,
   type AssetResponse,
+  type BackupVerificationResponse,
   type CreateShareLinkInput,
+  type DeadLetterResponse,
   type ExportFormat,
   type ExportResult,
   type ImportJobResult,
+  type MaintenanceCapabilitiesResponse,
+  type MaintenanceJobMutationResponse,
+  type MaintenanceSearchRebuildRequest,
   type SearchQuery,
   type SearchResponse,
   type ShareLinkResponse,
@@ -135,6 +150,26 @@ export interface StartExportInput {
   scope: z.input<typeof exportScopeSchema>;
   format: ExportFormat;
   idempotencyKey?: string;
+}
+
+export interface Phase5MaintenanceClient {
+  getMaintenanceCapabilities(): Promise<MaintenanceCapabilitiesResponse>;
+  startSearchRebuild(
+    input: MaintenanceSearchRebuildRequest,
+    idempotencyKey?: string,
+  ): Promise<MaintenanceJobMutationResponse>;
+  listDeadLetters(query?: z.input<typeof deadLetterQuerySchema>): Promise<DeadLetterResponse>;
+  replayDeadLetter(
+    deadLetterId: string,
+    idempotencyKey?: string,
+  ): Promise<MaintenanceJobMutationResponse>;
+  runAssetCleanup(
+    input: AssetCleanupRequest,
+    idempotencyKey?: string,
+  ): Promise<MaintenanceJobMutationResponse>;
+  getBackupVerification(
+    query?: z.input<typeof backupVerificationQuerySchema>,
+  ): Promise<BackupVerificationResponse>;
 }
 
 export interface Phase5ClientOptions {
@@ -376,6 +411,101 @@ export class Phase5Client {
       expectedStatus: 204,
       empty: true,
     });
+  }
+
+  async getMaintenanceCapabilities(): Promise<MaintenanceCapabilitiesResponse> {
+    const result = maintenanceCapabilitiesResponseSchema.safeParse(
+      await this.request("/maintenance/capabilities"),
+    );
+    if (!result.success) throw invalidResponse();
+    return result.data;
+  }
+
+  async startSearchRebuild(
+    input: MaintenanceSearchRebuildRequest,
+    idempotencyKey?: string,
+  ): Promise<MaintenanceJobMutationResponse> {
+    const parsed = maintenanceSearchRebuildRequestSchema.safeParse(input);
+    if (!parsed.success) throw new Phase5ValidationError("request");
+    const parsedKey = idempotencyKeySchema.safeParse(idempotencyKey ?? this.idempotencyKey());
+    if (!parsedKey.success) throw new Phase5ValidationError("request");
+    const result = maintenanceJobMutationResponseSchema.safeParse(
+      await this.request("/maintenance/search-rebuild", {
+        method: "POST",
+        body: parsed.data,
+        idempotencyKey: parsedKey.data,
+        expectedStatus: 202,
+      }),
+    );
+    if (!result.success) throw invalidResponse();
+    return result.data;
+  }
+
+  async listDeadLetters(
+    query: z.input<typeof deadLetterQuerySchema> = {},
+  ): Promise<DeadLetterResponse> {
+    const parsed = deadLetterQuerySchema.safeParse(query);
+    if (!parsed.success) throw new Phase5ValidationError("request");
+    const queryString = new URLSearchParams({ pageSize: String(parsed.data.pageSize) });
+    if (parsed.data.cursor) queryString.set("cursor", parsed.data.cursor);
+    const result = deadLetterResponseSchema.safeParse(
+      await this.request(`/maintenance/dead-letters?${queryString.toString()}`),
+    );
+    if (!result.success) throw invalidResponse();
+    return result.data;
+  }
+
+  async replayDeadLetter(
+    deadLetterId: string,
+    idempotencyKey?: string,
+  ): Promise<MaintenanceJobMutationResponse> {
+    const parsedId = deadLetterReplayParamsSchema.safeParse({ id: deadLetterId });
+    if (!parsedId.success) throw new Phase5ValidationError("request");
+    const parsedKey = idempotencyKeySchema.safeParse(idempotencyKey ?? this.idempotencyKey());
+    if (!parsedKey.success) throw new Phase5ValidationError("request");
+    const result = maintenanceJobMutationResponseSchema.safeParse(
+      await this.request(`/maintenance/dead-letters/${pathSegment(parsedId.data.id)}/replay`, {
+        method: "POST",
+        idempotencyKey: parsedKey.data,
+        expectedStatus: 202,
+      }),
+    );
+    if (!result.success) throw invalidResponse();
+    return result.data;
+  }
+
+  async runAssetCleanup(
+    input: AssetCleanupRequest,
+    idempotencyKey?: string,
+  ): Promise<MaintenanceJobMutationResponse> {
+    const parsed = assetCleanupRequestSchema.safeParse(input);
+    if (!parsed.success) throw new Phase5ValidationError("request");
+    const parsedKey = idempotencyKeySchema.safeParse(idempotencyKey ?? this.idempotencyKey());
+    if (!parsedKey.success) throw new Phase5ValidationError("request");
+    const result = maintenanceJobMutationResponseSchema.safeParse(
+      await this.request("/maintenance/asset-cleanup", {
+        method: "POST",
+        body: parsed.data,
+        idempotencyKey: parsedKey.data,
+        expectedStatus: 202,
+      }),
+    );
+    if (!result.success) throw invalidResponse();
+    return result.data;
+  }
+
+  async getBackupVerification(
+    query: z.input<typeof backupVerificationQuerySchema> = {},
+  ): Promise<BackupVerificationResponse> {
+    const parsed = backupVerificationQuerySchema.safeParse(query);
+    if (!parsed.success) throw new Phase5ValidationError("request");
+    const queryString = new URLSearchParams({ pageSize: String(parsed.data.pageSize) });
+    if (parsed.data.cursor) queryString.set("cursor", parsed.data.cursor);
+    const result = backupVerificationResponseSchema.safeParse(
+      await this.request(`/maintenance/backup-verification?${queryString.toString()}`),
+    );
+    if (!result.success) throw invalidResponse();
+    return result.data;
   }
 
   private exportIdentityMatches(

@@ -13,6 +13,7 @@ const ASSET_ID = "33333333-3333-4333-8333-333333333333";
 const IMPORT_ID = "44444444-4444-4444-8444-444444444444";
 const EXPORT_ID = "55555555-5555-4555-8555-555555555555";
 const SHARE_ID = "66666666-6666-4666-8666-666666666666";
+const DEAD_LETTER_ID = "88888888-8888-4888-8888-888888888888";
 const REQUEST_ID = "77777777-7777-4777-8777-777777777777";
 const IDEMPOTENCY_KEY = "phase5-test-key";
 const NOW = "2026-08-30T00:00:00.000Z";
@@ -70,7 +71,149 @@ function exportResponse(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function maintenanceMutation(overrides: Record<string, unknown> = {}) {
+  return { jobId: IMPORT_ID, duplicate: false, ...overrides };
+}
+
+function capabilitiesResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    operator: true,
+    capabilities: ["search.rebuild", "jobs.dead_letters", "asset.cleanup", "backup.verify"],
+    ...overrides,
+  };
+}
+
+function deadLetterResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    items: [
+      {
+        id: DEAD_LETTER_ID,
+        workspaceId: WORKSPACE_ID,
+        type: "export",
+        attempts: 2,
+        maxAttempts: 5,
+        createdAt: NOW,
+        deadLetteredAt: NOW,
+        errorCode: "JOB_FAILED",
+      },
+    ],
+    nextCursor: null,
+    ...overrides,
+  };
+}
+
+function backupVerificationResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    items: [
+      {
+        jobId: IMPORT_ID,
+        backupId: EXPORT_ID,
+        status: "completed",
+        createdAt: NOW,
+        completedAt: NOW,
+        errorCode: null,
+      },
+    ],
+    nextCursor: null,
+    ...overrides,
+  };
+}
+
 describe("Phase5Client request and response boundary", () => {
+  it("reads authorized maintenance capabilities through a root-relative request", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(capabilitiesResponse()));
+    const client = new Phase5Client(options(fetchImpl));
+
+    await expect(client.getMaintenanceCapabilities()).resolves.toEqual(capabilitiesResponse());
+
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe("/api/v1/maintenance/capabilities");
+    expect(init?.method).toBe("GET");
+    expect(new Headers(init?.headers).get("x-request-id")).toBe(REQUEST_ID);
+    expect(new Headers(init?.headers).has("authorization")).toBe(false);
+  });
+
+  it("validates bounded maintenance mutations, request ids, and idempotency keys", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(maintenanceMutation(), 202))
+      .mockResolvedValueOnce(jsonResponse(maintenanceMutation({ duplicate: true }), 202))
+      .mockResolvedValueOnce(jsonResponse(maintenanceMutation(), 202));
+    const client = new Phase5Client(options(fetchImpl));
+
+    await client.startSearchRebuild({ workspaceId: WORKSPACE_ID, batchSize: 100 });
+    await client.runAssetCleanup({ workspaceId: WORKSPACE_ID, batchSize: 1 });
+    await client.replayDeadLetter(DEAD_LETTER_ID);
+
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
+      "/api/v1/maintenance/search-rebuild",
+      "/api/v1/maintenance/asset-cleanup",
+      `/api/v1/maintenance/dead-letters/${DEAD_LETTER_ID}/replay`,
+    ]);
+    for (const [, init] of fetchImpl.mock.calls) {
+      const headers = new Headers(init?.headers);
+      expect(headers.get("x-request-id")).toBe(REQUEST_ID);
+      expect(headers.get("idempotency-key")).toBe(IDEMPOTENCY_KEY);
+      expect(headers.get("authorization")).toBeNull();
+    }
+    expect(new Headers(fetchImpl.mock.calls[0]?.[1]?.headers).get("content-type")).toBe(
+      "application/json",
+    );
+    expect(new Headers(fetchImpl.mock.calls[1]?.[1]?.headers).get("content-type")).toBe(
+      "application/json",
+    );
+    expect(new Headers(fetchImpl.mock.calls[2]?.[1]?.headers).get("content-type")).toBeNull();
+    expect(await new Request("http://local", fetchImpl.mock.calls[0]?.[1]).json()).toEqual({
+      workspaceId: WORKSPACE_ID,
+      batchSize: 100,
+    });
+    expect(await new Request("http://local", fetchImpl.mock.calls[1]?.[1]).json()).toEqual({
+      workspaceId: WORKSPACE_ID,
+      batchSize: 1,
+    });
+    expect(fetchImpl.mock.calls[2]?.[1]?.body).toBeUndefined();
+
+    await expect(
+      client.startSearchRebuild({ workspaceId: WORKSPACE_ID, batchSize: 101 }),
+    ).rejects.toBeInstanceOf(Phase5ValidationError);
+    await expect(
+      client.runAssetCleanup({ workspaceId: WORKSPACE_ID, batchSize: 0 }),
+    ).rejects.toBeInstanceOf(Phase5ValidationError);
+    await expect(client.replayDeadLetter("not-an-id")).rejects.toBeInstanceOf(
+      Phase5ValidationError,
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it("lists scrubbed diagnostics with bounded page and cursor parameters", async () => {
+    const cursor = "eyJjcmVhdGVkQXQiOiIyMDI2LTA4LTMwVDAwOjAwOjAwLjAwMFoiLCJpZCI6IjEyMyJ9";
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(deadLetterResponse()))
+      .mockResolvedValueOnce(jsonResponse(backupVerificationResponse()));
+    const client = new Phase5Client(options(fetchImpl));
+
+    await expect(client.listDeadLetters({ pageSize: 100, cursor })).resolves.toMatchObject({
+      items: [{ id: DEAD_LETTER_ID, errorCode: "JOB_FAILED" }],
+    });
+    await expect(client.getBackupVerification({ pageSize: 1 })).resolves.toMatchObject({
+      items: [{ backupId: EXPORT_ID, status: "completed" }],
+    });
+
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
+      `/api/v1/maintenance/dead-letters?pageSize=100&cursor=${encodeURIComponent(cursor)}`,
+      "/api/v1/maintenance/backup-verification?pageSize=1",
+    ]);
+    await expect(client.listDeadLetters({ pageSize: 101 })).rejects.toBeInstanceOf(
+      Phase5ValidationError,
+    );
+    await expect(client.getBackupVerification({ pageSize: 0 })).rejects.toBeInstanceOf(
+      Phase5ValidationError,
+    );
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("uploads through a root-relative same-origin URL with bounded request headers", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(assetResponse(), 201));
     const client = new Phase5Client(options(fetchImpl));
