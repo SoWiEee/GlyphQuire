@@ -1,0 +1,2 @@
+ALTER TABLE "exports" DROP CONSTRAINT "exports_format_check";--> statement-breakpoint
+ALTER TABLE "exports" ADD CONSTRAINT "exports_format_check" CHECK ("exports"."format" in ('markdown', 'zip', 'html', 'plain-text', 'ast-json'));

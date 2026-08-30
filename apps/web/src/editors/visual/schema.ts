@@ -20,6 +20,7 @@ import type {
 } from "@milkdown/kit/transformer";
 import { $remark } from "@milkdown/kit/utils";
 import remarkDirective from "remark-directive";
+import { parseAssetReference, type VisualAssetResolver } from "./asset-resolver.js";
 
 const engine = createDocumentEngine();
 const registry = createRegistry();
@@ -91,6 +92,10 @@ export function resolveVisualUrl(
   baseUrl = globalThis.location?.href ?? "https://glyphquire.invalid/",
 ): ResolvedVisualUrl | null {
   if (typeof raw !== "string" || raw.length === 0 || raw !== raw.trim()) return null;
+  // Image sources are intentionally never resolved by the generic URL
+  // policy. Persisted images stay logical asset:// references and the owned
+  // asset resolver below is the sole seam allowed to create a live src.
+  if (kind === "image") return null;
   const candidates = decodedUrlCandidates(raw);
   if (!candidates) return null;
 
@@ -690,23 +695,55 @@ export const safeLinkSchema = linkSchema.extendSchema((previous) => (ctx) => {
   };
 });
 
-export const safeImageSchema = imageSchema.extendSchema((previous) => (ctx) => {
-  const base = previous(ctx);
-  return {
-    ...base,
-    toDOM: (node) => {
-      const resolved = resolveVisualUrl(node.attrs.src, "image");
-      const attributes: Record<string, string> = {
-        alt: typeof node.attrs.alt === "string" ? node.attrs.alt : "",
-      };
-      if (resolved) attributes.src = resolved.href;
-      if (typeof node.attrs.title === "string" && node.attrs.title !== "") {
-        attributes.title = node.attrs.title;
-      }
-      return ["img", attributes];
-    },
-  };
-});
+const VISUAL_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+
+export function createSafeImageSchema(assetResolver?: VisualAssetResolver): MilkdownPlugin {
+  return imageSchema.extendSchema((previous) => (ctx) => {
+    const base = previous(ctx);
+    return {
+      ...base,
+      toDOM: (node) => {
+        const image = document.createElement("img");
+        image.alt = typeof node.attrs.alt === "string" ? node.attrs.alt : "";
+        if (typeof node.attrs.title === "string" && node.attrs.title !== "") {
+          image.title = node.attrs.title;
+        }
+
+        const reference = typeof node.attrs.src === "string" ? node.attrs.src : "";
+        if (!assetResolver || parseAssetReference(reference) === null) return image;
+
+        void assetResolver.resolve(reference).then(
+          (resolved) => {
+            if (
+              !resolved.src.startsWith("blob:") ||
+              !VISUAL_IMAGE_MIME_TYPES.has(resolved.mimeType)
+            ) {
+              resolved.release();
+              return;
+            }
+            let released = false;
+            const release = () => {
+              if (released) return;
+              released = true;
+              resolved.release();
+            };
+            image.addEventListener("load", release, { once: true });
+            image.addEventListener("error", release, { once: true });
+            image.src = resolved.src;
+          },
+          () => {
+            // Resolution errors stay inert and deliberately reveal no
+            // provider, authorization, or object metadata in the DOM.
+          },
+        );
+        return image;
+      },
+    };
+  });
+}
+
+/** Fail-closed default retained for direct schema consumers. */
+export const safeImageSchema = createSafeImageSchema();
 
 export const safeHtmlSchema = htmlSchema.extendSchema((previous) => (ctx) => {
   const base = previous(ctx);

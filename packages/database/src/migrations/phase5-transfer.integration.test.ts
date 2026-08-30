@@ -98,6 +98,34 @@ async function migrateThroughPhase5Search(databaseUrl: string): Promise<void> {
   }
 }
 
+async function migrateThrough0010(databaseUrl: string): Promise<void> {
+  const migrations = await readRepositoryMigrations(migrationsDirectory);
+  expect(migrations.slice(0, 11).at(-1)?.tag).toBe("0010_phase5_lifecycle");
+  const client = postgres(databaseUrl, { max: 1, onnotice() {} });
+  try {
+    await client`create schema drizzle`;
+    await client`
+      create table drizzle.__drizzle_migrations (
+        id serial primary key,
+        hash text not null,
+        created_at bigint
+      )
+    `;
+    for (const migration of migrations.slice(0, 11)) {
+      const source = await readFile(new URL(`./${migration.tag}.sql`, import.meta.url), "utf8");
+      await client.begin(async (transaction) => {
+        await applySql(transaction, source);
+        await transaction`
+          insert into drizzle.__drizzle_migrations (hash, created_at)
+          values (${migration.hash}, ${migration.when})
+        `;
+      });
+    }
+  } finally {
+    await client.end();
+  }
+}
+
 async function journalRows(databaseUrl: string) {
   const client = postgres(databaseUrl, { max: 1 });
   try {
@@ -173,6 +201,37 @@ describe("Phase 5 transfer schema and migration artifacts", () => {
     expect(snapshot).toContain('"public.import_resources"');
     expect(snapshot).toContain('"public.exports"');
   });
+
+  it("preserves migrations through 0010 and appends the export-format check only in 0011", async () => {
+    const frozen = [
+      ["0008_phase5_exports", "9a6ad7ed95a5e65b0dc0e2daba5e3720c28e822752b32ff254565e754b42b14e"],
+      [
+        "0009_phase5_share_links",
+        "cad40a10a1f8649a73b60b45d4cd27b2c8e03771d323028a90c451eaa8385fab",
+      ],
+      ["0010_phase5_lifecycle", "a9dd8e0fb7640e1f19ec8aac42f5b1a6c414f1ee2be10ec1c8ee09f707afba21"],
+    ] as const;
+    for (const [tag, expectedHash] of frozen) {
+      const bytes = await readFile(new URL(`./${tag}.sql`, import.meta.url));
+      expect(createHash("sha256").update(bytes).digest("hex"), tag).toBe(expectedHash);
+    }
+
+    const repository = await readRepositoryMigrations(migrationsDirectory);
+    expect(repository.map((entry) => entry.tag).slice(-2)).toEqual([
+      "0010_phase5_lifecycle",
+      "0011_phase5_export_formats",
+    ]);
+    const snapshot = JSON.parse(
+      await readFile(new URL("./meta/0011_snapshot.json", import.meta.url), "utf8"),
+    ) as {
+      prevId: string;
+      tables: Record<string, { checkConstraints: Record<string, { value: string }> }>;
+    };
+    expect(snapshot.prevId).toBe("bbc01f47-f9ab-45bd-9f8e-01ea99719492");
+    expect(
+      snapshot.tables["public.exports"]?.checkConstraints.exports_format_check?.value,
+    ).toContain("'plain-text', 'ast-json'");
+  });
 });
 
 describeWithPostgres("Phase 5 transfer PostgreSQL migration", () => {
@@ -243,6 +302,92 @@ describeWithPostgres("Phase 5 transfer PostgreSQL migration", () => {
     );
   }, 120_000);
 
+  it("upgrades exact 0010 atomically, permits both new formats, and reruns without drift", async () => {
+    const repository = await readRepositoryMigrations(migrationsDirectory);
+    const database = await createTestDatabase();
+    await migrateThrough0010(database.migrationUrl);
+    expect(await journalRows(database.migrationUrl)).toEqual(
+      repository.slice(0, 11).map((entry) => ({
+        hash: entry.hash,
+        created_at: String(entry.when),
+      })),
+    );
+
+    const actorId = `phase5-export-format-upgrade-${randomUUID()}`;
+    const client = postgres(database.migrationUrl, { max: 1, onnotice() {} });
+    let workspaceId: string;
+    try {
+      await client`
+        insert into "user" (id, name, email)
+        values (${actorId}, 'Export format upgrade', ${`${actorId}@example.test`})
+      `;
+      const [workspace] = await client<{ id: string }[]>`
+        insert into workspaces (personal_owner_id) values (${actorId}) returning id
+      `;
+      workspaceId = workspace!.id;
+      const rejectedId = randomUUID();
+      await expect(client`
+        insert into exports (
+          id, workspace_id, requester_id, scope_type, format, status,
+          idempotency_key, request_hash, expires_at
+        ) values (
+          ${rejectedId}, ${workspaceId}, ${actorId}, 'workspace', 'plain-text', 'pending',
+          'before-0011', ${"1".repeat(64)}, now() + interval '1 day'
+        )
+      `).rejects.toMatchObject({ code: "23514", constraint_name: "exports_format_check" });
+
+      const migration = await readFile(
+        new URL("./0011_phase5_export_formats.sql", import.meta.url),
+        "utf8",
+      );
+      await expect(
+        client.begin(async (transaction) => {
+          await applySql(transaction, migration);
+          throw new Error("force 0011 rollback");
+        }),
+      ).rejects.toThrow("force 0011 rollback");
+      await expect(client`
+        insert into exports (
+          id, workspace_id, requester_id, scope_type, format, status,
+          idempotency_key, request_hash, expires_at
+        ) values (
+          ${randomUUID()}, ${workspaceId}, ${actorId}, 'workspace', 'ast-json', 'pending',
+          'rolled-back-0011', ${"2".repeat(64)}, now() + interval '1 day'
+        )
+      `).rejects.toMatchObject({ code: "23514", constraint_name: "exports_format_check" });
+    } finally {
+      await client.end();
+    }
+
+    await migrateDatabase(database.migrationUrl);
+    const verify = postgres(database.migrationUrl, { max: 1, onnotice() {} });
+    try {
+      for (const [format, key, hash] of [
+        ["plain-text", "after-0011-plain", "3".repeat(64)],
+        ["ast-json", "after-0011-ast", "4".repeat(64)],
+      ] as const) {
+        await verify`
+          insert into exports (
+            id, workspace_id, requester_id, scope_type, format, status,
+            idempotency_key, request_hash, expires_at
+          ) values (
+            ${randomUUID()}, ${workspaceId}, ${actorId}, 'workspace', ${format}, 'pending',
+            ${key}, ${hash}, now() + interval '1 day'
+          )
+        `;
+      }
+      expect(
+        await verify<{ format: string }[]>`
+          select format from exports where requester_id = ${actorId} order by format
+        `,
+      ).toEqual([{ format: "ast-json" }, { format: "plain-text" }]);
+    } finally {
+      await verify.end();
+    }
+    await migrateDatabase(database.migrationUrl);
+    expect(await journalRows(database.migrationUrl)).toHaveLength(repository.length);
+  }, 120_000);
+
   it("rolls 0008 back atomically and preserves pre-existing note bytes before a clean upgrade", async () => {
     const repository = await readRepositoryMigrations(migrationsDirectory);
     const database = await createTestDatabase();
@@ -292,7 +437,7 @@ describeWithPostgres("Phase 5 transfer PostgreSQL migration", () => {
             pg_catalog.to_regclass('public.exports')::text as exports
         `,
       ).toEqual([{ imports: null, resources: null, exports: null }]);
-      expect(await journalRows(database.migrationUrl)).toHaveLength(repository.length - 1);
+      expect(await journalRows(database.migrationUrl)).toHaveLength(repository.slice(0, 8).length);
       expect(
         await client<{ content_markdown: string }[]>`
           select content_markdown from notes where id = ${noteId}
@@ -575,6 +720,20 @@ describeWithPostgres("Phase 5 transfer PostgreSQL migration", () => {
       expect(
         await runtime<{ id: string }[]>`select id from imports where id = ${importId}`,
       ).toEqual([{ id: importId }]);
+
+      const exportId = randomUUID();
+      await runtime`
+        insert into exports (
+          id, workspace_id, requester_id, scope_type, format, status,
+          idempotency_key, request_hash, expires_at
+        ) values (
+          ${exportId}, ${workspace!.id}, ${actorId}, 'workspace', 'ast-json', 'pending',
+          'runtime-ast-json', ${"9".repeat(64)}, now() + interval '1 day'
+        )
+      `;
+      expect(
+        await runtime<{ format: string }[]>`select format from exports where id = ${exportId}`,
+      ).toEqual([{ format: "ast-json" }]);
 
       await expect(runtime.unsafe(`set role "${migrationRole}"`)).rejects.toMatchObject({
         code: "42501",

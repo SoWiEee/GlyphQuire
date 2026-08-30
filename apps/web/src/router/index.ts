@@ -35,7 +35,7 @@ export const router = createRouter({
           component: () => import("@/pages/HomePage.vue"),
         },
         {
-          path: "workspace",
+          path: "workspace/:workspaceId?",
           name: "workspace",
           component: () => import("@/pages/WorkbenchPage.vue"),
           meta: { fullBleed: true },

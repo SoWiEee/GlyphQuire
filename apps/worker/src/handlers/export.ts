@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
+import type { AdditionalExportFormat as ContractAdditionalExportFormat } from "@glyphquire/api-contract";
 import type { ExportPayload, JobEnvelope } from "@glyphquire/api-contract/jobs";
-import { createDocumentEngine } from "@glyphquire/document-engine";
+import {
+  createDocumentEngine,
+  semanticNormalize,
+  type NotebookDocument,
+} from "@glyphquire/document-engine";
 import {
   assets,
   exports,
@@ -28,12 +33,17 @@ const UUID_ASSET_URI =
 const ZIP_EPOCH = new Date("1980-01-01T00:00:00.000Z");
 const documentEngine = createDocumentEngine();
 
-interface ExportNote {
+export type AdditionalExportFormat = ContractAdditionalExportFormat;
+
+export interface ExportFormatSource {
   id: string;
   title: string;
   contentMarkdown: string;
   revision: number;
   schemaVersion: number;
+}
+
+interface ExportNote extends ExportFormatSource {
   createdAt: Date;
   updatedAt: Date;
 }
@@ -43,7 +53,7 @@ interface LoadedAsset {
   body: Buffer;
 }
 
-interface ExportArtifact {
+export interface ExportArtifact {
   body: Buffer;
   contentType: string;
 }
@@ -296,6 +306,79 @@ function exportMetadata(
   };
 }
 
+function orderedExportSources(sources: readonly ExportFormatSource[]): ExportFormatSource[] {
+  return [...sources].sort((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+}
+
+function parseExportDocument(source: ExportFormatSource): NotebookDocument {
+  const parsed = documentEngine.parse(source.contentMarkdown);
+  if (
+    !parsed.ok ||
+    parsed.specVersion !== source.schemaVersion ||
+    parsed.document.specVersion !== source.schemaVersion
+  ) {
+    throw new Error("JOB_FAILED");
+  }
+  return parsed.document;
+}
+
+function normalizedPlainText(document: NotebookDocument): string {
+  return documentEngine
+    .extractText(document)
+    .replaceAll("\r\n", "\n")
+    .replaceAll("\r", "\n")
+    .split("\n")
+    .map((line) => line.replace(/[\t ]+$/u, ""))
+    .join("\n")
+    .trim();
+}
+
+const ADDITIONAL_EXPORT_FORMATTERS: Readonly<
+  Record<AdditionalExportFormat, (sources: readonly ExportFormatSource[]) => ExportArtifact>
+> = Object.freeze({
+  "plain-text": (sources) => {
+    const text = orderedExportSources(sources)
+      .map((source) => normalizedPlainText(parseExportDocument(source)))
+      .filter((value) => value.length > 0)
+      .join("\n\n");
+    return {
+      body: Buffer.from(text.length === 0 ? "" : `${text}\n`, "utf8"),
+      contentType: "text/plain; charset=utf-8",
+    };
+  },
+  "ast-json": (sources) => ({
+    body: Buffer.from(
+      `${JSON.stringify(
+        {
+          notes: orderedExportSources(sources).map((source) => ({
+            document: semanticNormalize(parseExportDocument(source)),
+            id: source.id,
+            revision: source.revision,
+            schemaVersion: source.schemaVersion,
+            title: source.title,
+          })),
+          schemaVersion: 1,
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    ),
+    contentType: "application/json; charset=utf-8",
+  }),
+});
+
+export function formatAdditionalExportArtifact(
+  format: AdditionalExportFormat,
+  sources: readonly ExportFormatSource[],
+): ExportArtifact {
+  if (!Object.hasOwn(ADDITIONAL_EXPORT_FORMATTERS, format)) {
+    throw new Error("JOB_FAILED");
+  }
+  const formatter = ADDITIONAL_EXPORT_FORMATTERS[format];
+  return formatter(sources);
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -499,6 +582,9 @@ function buildArtifact(
       body: buildInertHtml(row, exportNotes, loadedAssets),
       contentType: "text/html; charset=utf-8",
     };
+  }
+  if (row.format === "plain-text" || row.format === "ast-json") {
+    return formatAdditionalExportArtifact(row.format, exportNotes);
   }
   throw new Error("JOB_FAILED");
 }

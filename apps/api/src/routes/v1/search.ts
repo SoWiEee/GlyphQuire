@@ -8,7 +8,7 @@ import type { SecurityVariables } from "../../middleware/security.js";
 import type { OperatorAuthorizer } from "../../modules/search/OperatorAuthorizer.js";
 import type { SearchService } from "../../modules/search/SearchService.js";
 
-const SEARCH_QUERY_PARAMETERS = new Set(["workspaceId", "q", "cursor", "pageSize"]);
+const SEARCH_QUERY_PARAMETERS = new Set(["workspaceId", "q", "cursor", "pageSize", "ranking"]);
 
 function invalidRequest(): never {
   throw new PublicApiError("SEARCH_UNAVAILABLE", 400);
@@ -41,6 +41,7 @@ export function createSearchRoutes(
         q: context.req.query("q"),
         cursor: context.req.query("cursor"),
         pageSize: context.req.query("pageSize"),
+        ranking: context.req.query("ranking"),
       });
       if (!query.success || normalizeSearchText(query.data.q).length === 0) invalidRequest();
 

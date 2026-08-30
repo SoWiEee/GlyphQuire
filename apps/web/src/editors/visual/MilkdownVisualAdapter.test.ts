@@ -10,6 +10,7 @@ import { AllSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import VisualEditor from "../../components/visual/VisualEditor.vue";
 import { MilkdownVisualAdapter } from "./MilkdownVisualAdapter.js";
+import type { VisualAssetResolver } from "./asset-resolver.js";
 import {
   blockWarningAttrsFromSource,
   GLYPHQUIRE_FRONTMATTER,
@@ -617,6 +618,48 @@ describe("MilkdownVisualAdapter", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("renders only canonical asset references through the owned async resolver seam", async () => {
+    const release = vi.fn();
+    const resolver: VisualAssetResolver = {
+      resolve: vi.fn(async () => ({
+        src: "blob:https://app.glyphquire.test/asset-image",
+        mimeType: "image/png",
+        release,
+      })),
+    };
+    const markdown = [
+      "---",
+      "glyphquire-spec: 1",
+      "---",
+      "",
+      "![Managed](asset://33333333-3333-4333-8333-333333333333)",
+      "",
+      "![Remote](https://evil.example/tracker.png)",
+      "",
+    ].join("\n");
+    const host = document.createElement("div");
+    host.dataset.glyphquireTestHost = "";
+    document.body.appendChild(host);
+    const adapter = new MilkdownVisualAdapter({ assetResolver: resolver });
+    adapter.mount(host);
+    cleanups.push(() => adapter.destroy());
+    await adapter.whenReady();
+    adapter.setMarkdown(markdown);
+
+    const managed = host.querySelector<HTMLImageElement>('img[alt="Managed"]');
+    const remote = host.querySelector<HTMLImageElement>('img[alt="Remote"]');
+    await vi.waitFor(() => {
+      expect(managed?.getAttribute("src")).toBe("blob:https://app.glyphquire.test/asset-image");
+    });
+    expect(resolver.resolve).toHaveBeenCalledOnce();
+    expect(resolver.resolve).toHaveBeenCalledWith("asset://33333333-3333-4333-8333-333333333333");
+    expect(remote?.hasAttribute("src")).toBe(false);
+    expect(adapter.getMarkdown()).toContain("asset://33333333-3333-4333-8333-333333333333");
+
+    managed?.dispatchEvent(new Event("load"));
+    expect(release).toHaveBeenCalledOnce();
+  });
+
   it("keeps p5 and canvas source entirely inert with no execution or capability calls", async () => {
     const fetchSpy = vi.fn();
     const workerSpy = vi.fn();
@@ -726,11 +769,12 @@ describe("central visual URL policy", () => {
     });
   });
 
-  it("allows only passive HTTP(S) or relative image locations", () => {
-    expect(resolveVisualUrl("https://cdn.example/image.png", "image", baseUrl)?.href).toBe(
-      "https://cdn.example/image.png",
-    );
-    expect(resolveVisualUrl("/assets/image.png", "image", baseUrl)?.href).toBe("/assets/image.png");
+  it("keeps every image URL inert so the asset resolver remains the sole image source seam", () => {
+    expect(resolveVisualUrl("https://cdn.example/image.png", "image", baseUrl)).toBeNull();
+    expect(resolveVisualUrl("/assets/image.png", "image", baseUrl)).toBeNull();
+    expect(
+      resolveVisualUrl("asset://33333333-3333-4333-8333-333333333333", "image", baseUrl),
+    ).toBeNull();
     expect(resolveVisualUrl("mailto:person@example.com", "image", baseUrl)).toBeNull();
     expect(
       resolveVisualUrl("data:image/svg+xml,<svg onload=alert(1)>", "image", baseUrl),

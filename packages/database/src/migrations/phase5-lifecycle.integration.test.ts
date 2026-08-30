@@ -113,7 +113,7 @@ describe("Phase 5 lifecycle migration artifacts", () => {
     );
   });
 
-  it("preserves migrations 0000 through 0009 byte-for-byte and appends only 0010", async () => {
+  it("preserves migrations 0000 through 0009 byte-for-byte and records lifecycle as 0010", async () => {
     const frozen = [
       ["0000_phase0_auth", "7fbba803d17ce335f8acc41fd7027c3c1278d4af79225c48ac6d0ab885028863"],
       [
@@ -140,10 +140,10 @@ describe("Phase 5 lifecycle migration artifacts", () => {
       expect(createHash("sha256").update(bytes).digest("hex"), tag).toBe(hash);
     }
     const repository = await readRepositoryMigrations(migrationsDirectory);
-    expect(repository.map((entry) => entry.tag).slice(-2)).toEqual([
-      "0009_phase5_share_links",
-      "0010_phase5_lifecycle",
-    ]);
+    const tags = repository.map((entry) => entry.tag);
+    expect(tags.indexOf("0009_phase5_share_links")).toBeLessThan(
+      tags.indexOf("0010_phase5_lifecycle"),
+    );
     const snapshot = JSON.parse(
       await readFile(new URL("./meta/0010_snapshot.json", import.meta.url), "utf8"),
     ) as {
@@ -153,7 +153,7 @@ describe("Phase 5 lifecycle migration artifacts", () => {
     };
     expect(snapshot.id).toBe("bbc01f47-f9ab-45bd-9f8e-01ea99719492");
     expect(snapshot.prevId).toBe("0edb4655-6cd0-43ba-8cd8-1d0e594218ee");
-    expect(repository.at(-1)).toMatchObject({
+    expect(repository.find((entry) => entry.tag === "0010_phase5_lifecycle")).toMatchObject({
       idx: 10,
       tag: "0010_phase5_lifecycle",
       when: 1788014916377,

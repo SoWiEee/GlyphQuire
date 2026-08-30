@@ -16,7 +16,7 @@ export const exportStatusSchema = z.enum([
   "failed",
   "expired",
 ]);
-export const exportFormatSchema = z.enum(["markdown", "zip", "html"]);
+export const exportFormatSchema = z.enum(["markdown", "zip", "html", "plain-text", "ast-json"]);
 
 export const transferProgressSchema = z
   .object({

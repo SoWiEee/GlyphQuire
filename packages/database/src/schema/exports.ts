@@ -16,7 +16,7 @@ import { notes } from "./notes.js";
 import { workspaces } from "./workspaces.js";
 
 export type ExportScopeType = "workspace" | "note";
-export type ExportFormat = "markdown" | "zip" | "html";
+export type ExportFormat = "markdown" | "zip" | "html" | "plain-text" | "ast-json";
 export type ExportStatus = "pending" | "processing" | "completed" | "failed" | "expired";
 
 export const exports = pgTable(
@@ -57,7 +57,10 @@ export const exports = pgTable(
     ),
     index("exports_expiry_status_idx").on(table.status, table.expiresAt, table.createdAt, table.id),
     check("exports_scope_type_check", sql`${table.scopeType} in ('workspace', 'note')`),
-    check("exports_format_check", sql`${table.format} in ('markdown', 'zip', 'html')`),
+    check(
+      "exports_format_check",
+      sql`${table.format} in ('markdown', 'zip', 'html', 'plain-text', 'ast-json')`,
+    ),
     check(
       "exports_status_check",
       sql`${table.status} in ('pending', 'processing', 'completed', 'failed', 'expired')`,

@@ -25,12 +25,13 @@ import { visualTogglePlugins } from "./nodes/toggle.js";
 import { visualWarningPlugins } from "./nodes/unknown.js";
 import {
   GLYPHQUIRE_FRONTMATTER,
+  createSafeImageSchema,
   createDirectiveRemarkPlugins,
   safeHtmlSchema,
-  safeImageSchema,
   safeLinkSchema,
   setVisualControlsReadOnly,
 } from "./schema.js";
+import { getActiveVisualAssetResolver, type VisualAssetResolver } from "./asset-resolver.js";
 
 const engine = createDocumentEngine();
 const EMPTY_MARKDOWN = `${GLYPHQUIRE_FRONTMATTER}`;
@@ -39,6 +40,10 @@ const UTF8_ENCODER = new TextEncoder();
 interface AcceptedProjection {
   readonly canonicalMarkdown: string;
   readonly document: NotebookDocument;
+}
+
+export interface MilkdownVisualAdapterOptions {
+  assetResolver?: VisualAssetResolver;
 }
 
 function acceptedProjection(markdown: string): AcceptedProjection {
@@ -84,6 +89,8 @@ export class MilkdownVisualAdapter implements EditorAdapter {
   private semanticDocument = this.projection.document;
   private destroyed = false;
   private projecting = false;
+
+  constructor(private readonly options: MilkdownVisualAdapterOptions = {}) {}
 
   mount(host: HTMLElement): void {
     if (this.host) {
@@ -199,7 +206,7 @@ export class MilkdownVisualAdapter implements EditorAdapter {
       .use(gfm)
       .use(semanticPlugins)
       .use(safeLinkSchema)
-      .use(safeImageSchema)
+      .use(createSafeImageSchema(this.options.assetResolver ?? getActiveVisualAssetResolver()))
       .use(safeHtmlSchema)
       .use(visualCalloutPlugins)
       .use(visualStickyPlugins)

@@ -17,15 +17,23 @@
         class="w-full rounded-t-lg border-b border-gray-200 px-4 py-3 text-sm"
         placeholder="Type a command…"
         aria-label="Filter commands"
+        aria-controls="command-palette-options"
+        :aria-activedescendant="activeDescendant"
         @keydown.down.prevent="move(1)"
         @keydown.up.prevent="move(-1)"
         @keydown.enter.prevent="runHighlighted"
       />
-      <ul role="listbox" aria-label="Commands" class="max-h-64 overflow-y-auto py-1">
+      <ul
+        id="command-palette-options"
+        role="listbox"
+        aria-label="Commands"
+        class="max-h-64 overflow-y-auto py-1"
+      >
         <li
           v-for="(command, index) in filtered"
           :key="command.id"
           role="option"
+          :id="`command-palette-option-${index}`"
           :aria-selected="index === highlightedIndex"
           class="cursor-pointer px-4 py-2 text-sm"
           :class="index === highlightedIndex ? 'bg-gray-100 text-gray-900' : 'text-gray-700'"
@@ -66,6 +74,11 @@ const filtered = computed(() => {
   if (!needle) return props.commands;
   return props.commands.filter((command) => command.label.toLowerCase().includes(needle));
 });
+const activeDescendant = computed(() =>
+  filtered.value[highlightedIndex.value]
+    ? `command-palette-option-${highlightedIndex.value}`
+    : undefined,
+);
 
 function move(delta: number): void {
   const count = filtered.value.length;

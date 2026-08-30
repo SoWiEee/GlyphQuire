@@ -1,4 +1,9 @@
-import { canonicalUuidSchema, exportFormatSchema } from "@glyphquire/api-contract";
+import {
+  canonicalUuidSchema,
+  exportFormatSchema,
+  importJobResultSchema,
+  revisionSchema,
+} from "@glyphquire/api-contract";
 import { idempotencyKeySchema } from "@glyphquire/api-contract/jobs";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -7,6 +12,7 @@ import { getRequestContext } from "../../middleware/request-context.js";
 import type { SecurityVariables } from "../../middleware/security.js";
 import type { ExportService } from "../../modules/transfer/ExportService.js";
 import type { ImportService } from "../../modules/transfer/ImportService.js";
+import { MAX_ARCHIVE_BYTES } from "../../modules/transfer/ArchiveLimits.js";
 
 function invalidImport(): never {
   throw new PublicApiError("IMPORT_INVALID", 400);
@@ -17,12 +23,46 @@ function invalidExport(): never {
 }
 
 const exportRequestSchema = z.object({ format: exportFormatSchema }).strict();
+const multipartRevisionSchema = z
+  .string()
+  .regex(/^[1-9]\d{0,9}$/u)
+  .transform(Number)
+  .pipe(revisionSchema.max(2_147_483_646));
+const importRequestSchema = z
+  .object({
+    file: z.custom<File>(
+      (value) =>
+        typeof File !== "undefined" &&
+        value instanceof File &&
+        value.size > 0 &&
+        value.size <= MAX_ARCHIVE_BYTES,
+    ),
+    noteId: canonicalUuidSchema.optional(),
+    baseRevision: multipartRevisionSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.noteId === undefined) !== (value.baseRevision === undefined)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "noteId and baseRevision must be supplied together",
+      });
+    }
+  });
 
 function requireIdempotencyKey(context: {
   req: { header(name: string): string | undefined };
 }): string {
   const parsed = idempotencyKeySchema.safeParse(context.req.header("idempotency-key"));
   if (!parsed.success) invalidExport();
+  return parsed.data;
+}
+
+function requireImportIdempotencyKey(context: {
+  req: { header(name: string): string | undefined };
+}): string {
+  const parsed = idempotencyKeySchema.safeParse(context.req.header("idempotency-key"));
+  if (!parsed.success) invalidImport();
   return parsed.data;
 }
 
@@ -47,17 +87,50 @@ function requireNoQuery(context: { req: { url: string } }): void {
  * while Task 5c mounts the additional endpoints with both services.
  */
 export function createTransferRoutes(importService: ImportService, exportService?: ExportService) {
-  const routes = new Hono<{ Variables: SecurityVariables }>().get(
-    "/imports/:id",
-    async (context) => {
+  const routes = new Hono<{ Variables: SecurityVariables }>()
+    .post("/workspaces/:workspaceId/import", async (context) => {
+      if (new URL(context.req.url).search !== "") invalidImport();
+      const workspaceId = canonicalUuidSchema.safeParse(context.req.param("workspaceId"));
+      if (!workspaceId.success) invalidImport();
+      const idempotencyKey = requireImportIdempotencyKey(context);
+
+      let body: Record<string, string | File | (string | File)[]>;
+      try {
+        body = await context.req.parseBody({ all: true });
+      } catch {
+        invalidImport();
+      }
+      const allowed = new Set(["file", "noteId", "baseRevision"]);
+      if (
+        Object.keys(body).some((key) => !allowed.has(key)) ||
+        Object.values(body).some((value) => Array.isArray(value))
+      ) {
+        invalidImport();
+      }
+      const parsed = importRequestSchema.safeParse(body);
+      if (!parsed.success) invalidImport();
+      const { actorId } = getRequestContext(context);
+      const result = await importService.start(
+        actorId,
+        workspaceId.data,
+        {
+          upload: parsed.data.file,
+          ...(parsed.data.noteId === undefined
+            ? {}
+            : { noteId: parsed.data.noteId, baseRevision: parsed.data.baseRevision }),
+        },
+        idempotencyKey,
+      );
+      return context.json(importJobResultSchema.parse(result), 202);
+    })
+    .get("/imports/:id", async (context) => {
       const importId = canonicalUuidSchema.safeParse(context.req.param("id"));
       if (!importId.success) invalidImport();
 
       const { actorId } = getRequestContext(context);
       const result = await importService.getStatus(actorId, importId.data);
       return context.json(result, 200);
-    },
-  );
+    });
 
   if (!exportService) return routes;
 

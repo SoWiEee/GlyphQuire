@@ -58,6 +58,50 @@
 
     <StatusBar :note-title="activeNote?.title ?? null" :mode="mode" :word-count="wordCount" />
 
+    <div
+      v-if="phase5Panel && phase5WorkspaceId"
+      class="fixed inset-0 z-40 flex items-start justify-center bg-black/30 p-8 pt-20"
+      @click.self="closePhase5Panel"
+      @keydown.escape="closePhase5Panel"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        :aria-label="phase5PanelLabel"
+        class="max-h-[80vh] w-full max-w-2xl overflow-auto rounded-lg bg-white p-4 shadow-xl"
+      >
+        <button
+          ref="phase5CloseRef"
+          type="button"
+          class="mb-3 rounded border border-gray-300 px-2 py-1 text-sm"
+          aria-label="Close Phase 5 tools"
+          @click="closePhase5Panel"
+        >
+          Close
+        </button>
+        <AssetManager
+          v-if="phase5Panel === 'assets'"
+          :workspace-id="phase5WorkspaceId"
+          @reference="insertAssetReference"
+        />
+        <SearchPalette
+          v-else-if="phase5Panel === 'search'"
+          :workspace-id="phase5WorkspaceId"
+          @select-note="selectSearchResult"
+        />
+        <TransferDialog
+          v-else-if="phase5Panel === 'transfer'"
+          :workspace-id="phase5WorkspaceId"
+          :note-id="phase5NoteId ?? undefined"
+          :base-revision="phase5BaseRevision"
+        />
+        <ShareLinkDialog
+          v-else-if="phase5Panel === 'share' && phase5NoteId"
+          :note-id="phase5NoteId"
+        />
+      </div>
+    </div>
+
     <CommandPalette v-if="paletteOpen" :commands="commands" @close="closePalette" />
 
     <ThemeEditorPanel v-if="themeStore.editorOpen" @close="themeStore.closeEditor()" />
@@ -65,7 +109,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { canonicalUuidSchema } from "@glyphquire/api-contract";
 import CommandPalette from "./CommandPalette.vue";
 import EditorTabs from "./EditorTabs.vue";
 import ExplorerPane from "./ExplorerPane.vue";
@@ -75,6 +120,10 @@ import SourceEditor from "../source/SourceEditor.vue";
 import VisualEditor from "../visual/VisualEditor.vue";
 import SplitEditor from "../split/SplitEditor.vue";
 import ThemeEditorPanel from "../theme-editor/ThemeEditorPanel.vue";
+import AssetManager from "../assets/AssetManager.vue";
+import SearchPalette from "../search/SearchPalette.vue";
+import TransferDialog from "../transfer/TransferDialog.vue";
+import ShareLinkDialog from "../share/ShareLinkDialog.vue";
 import { useThemeStore } from "../../stores/theme.js";
 import {
   createBookkeepingModeAdapter,
@@ -88,6 +137,10 @@ import type {
   WorkbenchNote,
   WorkbenchSessionFactory,
 } from "./types.js";
+import {
+  createAssetResolver,
+  registerVisualAssetResolver,
+} from "../../editors/visual/asset-resolver.js";
 
 const themeStore = useThemeStore();
 
@@ -112,7 +165,63 @@ const DEFAULT_NOTES: WorkbenchNote[] = [
 const props = defineProps<{
   initialNotes?: readonly WorkbenchNote[];
   sessionFactory?: WorkbenchSessionFactory;
+  phase5WorkspaceId?: string;
+  phase5NoteId?: string;
 }>();
+
+type Phase5Panel = "assets" | "search" | "transfer" | "share";
+
+function routePhase5Context(): { workspaceId: string | null; noteId: string | null } {
+  if (typeof location === "undefined") return { workspaceId: null, noteId: null };
+  const workspaceMatch = /^\/workspace\/([^/]+)\/?$/u.exec(location.pathname);
+  const workspaceId = workspaceMatch?.[1];
+  const noteId = new URLSearchParams(location.search).get("noteId");
+  return {
+    workspaceId: canonicalUuidSchema.safeParse(workspaceId).success ? workspaceId! : null,
+    noteId: canonicalUuidSchema.safeParse(noteId).success ? noteId : null,
+  };
+}
+
+const routeContext = routePhase5Context();
+function firstCanonicalUuid(...candidates: Array<string | null | undefined>): string | null {
+  for (const candidate of candidates) {
+    const parsed = canonicalUuidSchema.safeParse(candidate);
+    if (parsed.success) return parsed.data;
+  }
+  return null;
+}
+const phase5WorkspaceId = computed(() => {
+  return firstCanonicalUuid(props.phase5WorkspaceId, routeContext.workspaceId);
+});
+const phase5NoteId = computed(() => {
+  return firstCanonicalUuid(props.phase5NoteId, activeNoteId.value, routeContext.noteId);
+});
+const phase5BaseRevision = computed(() => {
+  const revision = sessionState.value?.baseRevision;
+  return Number.isInteger(revision) && (revision ?? 0) > 0 ? revision : undefined;
+});
+const phase5Panel = ref<Phase5Panel | null>(null);
+const phase5CloseRef = ref<HTMLButtonElement | null>(null);
+const phase5PanelLabel = computed(() => {
+  switch (phase5Panel.value) {
+    case "assets":
+      return "Asset manager";
+    case "search":
+      return "Search notes";
+    case "transfer":
+      return "Import and export";
+    case "share":
+      return "Share link";
+    default:
+      return "Phase 5 tools";
+  }
+});
+let releaseVisualAssetResolver: (() => void) | undefined;
+if (phase5WorkspaceId.value) {
+  releaseVisualAssetResolver = registerVisualAssetResolver(
+    createAssetResolver({ workspaceId: phase5WorkspaceId.value }),
+  );
+}
 
 const notes = ref<WorkbenchNote[]>(
   (props.initialNotes ?? DEFAULT_NOTES).map((note) => ({ ...note })),
@@ -234,6 +343,33 @@ function closePalette(): void {
     ?.focus();
 }
 
+function openPhase5Panel(panel: Phase5Panel): void {
+  phase5Panel.value = panel;
+  void nextTick(() => phase5CloseRef.value?.focus());
+}
+
+function closePhase5Panel(): void {
+  phase5Panel.value = null;
+  topBarRef.value?.$el
+    ?.querySelector<HTMLButtonElement>('[aria-label="Open command palette"]')
+    ?.focus();
+}
+
+function insertAssetReference(reference: string): void {
+  const session = activeSession.value;
+  if (!session || session.snapshot().readOnly) return;
+  const markdown = session.snapshot().markdown;
+  const separator = markdown.endsWith("\n") || markdown.length === 0 ? "" : "\n";
+  session.edit(`${markdown}${separator}\n![Asset](${reference})\n`);
+  sessionState.value = session.snapshot();
+  closePhase5Panel();
+}
+
+function selectSearchResult(noteId: string): void {
+  if (notes.value.some((note) => note.id === noteId)) openNote(noteId);
+  closePhase5Panel();
+}
+
 const commands = computed<WorkbenchCommand[]>(() => [
   {
     id: "toggle-mode",
@@ -254,6 +390,38 @@ const commands = computed<WorkbenchCommand[]>(() => [
           label: `Close "${activeNote.value?.title ?? ""}"`,
           hint: "Tab",
           run: () => closeTab(activeNoteId.value as string),
+        },
+      ]
+    : []),
+  ...(phase5WorkspaceId.value
+    ? [
+        {
+          id: "phase5-assets",
+          label: "Manage assets",
+          hint: "Workspace",
+          run: () => openPhase5Panel("assets"),
+        },
+        {
+          id: "phase5-search",
+          label: "Search notes",
+          hint: "Workspace",
+          run: () => openPhase5Panel("search"),
+        },
+        {
+          id: "phase5-transfer",
+          label: "Import or export",
+          hint: "Workspace",
+          run: () => openPhase5Panel("transfer"),
+        },
+      ]
+    : []),
+  ...(phase5WorkspaceId.value && phase5NoteId.value
+    ? [
+        {
+          id: "phase5-share",
+          label: "Create read-only share link",
+          hint: "Note",
+          run: () => openPhase5Panel("share"),
         },
       ]
     : []),
@@ -342,5 +510,7 @@ onBeforeUnmount(() => {
   activeSession.value = undefined;
   sessionState.value = undefined;
   if (session) void session.dispose();
+  releaseVisualAssetResolver?.();
+  releaseVisualAssetResolver = undefined;
 });
 </script>

@@ -206,6 +206,7 @@ export class ExportServiceImpl implements ExportService {
     format: ExportFormat,
     idempotencyKey: string,
   ): Promise<ExportResult> {
+    const parsedFormat = exportFormatSchema.safeParse(format);
     if (
       !opaqueAuthIdSchema.safeParse(actorId).success ||
       !scope ||
@@ -213,14 +214,15 @@ export class ExportServiceImpl implements ExportService {
       Array.isArray(scope) ||
       Object.getPrototypeOf(scope) !== Object.prototype ||
       Object.keys(scope).some((key) => key !== "workspaceId" && key !== "noteId") ||
-      !exportFormatSchema.safeParse(format).success ||
+      !parsedFormat.success ||
       !idempotencyKeySchema.safeParse(idempotencyKey).success
     ) {
       invalidExport();
     }
 
+    const requestedFormat = parsedFormat.data;
     const resolved = await this.resolveScope(actorId, scope);
-    const requestHash = hashRequest(resolved, format);
+    const requestHash = hashRequest(resolved, requestedFormat);
     const replay = await this.existingReplay(
       actorId,
       resolved.workspaceId,
@@ -245,7 +247,7 @@ export class ExportServiceImpl implements ExportService {
             requesterId: actorId,
             scopeType: resolved.scopeType,
             noteId: resolved.noteId,
-            format,
+            format: requestedFormat,
             status: "pending",
             idempotencyKey,
             requestHash,

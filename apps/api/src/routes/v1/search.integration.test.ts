@@ -175,6 +175,46 @@ describeWithPostgres("search routes", () => {
     expect(body.nextCursor).toBeNull();
   });
 
+  it("accepts the weighted ranking query and returns its ranking version", async () => {
+    const fixture = await buildFixture();
+    const { app, adapter } = freshApp();
+    const marker = randomUUID().replaceAll("-", "");
+
+    const [note] = await db
+      .insert(notes)
+      .values({
+        workspaceId: fixture.workspaceId,
+        title: `Weighted route note ${marker}`,
+        contentMarkdown: `Weighted route note ${marker}`,
+        contentHash: "weighted-hash",
+        ownerId: fixture.owner,
+      })
+      .returning({ id: notes.id });
+    await adapter.indexNote({
+      noteId: note!.id,
+      workspaceId: fixture.workspaceId,
+      revision: 1,
+      title: `Weighted route note ${marker}`,
+      headings: [],
+      body: `Weighted route note ${marker}`,
+      tags: [],
+      normalizedText: normalizeSearchText(`Weighted route note ${marker}`),
+    });
+
+    const response = await v1(
+      app,
+      `/search?workspaceId=${fixture.workspaceId}&q=${marker}&ranking=weighted-v1`,
+      fixture.owner,
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      items: { noteId: string; rankingVersion: string }[];
+    };
+    expect(body.items).toEqual([
+      expect.objectContaining({ noteId: note!.id, rankingVersion: "weighted-v1" }),
+    ]);
+  });
+
   it("returns a uniform not-found envelope for a non-member, without leaking membership state", async () => {
     const fixture = await buildFixture();
     const { app } = freshApp();

@@ -1,8 +1,13 @@
 import { getConnInfo } from "@hono/node-server/conninfo";
 import type { AuthOptions } from "@glyphquire/auth";
-import { createDb, type Database } from "@glyphquire/database";
+import { createDb, IdempotencyStore, type Database } from "@glyphquire/database";
 import { PostgresJobDispatcher, type JobDispatcher } from "@glyphquire/queue";
 import { PostgresSearchAdapter } from "@glyphquire/search";
+import {
+  createMinioObjectStorage,
+  createS3ObjectStorage,
+  type ObjectStoragePort,
+} from "@glyphquire/storage";
 import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { type Env, type EnvInput, parseEnv } from "./env.js";
 import { createCorsMiddleware } from "./middleware/cors.js";
@@ -34,6 +39,13 @@ import {
   type OperatorAuthorizer,
 } from "./modules/search/OperatorAuthorizer.js";
 import { SearchServiceImpl, type SearchService } from "./modules/search/SearchService.js";
+import { AssetServiceImpl, type AssetService } from "./modules/assets/AssetService.js";
+import { ImportServiceImpl, type ImportService } from "./modules/transfer/ImportService.js";
+import { ExportServiceImpl, type ExportService } from "./modules/transfer/ExportService.js";
+import {
+  ShareLinkServiceImpl,
+  type ShareLinkService,
+} from "./modules/share-links/ShareLinkService.js";
 import {
   AccountDeletionServiceImpl,
   type AccountDeletionService,
@@ -53,6 +65,10 @@ import { createVersionRoutes } from "./routes/v1/versions.js";
 import { ThemeServiceImpl, type ThemeService } from "./modules/themes/ThemeService.js";
 import { createThemeRoutes } from "./routes/v1/themes.js";
 import { createSearchRoutes } from "./routes/v1/search.js";
+import { createAssetRoutes } from "./routes/v1/assets.js";
+import { createTransferRoutes } from "./routes/v1/transfer.js";
+import { createShareLinkRoutes } from "./routes/v1/share-links.js";
+import { createSharedRoutes } from "./routes/shared.js";
 import { createDeletionRoutes } from "./routes/v1/deletion.js";
 import {
   createMaintenanceRoutes,
@@ -84,6 +100,12 @@ export interface AppDependencies {
   maintenanceService?: MaintenanceService;
   operatorAuthorizer?: OperatorAuthorizer;
   jobDispatcher?: JobDispatcher;
+  storage?: ObjectStoragePort;
+  idempotencyStore?: IdempotencyStore;
+  assetService?: AssetService;
+  importService?: ImportService;
+  exportService?: ExportService;
+  shareLinkService?: ShareLinkService;
   rateLimit?: RateLimitPort;
   clock?: Clock;
   logger?: AppSecurityLogger;
@@ -118,6 +140,58 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
   const operatorAuthorizer =
     dependencies.operatorAuthorizer ?? createOperatorAuthorizer(env.PHASE5_OPERATOR_IDS);
   const jobDispatcher = dependencies.jobDispatcher ?? new PostgresJobDispatcher(db);
+  let ownedStorage: (ObjectStoragePort & { destroy?(): void }) | undefined;
+  const storage =
+    dependencies.storage ??
+    (env.PHASE5_ENABLED
+      ? (ownedStorage = env.S3_FORCE_PATH_STYLE
+          ? createMinioObjectStorage(env)
+          : createS3ObjectStorage(env))
+      : undefined);
+  const idempotencyStore =
+    dependencies.idempotencyStore ??
+    (env.PHASE5_ENABLED
+      ? new IdempotencyStore(db, {
+          encryptionKey: env.IDEMPOTENCY_ENCRYPTION_KEY,
+          leaseSeconds: env.IDEMPOTENCY_LEASE_SECONDS,
+          clock: dependencies.clock,
+        })
+      : undefined);
+  const assetService =
+    dependencies.assetService ??
+    (env.PHASE5_ENABLED && storage && idempotencyStore
+      ? new AssetServiceImpl(db, storage, jobDispatcher, idempotencyStore, {
+          maxBytes: env.ASSET_MAX_BYTES,
+          workspaceQuotaBytes: env.ASSET_WORKSPACE_QUOTA_BYTES,
+          assetDeleteGraceDays: env.ASSET_DELETE_GRACE_DAYS,
+          downloadUrlExpirySeconds: 300,
+        })
+      : undefined);
+  const importService =
+    dependencies.importService ??
+    (env.PHASE5_ENABLED && storage
+      ? new ImportServiceImpl(db, storage, jobDispatcher, {
+          stagingGraceSeconds: env.IMPORT_STAGING_GRACE_SECONDS,
+        })
+      : undefined);
+  const exportService =
+    dependencies.exportService ??
+    (env.PHASE5_ENABLED && storage
+      ? new ExportServiceImpl(db, storage, jobDispatcher, {
+          expirySeconds: env.EXPORT_RETENTION_DAYS * 24 * 60 * 60,
+          downloadUrlExpirySeconds: 300,
+        })
+      : undefined);
+  const shareLinkService =
+    dependencies.shareLinkService ??
+    (env.PHASE5_ENABLED && idempotencyStore
+      ? new ShareLinkServiceImpl(db, idempotencyStore, jobDispatcher, {
+          tokenHashKey: env.IDEMPOTENCY_ENCRYPTION_KEY,
+          publicBaseUrl: env.WEB_ORIGIN,
+          deleteGraceSeconds: env.SHARE_DELETE_GRACE_SECONDS,
+          clock: dependencies.clock,
+        })
+      : undefined);
   const searchService =
     dependencies.searchService ??
     new SearchServiceImpl(db, new PostgresSearchAdapter(db), jobDispatcher, operatorAuthorizer);
@@ -194,46 +268,67 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
     await next();
   };
 
-  const app = new Hono<{ Variables: SecurityVariables }>()
-    .use("*", createSecurityHeadersMiddleware())
-    .use("*", createCorsMiddleware(env.WEB_ORIGIN))
-    .use("/api/auth/*", clientIp)
-    .use("/api/v1/*", clientIp)
-    .use("/api/auth/*", requestSecurity)
-    .use("/api/v1/*", requestSecurity)
-    .use("/api/auth/*", requireLimiter)
-    .use("/api/v1/*", requireLimiter)
-    .use(
-      "/api/auth/*",
-      createAuthRateLimitMiddleware({
+  const app = new Hono<{ Variables: SecurityVariables }>();
+  app.use("*", createSecurityHeadersMiddleware());
+  app.use("*", createCorsMiddleware(env.WEB_ORIGIN));
+  app.use("/api/auth/*", clientIp);
+  app.use("/api/v1/*", clientIp);
+  app.use("/api/auth/*", requestSecurity);
+  app.use("/api/v1/*", requestSecurity);
+  app.use("/api/auth/*", requireLimiter);
+  app.use("/api/v1/*", requireLimiter);
+  app.use(
+    "/api/auth/*",
+    createAuthRateLimitMiddleware({
+      rateLimit,
+      keySecret: env.BETTER_AUTH_SECRET,
+    }),
+  );
+  app.onError(createErrorHandler(logger as SecurityLogger));
+
+  // Anonymous read-only sharing must run before authenticated v1 context and
+  // personal-workspace provisioning, while retaining IP, origin, limiter,
+  // hardening-header, and scrubbed-error middleware above.
+  if (shareLinkService) {
+    app.route(
+      "/api/v1",
+      createSharedRoutes(shareLinkService, {
         rateLimit,
         keySecret: env.BETTER_AUTH_SECRET,
       }),
-    )
-    .use("/api/v1/*", createRequestContextMiddleware(auth.api))
-    .use(
-      "/api/v1/*",
-      createNoteRateLimitMiddleware({
-        rateLimit,
-        keySecret: env.BETTER_AUTH_SECRET,
-      }),
-    )
-    .use("/api/v1/*", ensurePersonalWorkspace)
-    .onError(createErrorHandler(logger as SecurityLogger))
-    .route("/api", healthRoutes)
-    .route("/api", authRoutes)
-    .route("/api/v1", createNoteRoutes(noteService))
-    .route("/api/v1", createVersionRoutes(noteService))
-    .route("/api/v1", createThemeRoutes(themeService))
-    .route("/api/v1", createSearchRoutes(searchService, operatorAuthorizer))
-    .route("/api/v1", createDeletionRoutes(workspaceDeletionService, accountDeletionService))
-    .route("/api/v1", createMaintenanceRoutes(maintenanceService, operatorAuthorizer));
+    );
+  }
+
+  app.use("/api/v1/*", createRequestContextMiddleware(auth.api));
+  app.use(
+    "/api/v1/*",
+    createNoteRateLimitMiddleware({
+      rateLimit,
+      keySecret: env.BETTER_AUTH_SECRET,
+    }),
+  );
+  app.use("/api/v1/*", ensurePersonalWorkspace);
+  app.route("/api", healthRoutes);
+  app.route("/api", authRoutes);
+  app.route("/api/v1", createNoteRoutes(noteService));
+  app.route("/api/v1", createVersionRoutes(noteService));
+  app.route("/api/v1", createThemeRoutes(themeService));
+  app.route("/api/v1", createSearchRoutes(searchService, operatorAuthorizer));
+  if (assetService) app.route("/api/v1", createAssetRoutes(assetService));
+  if (importService) app.route("/api/v1", createTransferRoutes(importService, exportService));
+  if (shareLinkService) app.route("/api/v1", createShareLinkRoutes(shareLinkService));
+  app.route("/api/v1", createDeletionRoutes(workspaceDeletionService, accountDeletionService));
+  app.route("/api/v1", createMaintenanceRoutes(maintenanceService, operatorAuthorizer));
 
   return {
     app,
     ready: limiterReady,
     async close() {
-      if (ownsDb) await db.$client.end();
+      try {
+        ownedStorage?.destroy?.();
+      } finally {
+        if (ownsDb) await db.$client.end();
+      }
     },
   };
 }

@@ -9,6 +9,8 @@ import { phase5CursorSchema } from "../jobs/schemas.js";
 
 export const MAX_SEARCH_QUERY_BYTES = 512;
 
+export const searchRankingSchema = z.enum(["relevance", "weighted-v1"]);
+
 export const searchQueryTextSchema = z
   .string()
   .min(1)
@@ -27,6 +29,7 @@ export const searchQuerySchema = z
     q: searchQueryTextSchema,
     cursor: phase5CursorSchema.optional(),
     pageSize: pageSizeSchema,
+    ranking: searchRankingSchema.default("relevance"),
   })
   .strict();
 
@@ -38,6 +41,7 @@ export const searchResultSchema = z
     title: noteTitleSchema,
     snippet: z.string().max(1000),
     score: z.number().finite().nonnegative().optional(),
+    rankingVersion: searchRankingSchema,
     updatedAt: timestampSchema,
   })
   .strict();
