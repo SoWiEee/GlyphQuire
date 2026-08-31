@@ -15,7 +15,10 @@
     >
       {{ action.shortLabel }}
     </button>
-    <span class="ml-auto text-[10px] uppercase tracking-wide text-gray-400" aria-hidden="true">
+    <span
+      class="gq-editor-toolbar__mode ml-auto text-[10px] uppercase tracking-wide"
+      aria-hidden="true"
+    >
       {{ mode }}
     </span>
     <button
