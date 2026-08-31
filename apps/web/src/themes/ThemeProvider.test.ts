@@ -29,6 +29,14 @@ describe("useTheme", () => {
     expect(theme.cssVariables.value["--gq-color-background"]).toBe("#000");
   });
 
+  it("preserves base semantic colors for partial overrides", () => {
+    const theme = useTheme();
+    theme.setDraftTokens({ color: { surface: "#fefefe" } });
+
+    expect(theme.tokens.value.color.surface).toBe("#fefefe");
+    expect(theme.tokens.value.color.danger).toBe(defaultTheme.color.danger);
+  });
+
   it("resetDraft reverts to base tokens", () => {
     const theme = useTheme();
     theme.setDraftTokens({

@@ -11,6 +11,13 @@ describe("tokensToCssVariables", () => {
     expect(vars["--gq-color-border"]).toBe(defaultTheme.color.border);
   });
 
+  it("maps semantic surface and status colors", () => {
+    const vars = tokensToCssVariables(defaultTheme);
+    expect(vars["--gq-color-surface"]).toBe(defaultTheme.color.surface);
+    expect(vars["--gq-color-success"]).toBe(defaultTheme.color.success);
+    expect(vars["--gq-color-danger"]).toBe(defaultTheme.color.danger);
+  });
+
   it("maps typography tokens to --gq-typography-* with kebab-case", () => {
     const vars = tokensToCssVariables(defaultTheme);
     expect(vars["--gq-typography-body-font"]).toBe(defaultTheme.typography.bodyFont);

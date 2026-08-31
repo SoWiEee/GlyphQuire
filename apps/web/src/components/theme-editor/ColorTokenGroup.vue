@@ -33,9 +33,15 @@ const emit = defineEmits<{
 
 const colorKeys: (keyof ThemeTokens["color"])[] = [
   "background",
+  "surface",
+  "surfaceMuted",
   "foreground",
   "muted",
   "accent",
+  "accentContrast",
   "border",
+  "success",
+  "warning",
+  "danger",
 ];
 </script>

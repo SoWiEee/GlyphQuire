@@ -1,4 +1,4 @@
-import type { ThemeTokens } from "./tokens.js";
+import type { ThemeTokenOverrides, ThemeTokens } from "./tokens.js";
 
 function deepFreeze<T extends object>(obj: T): Readonly<T> {
   for (const value of Object.values(obj)) {
@@ -9,7 +9,7 @@ function deepFreeze<T extends object>(obj: T): Readonly<T> {
   return Object.freeze(obj);
 }
 
-export function mergeTokens(base: ThemeTokens, overrides: Partial<ThemeTokens>): ThemeTokens {
+export function mergeTokens(base: ThemeTokens, overrides: ThemeTokenOverrides): ThemeTokens {
   return {
     color: overrides.color ? { ...base.color, ...overrides.color } : { ...base.color },
     typography: overrides.typography
@@ -20,6 +20,6 @@ export function mergeTokens(base: ThemeTokens, overrides: Partial<ThemeTokens>):
   };
 }
 
-export function resolveTheme(base: ThemeTokens, overrides: Partial<ThemeTokens>): ThemeTokens {
+export function resolveTheme(base: ThemeTokens, overrides: ThemeTokenOverrides): ThemeTokens {
   return deepFreeze(mergeTokens(base, overrides));
 }

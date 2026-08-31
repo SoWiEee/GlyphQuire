@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveTheme, mergeTokens, defaultTheme, type ThemeTokens } from "../src/index.js";
+import { resolveTheme, mergeTokens, defaultTheme, type ThemeTokenOverrides } from "../src/index.js";
 
 describe("mergeTokens", () => {
   it("returns base unchanged when overrides is empty", () => {
@@ -42,11 +42,17 @@ describe("mergeTokens", () => {
     expect(result.spacing.custom).toBe("4rem");
     expect(result.spacing.md).toBe("1rem");
   });
+
+  it("accepts a partial semantic color override", () => {
+    const result = mergeTokens(defaultTheme, { color: { surface: "#f00" } });
+    expect(result.color.surface).toBe("#f00");
+    expect(result.color.background).toBe(defaultTheme.color.background);
+  });
 });
 
 describe("resolveTheme", () => {
   it("applies overrides on top of the base theme", () => {
-    const overrides: Partial<ThemeTokens> = {
+    const overrides: ThemeTokenOverrides = {
       color: {
         background: "#111",
         foreground: "#eee",

@@ -23,10 +23,16 @@ export const themeTokensSchema = z
     color: z
       .object({
         background: safeColorSchema,
+        surface: safeColorSchema,
+        surfaceMuted: safeColorSchema,
         foreground: safeColorSchema,
         muted: safeColorSchema,
         accent: safeColorSchema,
+        accentContrast: safeColorSchema,
         border: safeColorSchema,
+        success: safeColorSchema,
+        warning: safeColorSchema,
+        danger: safeColorSchema,
       })
       .strict(),
     typography: z

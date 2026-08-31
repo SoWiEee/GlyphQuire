@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   themeTokensSchema,
+  partialThemeTokensSchema,
   themeComponentVariantsSchema,
   themeManifestSchema,
   pluginManifestSchema,
@@ -11,10 +12,16 @@ describe("themeTokensSchema", () => {
     const result = themeTokensSchema.safeParse({
       color: {
         background: "#fff",
+        surface: "#fff",
+        surfaceMuted: "#eee",
         foreground: "#000",
         muted: "#999",
         accent: "#00f",
+        accentContrast: "#fff",
         border: "#ccc",
+        success: "#080",
+        warning: "#880",
+        danger: "#800",
       },
       typography: {
         bodyFont: "Inter, sans-serif",
@@ -31,10 +38,16 @@ describe("themeTokensSchema", () => {
     const result = themeTokensSchema.safeParse({
       color: {
         background: "url(evil)",
+        surface: "#fff",
+        surfaceMuted: "#eee",
         foreground: "#000",
         muted: "#999",
         accent: "#00f",
+        accentContrast: "#fff",
         border: "#ccc",
+        success: "#080",
+        warning: "#880",
+        danger: "#800",
       },
       typography: { bodyFont: "sans-serif", headingFont: "sans-serif", monoFont: "monospace" },
       radius: { sm: "0.25rem", md: "0.5rem", lg: "1rem" },
@@ -47,16 +60,55 @@ describe("themeTokensSchema", () => {
     const result = themeTokensSchema.safeParse({
       color: {
         background: "#fff",
+        surface: "#fff",
+        surfaceMuted: "#eee",
         foreground: "#000",
         muted: "#999",
         accent: "#00f",
+        accentContrast: "#fff",
         border: "#ccc",
+        success: "#080",
+        warning: "#880",
+        danger: "#800",
       },
       typography: { bodyFont: "url(evil)", headingFont: "sans-serif", monoFont: "monospace" },
       radius: { sm: "0.25rem", md: "0.5rem", lg: "1rem" },
       spacing: {},
     });
     expect(result.success).toBe(false);
+  });
+
+  it("requires the semantic color keys for complete tokens", () => {
+    const result = themeTokensSchema.safeParse({
+      color: {
+        background: "#fff",
+        foreground: "#000",
+        muted: "#999",
+        accent: "#00f",
+        border: "#ccc",
+      },
+      typography: {
+        bodyFont: "Inter, sans-serif",
+        headingFont: "Inter, sans-serif",
+        monoFont: "monospace",
+      },
+      radius: { sm: "0.25rem", md: "0.5rem", lg: "1rem" },
+      spacing: { xs: "0.25rem", sm: "0.5rem" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts legacy five-color overrides for partial tokens", () => {
+    const result = partialThemeTokensSchema.safeParse({
+      color: {
+        background: "#fff",
+        foreground: "#000",
+        muted: "#999",
+        accent: "#00f",
+        border: "#ccc",
+      },
+    });
+    expect(result.success).toBe(true);
   });
 });
 

@@ -7,6 +7,7 @@ import {
   defaultDarkTheme,
   defaultVariants,
   type ThemeTokens,
+  type ThemeTokenOverrides,
   type ThemeComponentVariants,
 } from "@glyphquire/theme-engine";
 
@@ -15,8 +16,8 @@ export interface ThemeContext {
   readonly variants: ComputedRef<ThemeComponentVariants>;
   readonly cssVariables: ComputedRef<Record<string, string>>;
   readonly isDark: Ref<boolean>;
-  setTheme(tokens: Partial<ThemeTokens>, variants?: Partial<ThemeComponentVariants>): void;
-  setDraftTokens(overrides: Partial<ThemeTokens>): void;
+  setTheme(tokens: ThemeTokenOverrides, variants?: Partial<ThemeComponentVariants>): void;
+  setDraftTokens(overrides: ThemeTokenOverrides): void;
   setDraftVariants(overrides: Partial<ThemeComponentVariants>): void;
   commitDraft(): void;
   resetDraft(): void;
@@ -27,9 +28,9 @@ export const THEME_INJECTION_KEY: InjectionKey<ThemeContext> = Symbol("glyphquir
 
 export function useTheme(): ThemeContext {
   const isDark = ref(false);
-  const baseTokenOverrides = ref<Partial<ThemeTokens>>({});
+  const baseTokenOverrides = ref<ThemeTokenOverrides>({});
   const baseVariantOverrides = ref<Partial<ThemeComponentVariants>>({});
-  const draftTokenOverrides = ref<Partial<ThemeTokens> | null>(null);
+  const draftTokenOverrides = ref<ThemeTokenOverrides | null>(null);
   const draftVariantOverrides = ref<Partial<ThemeComponentVariants> | null>(null);
 
   const baseTheme = computed(() => (isDark.value ? defaultDarkTheme : defaultTheme));
@@ -47,7 +48,7 @@ export function useTheme(): ThemeContext {
   const cssVariables = computed(() => tokensToCssVariables(tokens.value));
 
   function setTheme(
-    tokenOverrides: Partial<ThemeTokens>,
+    tokenOverrides: ThemeTokenOverrides,
     variantOverrides?: Partial<ThemeComponentVariants>,
   ) {
     baseTokenOverrides.value = tokenOverrides;
@@ -56,7 +57,7 @@ export function useTheme(): ThemeContext {
     draftVariantOverrides.value = null;
   }
 
-  function setDraftTokens(overrides: Partial<ThemeTokens>) {
+  function setDraftTokens(overrides: ThemeTokenOverrides) {
     draftTokenOverrides.value = overrides;
   }
 
