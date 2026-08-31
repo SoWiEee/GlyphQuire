@@ -66,6 +66,32 @@ describe("resolveTheme", () => {
     expect(resolved.typography).toEqual(defaultTheme.typography);
   });
 
+  it("fills new semantic colors from the base for legacy color overrides", () => {
+    const resolved = resolveTheme(defaultTheme, {
+      color: {
+        background: "#111",
+        foreground: "#eee",
+        muted: "#888",
+        accent: "#00f",
+        border: "#444",
+      },
+    });
+
+    expect(resolved.color).toEqual({
+      background: "#111",
+      surface: "#fffdf9",
+      surfaceMuted: "#eee8df",
+      foreground: "#eee",
+      muted: "#888",
+      accent: "#00f",
+      accentContrast: "#ffffff",
+      border: "#444",
+      success: "#31724d",
+      warning: "#8a5a16",
+      danger: "#a13d3d",
+    });
+  });
+
   it("returns a frozen result", () => {
     const resolved = resolveTheme(defaultTheme, {});
     expect(Object.isFrozen(resolved)).toBe(true);

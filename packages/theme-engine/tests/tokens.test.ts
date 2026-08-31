@@ -25,6 +25,23 @@ describe("defaultTheme", () => {
     expect(defaultTheme.color.accent).toBe("#4f5f9f");
   });
 
+  it("keeps the exact Paper Canvas light semantic colors", () => {
+    expect(defaultTheme.color).toEqual({
+      background: "#f7f3ed",
+      surface: "#fffdf9",
+      surfaceMuted: "#eee8df",
+      foreground: "#2e2924",
+      muted: "#6f675f",
+      accent: "#4f5f9f",
+      accentContrast: "#ffffff",
+      border: "#9c8e7f",
+      success: "#31724d",
+      warning: "#8a5a16",
+      danger: "#a13d3d",
+    });
+    expect(defaultTheme.typography.headingFont).toBe('"Source Serif 4", Georgia, serif');
+  });
+
   it("has all required typography token keys", () => {
     expect(defaultTheme.typography).toEqual(
       expect.objectContaining({
@@ -56,6 +73,23 @@ describe("defaultDarkTheme", () => {
   it("is a complete ThemeTokens with different background than light", () => {
     expect(defaultDarkTheme.color.background).not.toBe(defaultTheme.color.background);
     expect(defaultDarkTheme.typography.bodyFont).toEqual(expect.any(String));
+  });
+
+  it("keeps the exact Paper Canvas dark semantic colors", () => {
+    expect(defaultDarkTheme.color).toEqual({
+      background: "#16171d",
+      surface: "#20222b",
+      surfaceMuted: "#2b2e3a",
+      foreground: "#f3f1ed",
+      muted: "#b8b3ac",
+      accent: "#aab5f0",
+      accentContrast: "#171924",
+      border: "#697087",
+      success: "#8fd3aa",
+      warning: "#f0c477",
+      danger: "#f0a0a0",
+    });
+    expect(defaultDarkTheme.typography.headingFont).toBe('"Source Serif 4", Georgia, serif');
   });
 });
 
