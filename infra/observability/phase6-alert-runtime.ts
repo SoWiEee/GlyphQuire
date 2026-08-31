@@ -78,6 +78,7 @@ interface AlertState {
   detectedAt?: number;
   consecutiveSuccesses: number;
   severity: AlertSeverity;
+  correlationId?: string;
 }
 
 interface ProbeSample {
@@ -239,6 +240,7 @@ export class Phase6AlertEvaluator {
       state.phase = "firing";
       state.detectedAt = observedAt;
       state.severity = "critical";
+      state.correlationId = correlationId;
       events.push(
         this.event({
           alert: "probe_failure",
@@ -269,9 +271,10 @@ export class Phase6AlertEvaluator {
           detectedAt,
           emittedAt: observedAt,
           requestId,
-          correlationId,
+          correlationId: state.correlationId ?? correlationId,
         }),
       );
+      state.correlationId = undefined;
     }
     events.forEach((event) => publish(this.emit, event));
     return events;
@@ -289,6 +292,7 @@ export class Phase6AlertEvaluator {
       state.detectedAt = observedAt;
       state.consecutiveSuccesses = 0;
       state.severity = observation.severity ?? "critical";
+      state.correlationId = correlationId;
       events.push(
         this.event({
           alert: observation.alert,
@@ -318,10 +322,11 @@ export class Phase6AlertEvaluator {
             detectedAt,
             emittedAt: observedAt,
             requestId,
-            correlationId,
+            correlationId: state.correlationId ?? correlationId,
             jobId: observation.jobId,
           }),
         );
+        state.correlationId = undefined;
       }
     } else if (!observation.healthy) {
       state.consecutiveSuccesses = 0;
@@ -355,6 +360,7 @@ export class Phase6AlertEvaluator {
         state.detectedAt = observedAt;
         state.consecutiveSuccesses = 0;
         state.severity = severity;
+        state.correlationId = correlationId;
         events.push(
           this.event({
             alert,
@@ -400,9 +406,10 @@ export class Phase6AlertEvaluator {
             detectedAt,
             emittedAt: observedAt,
             requestId,
-            correlationId,
+            correlationId: state.correlationId ?? correlationId,
           }),
         );
+        state.correlationId = undefined;
       }
     }
     events.forEach((event) => publish(this.emit, event));

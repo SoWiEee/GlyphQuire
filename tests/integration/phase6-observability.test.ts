@@ -95,6 +95,35 @@ describe("Phase 6 alert evaluator", () => {
     expect(eventNames(recovery)).toEqual(["resolved:probe_failure"]);
   });
 
+  it("keeps an incident correlation id across generated probe retries", () => {
+    let now = baseTime;
+    const ids = [
+      "33333333-3333-4333-8333-333333333333",
+      "44444444-4444-4444-8444-444444444444",
+      "55555555-5555-4555-8555-555555555555",
+      "66666666-6666-4666-8666-666666666666",
+      "77777777-7777-4777-8777-777777777777",
+      "88888888-8888-4888-8888-888888888888",
+    ];
+    const evaluator = createPhase6AlertEvaluator({
+      clock: () => now,
+      requestIdFactory: () => ids.shift() ?? requestId,
+    });
+    evaluator.observeProbe({ ok: false, observedAt: now });
+    now += 30_000;
+    evaluator.observeProbe({ ok: false, observedAt: now });
+    now += 30_000;
+    const firing = evaluator.observeProbe({ ok: false, observedAt: now });
+    now += 30_000;
+    evaluator.observeProbe({ ok: true, observedAt: now });
+    now += 30_000;
+    evaluator.observeProbe({ ok: true, observedAt: now });
+    now += 30_000;
+    const recovery = evaluator.observeProbe({ ok: true, observedAt: now });
+
+    expect(firing[0]?.correlationId).toBe(recovery[0]?.correlationId);
+  });
+
   it("fires for a 50-percent failure ratio in a rolling five-minute window", () => {
     let now = baseTime;
     const evaluator = createPhase6AlertEvaluator({ clock: () => now });

@@ -28,6 +28,12 @@ import {
   type WorkerRuntimeOptions,
 } from "./runtime.js";
 import type { BackupVerifier } from "./handlers/backup-verification.js";
+import {
+  emitOperationalAlerts,
+  type MaintenanceSchedulerAlert,
+  type MaintenanceSchedulerMetrics,
+  type WorkerOperationalConditions,
+} from "./scheduler.js";
 
 export { WorkerRuntime, type WorkerRuntimeOptions } from "./runtime.js";
 
@@ -63,6 +69,10 @@ export interface StartWorkerOptions {
    * startup fails closed unless this is supplied with the built-in registry.
    */
   backupVerifier?: BackupVerifier;
+  /** Optional provider-backed operational probes and metric sink. */
+  operationalConditions?: (input: { now: Date }) => Promise<WorkerOperationalConditions>;
+  operationalAlert?: MaintenanceSchedulerAlert;
+  operationalMetrics?: MaintenanceSchedulerMetrics;
 }
 
 export interface StartedWorker {
@@ -173,6 +183,22 @@ async function enqueueImportStagingCleanup(
   }
 }
 
+const defaultOperationalConditions = async (): Promise<WorkerOperationalConditions> => ({
+  // Backup verification is owned by the backup pipeline; deployments that
+  // expose its health pass an explicit probe through StartWorkerOptions.
+  backupHealthy: true,
+  deadLetterCount: 0,
+  oldestQueueAgeSeconds: 0,
+});
+
+const defaultOperationalAlert: MaintenanceSchedulerAlert = {
+  async record(event) {
+    // Only the bounded event contract is logged; no provider payload crosses
+    // this composition boundary.
+    console.error(JSON.stringify({ event: "worker_operational_alert", alert: event }));
+  },
+};
+
 export async function startWorker(options: StartWorkerOptions = {}): Promise<StartedWorker> {
   const env = parseWorkerEnv(options.source === undefined ? process.env : options.source);
   // Keep the entrypoint importable before optional provider packages load so
@@ -234,15 +260,23 @@ export async function startWorker(options: StartWorkerOptions = {}): Promise<Sta
       options.runtime?.maintenanceIntervalMs ?? DEFAULT_MAINTENANCE_INTERVAL_MS;
     const runtime = new WorkerRuntime(dispatcher, registry, {
       ...options.runtime,
-      maintenance: (scheduledAt, maintenanceSignal) =>
-        enqueueImportStagingCleanup(
+      maintenance: async (scheduledAt, maintenanceSignal) => {
+        const probe = options.operationalConditions ?? defaultOperationalConditions;
+        const conditions = await probe({ now: new Date(scheduledAt) });
+        await emitOperationalAlerts(
+          options.operationalAlert ?? defaultOperationalAlert,
+          options.operationalMetrics,
+          conditions,
+        );
+        await enqueueImportStagingCleanup(
           readyDatabase,
           dispatcher,
           env.IMPORT_CLEANUP_BATCH_SIZE,
           maintenanceIntervalMs,
           scheduledAt,
           maintenanceSignal,
-        ),
+        );
+      },
       maintenanceIntervalMs,
       signal,
     });

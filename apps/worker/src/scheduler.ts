@@ -146,6 +146,41 @@ export async function recordWorkerAlert(
   await alert.record(createWorkerAlertEvent(input));
 }
 
+/** Emits the bounded alert and metric side effects for one operational probe. */
+export async function emitOperationalAlerts(
+  alert: MaintenanceSchedulerAlert,
+  metrics: MaintenanceSchedulerMetrics | undefined,
+  conditions: WorkerOperationalConditions,
+): Promise<void> {
+  metrics?.set(
+    "glyphquire_queue_oldest_job_age_seconds",
+    Number.isFinite(conditions.oldestQueueAgeSeconds)
+      ? Math.max(0, Math.min(Math.floor(conditions.oldestQueueAgeSeconds), 31_536_000))
+      : 0,
+  );
+  if (conditions.backupHealthy === false) {
+    metrics?.increment("glyphquire_backup_failures_total");
+    await recordWorkerAlert(alert, { event: "backup_failure" });
+  }
+  if (Number.isInteger(conditions.deadLetterCount) && conditions.deadLetterCount > 0) {
+    metrics?.increment(
+      "glyphquire_jobs_dead_lettered_total",
+      Math.min(conditions.deadLetterCount, MAX_DUE_DELETIONS),
+    );
+    await recordWorkerAlert(alert, { event: "dead_letter", jobId: conditions.oldestJobId });
+  }
+  if (
+    Number.isFinite(conditions.oldestQueueAgeSeconds) &&
+    conditions.oldestQueueAgeSeconds >= 300
+  ) {
+    await recordWorkerAlert(alert, {
+      event: "oldest_queue_age",
+      jobId: conditions.oldestJobId,
+      ageSeconds: conditions.oldestQueueAgeSeconds,
+    });
+  }
+}
+
 export interface MaintenanceBatchSizes {
   importCleanup: number;
   shareCleanup: number;
@@ -453,38 +488,7 @@ export function createMaintenanceScheduler(
           const conditions = await dependencies.operationalConditions({
             now: new Date(scheduledAt),
           });
-          dependencies.metrics?.set(
-            "glyphquire_queue_oldest_job_age_seconds",
-            Number.isFinite(conditions.oldestQueueAgeSeconds)
-              ? Math.max(0, Math.min(Math.floor(conditions.oldestQueueAgeSeconds), 31_536_000))
-              : 0,
-          );
-          if (conditions.backupHealthy === false) {
-            dependencies.metrics?.increment("glyphquire_backup_failures_total");
-            await recordWorkerAlert(dependencies.alert, {
-              event: "backup_failure",
-            });
-          }
-          if (Number.isInteger(conditions.deadLetterCount) && conditions.deadLetterCount > 0) {
-            dependencies.metrics?.increment(
-              "glyphquire_jobs_dead_lettered_total",
-              Math.min(conditions.deadLetterCount, MAX_DUE_DELETIONS),
-            );
-            await recordWorkerAlert(dependencies.alert, {
-              event: "dead_letter",
-              jobId: conditions.oldestJobId,
-            });
-          }
-          if (
-            Number.isFinite(conditions.oldestQueueAgeSeconds) &&
-            conditions.oldestQueueAgeSeconds >= 300
-          ) {
-            await recordWorkerAlert(dependencies.alert, {
-              event: "oldest_queue_age",
-              jobId: conditions.oldestJobId,
-              ageSeconds: conditions.oldestQueueAgeSeconds,
-            });
-          }
+          await emitOperationalAlerts(dependencies.alert, dependencies.metrics, conditions);
         }
         if (!runFifteen && !runHourly && !runDaily) return;
         const workspaceIds = await dependencies.repository.listWorkspaceIds(MAX_WORKSPACES);
