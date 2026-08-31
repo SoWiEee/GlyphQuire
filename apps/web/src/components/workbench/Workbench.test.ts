@@ -5,7 +5,12 @@ import { EditorView } from "@codemirror/view";
 import { defineComponent, h, nextTick } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Workbench from "./Workbench.vue";
-import type { EditorSession, EditorSessionState } from "../../editors/editor-session.types.js";
+import type {
+  EditorModeAdapters,
+  EditorSession,
+  EditorSessionState,
+} from "../../editors/editor-session.types.js";
+import type { WorkbenchModeAdapterShim } from "../../editors/WorkbenchModeAdapterShim.js";
 import type { NoteResult } from "@glyphquire/api-contract";
 
 const NOTE_ID = "44444444-4444-4444-8444-444444444444";
@@ -105,6 +110,28 @@ const SourceEditorStub = defineComponent({
         "div",
         {
           "data-testid": "session-source",
+          contenteditable: String(!props.readOnly),
+          onInput: (event: Event) =>
+            emit("update:markdown", (event.target as HTMLElement).textContent ?? ""),
+        },
+        props.markdown,
+      );
+  },
+});
+
+const VisualEditorStub = defineComponent({
+  name: "VisualEditor",
+  props: {
+    markdown: { type: String, required: true },
+    readOnly: { type: Boolean, default: false },
+  },
+  emits: ["update:markdown"],
+  setup(props, { emit }) {
+    return () =>
+      h(
+        "div",
+        {
+          "data-testid": "session-visual",
           contenteditable: String(!props.readOnly),
           onInput: (event: Event) =>
             emit("update:markdown", (event.target as HTMLElement).textContent ?? ""),
@@ -452,9 +479,82 @@ describe("Workbench EditorSession composition", () => {
     wrapper.unmount();
   });
 
+  it("rejects a restore when the note switches during replacement attachment", async () => {
+    const current = fakeSession(state({ noteId: NOTE_ID, markdown: "# Current" }));
+    const nextNote = fakeSession(state({ noteId: OTHER_NOTE_ID, markdown: "# Other current" }));
+    const attachment = deferred<() => void>();
+    const staleReplacement = fakeSession(
+      state({ noteId: NOTE_ID, baseRevision: 2, markdown: "# Restored" }),
+      vi.fn(() => attachment.promise),
+    );
+    const delayedRestore = deferred<EditorSession>();
+    let noteFactoryCalls = 0;
+    const sessionFactory = vi.fn((note: { id: string }) => {
+      if (note.id === NOTE_ID) {
+        noteFactoryCalls += 1;
+        return noteFactoryCalls === 1 ? Promise.resolve(current.session) : delayedRestore.promise;
+      }
+      return Promise.resolve(nextNote.session);
+    });
+    const VersionHistoryStub = defineComponent({
+      props: { noteId: { type: String, required: true }, currentRevision: { type: Number } },
+      emits: ["restored"],
+      setup(_, { emit }) {
+        return () => h("button", { onClick: () => emit("restored", noteResult()) }, "restore");
+      },
+    });
+    const wrapper = mount(Workbench, {
+      props: {
+        initialNotes: [
+          { id: NOTE_ID, title: "Current", markdown: "# Current" },
+          { id: OTHER_NOTE_ID, title: "Other", markdown: "# Other seed" },
+        ],
+        phase5WorkspaceId: "33333333-3333-4333-8333-333333333333",
+        phase5NoteId: NOTE_ID,
+        sessionFactory,
+      },
+      global: {
+        stubs: { SourceEditor: SourceEditorStub, VersionHistory: VersionHistoryStub },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.get('button[aria-label="Open context tools"]').trigger("click");
+    await wrapper.get('button[aria-label="Open version history"]').trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === "restore")!
+      .trigger("click");
+    await nextTick();
+    delayedRestore.resolve(staleReplacement.session);
+    await nextTick();
+    expect(staleReplacement.session.attachModeAdapters).toHaveBeenCalledOnce();
+
+    await wrapper.findAll('nav[aria-label="Notes explorer"] button')[1]!.trigger("click");
+    await flushPromises();
+    expect(wrapper.get('[data-testid="session-source"]').text()).toBe("# Other current");
+
+    attachment.resolve(() => {});
+    await flushPromises();
+    expect(staleReplacement.session.dispose).toHaveBeenCalledOnce();
+    expect(nextNote.session.dispose).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid="session-source"]').text()).toBe("# Other current");
+    const source = wrapper.get('[data-testid="session-source"]');
+    source.element.textContent = "# Other edit";
+    await source.trigger("input");
+    expect(nextNote.edit).toHaveBeenCalledWith("# Other edit");
+    expect(staleReplacement.edit).not.toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
   it("lets the newest overlapping restore win", async () => {
     const current = fakeSession(state({ baseRevision: 1, markdown: "# Current" }));
-    const olderReplacement = fakeSession(state({ baseRevision: 2, markdown: "# Older restore" }));
+    const olderAttachment = deferred<() => void>();
+    const olderReplacement = fakeSession(
+      state({ baseRevision: 2, markdown: "# Older restore" }),
+      vi.fn(() => olderAttachment.promise),
+    );
     const newerReplacement = fakeSession(state({ baseRevision: 2, markdown: "# Newer restore" }));
     const olderRestore = deferred<EditorSession>();
     const newerRestore = deferred<EditorSession>();
@@ -499,6 +599,12 @@ describe("Workbench EditorSession composition", () => {
     const restoreButton = () =>
       wrapper.findAll("button").find((button) => button.text() === "restore")!;
     await restoreButton().trigger("click");
+    await nextTick();
+    expect(sessionFactory).toHaveBeenCalledTimes(2);
+    olderRestore.resolve(olderReplacement.session);
+    await nextTick();
+    expect(olderReplacement.session.attachModeAdapters).toHaveBeenCalledOnce();
+
     await restoreButton().trigger("click");
     await nextTick();
     expect(sessionFactory).toHaveBeenCalledTimes(3);
@@ -509,7 +615,7 @@ describe("Workbench EditorSession composition", () => {
     expect(current.session.dispose).toHaveBeenCalledOnce();
     expect(newerReplacement.session.dispose).not.toHaveBeenCalled();
 
-    olderRestore.resolve(olderReplacement.session);
+    olderAttachment.resolve(() => {});
     await flushPromises();
     expect(olderReplacement.session.dispose).toHaveBeenCalledOnce();
     expect(newerReplacement.session.dispose).not.toHaveBeenCalled();
@@ -524,12 +630,34 @@ describe("Workbench EditorSession composition", () => {
   });
 
   it("does not route pending replacement edits through the current session", async () => {
-    const current = fakeSession(state({ baseRevision: 1, markdown: "# Current" }));
-    const attachment = deferred<() => void>();
-    const pendingReplacement = fakeSession(
-      state({ baseRevision: 2, markdown: "# Restored" }),
-      vi.fn(() => attachment.promise),
+    const current = fakeSession(
+      state({ baseRevision: 1, markdown: "# Current", mode: "visual", activePane: "visual" }),
     );
+    const attachment = deferred<() => void>();
+    let pendingAdapters: EditorModeAdapters | undefined;
+    let pendingReplacementSession: EditorSession;
+    const attachPendingReplacement = vi.fn(async (adapters: EditorModeAdapters) => {
+      pendingAdapters = adapters;
+      adapters.visual.setReadOnly(false);
+      const unsubscribe = adapters.visual.onChange((markdown) => {
+        pendingReplacementSession.edit(markdown);
+      });
+      const detach = await attachment.promise;
+      return () => {
+        unsubscribe();
+        detach();
+      };
+    });
+    const pendingReplacement = fakeSession(
+      state({
+        baseRevision: 2,
+        markdown: "# Restored",
+        mode: "visual",
+        activePane: "visual",
+      }),
+      attachPendingReplacement,
+    );
+    pendingReplacementSession = pendingReplacement.session;
     const sessionFactory = vi
       .fn()
       .mockResolvedValueOnce(current.session)
@@ -549,7 +677,11 @@ describe("Workbench EditorSession composition", () => {
         sessionFactory,
       },
       global: {
-        stubs: { SourceEditor: SourceEditorStub, VersionHistory: VersionHistoryStub },
+        stubs: {
+          SourceEditor: SourceEditorStub,
+          VisualEditor: VisualEditorStub,
+          VersionHistory: VersionHistoryStub,
+        },
       },
     });
     await flushPromises();
@@ -561,18 +693,28 @@ describe("Workbench EditorSession composition", () => {
       .find((button) => button.text() === "restore")!
       .trigger("click");
     await nextTick();
-    expect(pendingReplacement.session.attachModeAdapters).toHaveBeenCalledOnce();
+    expect(attachPendingReplacement).toHaveBeenCalledOnce();
+    expect(pendingAdapters).toBeDefined();
+    expect(wrapper.get('[data-testid="session-visual"]').text()).toBe("# Current");
 
     current.edit.mockClear();
-    pendingReplacement.edit("# Pending replacement edit");
+    const pendingVisualAdapter = pendingAdapters!.visual as WorkbenchModeAdapterShim;
+    pendingVisualAdapter.syncFromUi("# Pending replacement edit", true);
     expect(current.edit).not.toHaveBeenCalled();
-    expect(current.session.snapshot().markdown).toBe("# Current");
+    expect(pendingReplacement.edit).toHaveBeenCalledWith("# Pending replacement edit");
+    expect(wrapper.get('[data-testid="session-visual"]').text()).toBe("# Current");
 
     attachment.resolve(() => {});
     await flushPromises();
-    expect(wrapper.get('[data-testid="session-source"]').text()).toBe("# Restored");
+    expect(pendingReplacement.session.snapshot().noteId).toBe(NOTE_ID);
+    expect(pendingReplacement.session.snapshot().baseRevision).toBe(2);
     expect(current.session.dispose).toHaveBeenCalledOnce();
     expect(pendingReplacement.session.dispose).not.toHaveBeenCalled();
+    const visual = wrapper.get('[data-testid="session-visual"]');
+    visual.element.textContent = "# Active replacement edit";
+    await visual.trigger("input");
+    expect(pendingReplacement.edit).toHaveBeenLastCalledWith("# Active replacement edit");
+    expect(current.edit).not.toHaveBeenCalled();
 
     wrapper.unmount();
   });
