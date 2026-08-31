@@ -346,7 +346,12 @@ export class ImportServiceImpl implements ImportService {
         await this.hooks.afterSourcePut?.();
 
         const row = await this.coordinator.run({
-          replay: () => this.existingReplay(actorId, workspaceId, idempotencyKey, hash),
+          replay: async () => {
+            const replay = await this.existingReplay(actorId, workspaceId, idempotencyKey, hash);
+            // The staging row belongs to this invocation and must continue
+            // through the publish transaction instead of replaying early.
+            return replay?.id === importId && replay.status === "staging" ? undefined : replay;
+          },
           transaction: async (tx, dispatcher) => {
             const [updated] = await tx
               .update(imports)
