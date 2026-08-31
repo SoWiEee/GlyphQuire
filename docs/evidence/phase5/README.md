@@ -25,3 +25,10 @@ Evidence must not contain session cookies, bearer tokens, webhook URLs,
 credentials, presigned query strings, Markdown bodies, imported archives, or
 provider diagnostics. Store immutable CI/artifact references and sanitized
 counters instead.
+
+Phase 6 extends the alert evidence with a pinned evaluator/router/receiver
+rehearsal. Its checked-in instance is
+`docs/evidence/phase6/alert-evidence.json`; it remains blocked until a real
+operator-channel capture contains both firing and recovery events within the
+five-minute delivery deadline. Runbook details are in
+`docs/evidence/phase5/alert-delivery.md`.

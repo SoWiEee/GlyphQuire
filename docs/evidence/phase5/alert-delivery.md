@@ -21,3 +21,32 @@ without `PHASE5_ALERT_EVIDENCE_FILE`.
 
 Never record the webhook URL, channel token, session cookie, provider response,
 document content, archive name, or job payload in this file.
+
+## Phase 6 evaluator/router/receiver rehearsal
+
+Phase 6 keeps the same five-minute delivery boundary and adds the production
+policy checks: 30-second probes with a five-second timeout, three consecutive
+failures or a 50-percent rolling five-minute failure ratio, immediate backup,
+dead-letter, and oldest-queue notifications, 80/90-percent capacity levels,
+and three consecutive successes for recovery.
+
+Run the configured operator-channel rehearsal with an existing absolute capture
+file. The command fails closed when the Phase 5 capture or the Phase 6 host
+capture is absent:
+
+```sh
+PHASE5_ALERT_EVIDENCE_FILE=/secure/path/phase5-alert.json \
+PHASE6_ALERT_EVIDENCE_HOST_PATH=/secure/path/phase6-alert.json \
+PHASE6_ALERT_EVIDENCE_FILE=/secure/path/phase6-alert.json \
+PHASE6_ALERT_RUNTIME_IMAGE=registry.example/phase6-alert@sha256:<64-hex> \
+  pnpm test:integration:phase6-observability
+```
+
+`PHASE6_ALERT_RUNTIME_IMAGE` must be the immutable digest produced from
+`infra/observability/phase6-alert-runtime.Dockerfile`; the rehearsal does not
+mount source files into the evaluator, router, or receiver containers.
+
+The evaluator, router, and receiver exchange only the strict sanitized event
+shape in `docs/evidence/phase6/alert-evidence.schema.json`. The receiver writes
+firing and recovery timestamps and a successful delivery status; it never
+records URLs, credentials, cookies, bodies, or provider diagnostics.

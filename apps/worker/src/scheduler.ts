@@ -9,6 +9,7 @@ import {
 } from "@glyphquire/database";
 import type { EnqueueJobInput } from "@glyphquire/queue";
 import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
 
 export const FIFTEEN_MINUTES_MS = 15 * 60 * 1_000;
 export const ONE_HOUR_MS = 60 * 60 * 1_000;
@@ -64,10 +65,65 @@ export interface LifecyclePurgeAttentionEvent {
   deletionId: string;
   status: WorkspaceDeletionStatus | AccountDeletionStatus;
   deadlineBreached: boolean;
+  requestId: string;
+  correlationId: string;
 }
 
+export interface WorkerOperationalAlertEvent {
+  event: "backup_failure" | "dead_letter" | "oldest_queue_age";
+  requestId: string;
+  correlationId: string;
+  jobId?: string;
+  ageSeconds?: number;
+}
+
+export type MaintenanceAlertEvent = LifecyclePurgeAttentionEvent | WorkerOperationalAlertEvent;
+
 export interface MaintenanceSchedulerAlert {
-  record(event: LifecyclePurgeAttentionEvent): Promise<void>;
+  record(event: MaintenanceAlertEvent): Promise<void>;
+}
+
+const canonicalUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+
+/** Stable UUID-shaped correlation identity for retries of the same job/event. */
+export function stableCorrelationId(seed: string): string {
+  const digest = createHash("sha256").update(seed).digest("hex");
+  return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+}
+
+export function createWorkerAlertEvent(input: {
+  event: WorkerOperationalAlertEvent["event"];
+  jobId?: string;
+  ageSeconds?: number;
+  requestId?: string;
+  correlationId?: string;
+}): WorkerOperationalAlertEvent {
+  const seed = `${input.event}:${input.jobId ?? "none"}`;
+  const correlationId = canonicalUuid.test(input.correlationId ?? "")
+    ? input.correlationId!
+    : stableCorrelationId(seed);
+  const requestId = canonicalUuid.test(input.requestId ?? "") ? input.requestId! : correlationId;
+  const event: WorkerOperationalAlertEvent = {
+    event: input.event,
+    requestId,
+    correlationId,
+  };
+  if (input.jobId !== undefined && canonicalUuid.test(input.jobId)) event.jobId = input.jobId;
+  if (
+    input.ageSeconds !== undefined &&
+    Number.isFinite(input.ageSeconds) &&
+    input.ageSeconds >= 0
+  ) {
+    event.ageSeconds = Math.min(Math.floor(input.ageSeconds), 31_536_000);
+  }
+  return event;
+}
+
+export async function recordWorkerAlert(
+  alert: MaintenanceSchedulerAlert,
+  input: Parameters<typeof createWorkerAlertEvent>[0],
+): Promise<void> {
+  await alert.record(createWorkerAlertEvent(input));
 }
 
 export interface MaintenanceBatchSizes {
@@ -310,12 +366,15 @@ export function createMaintenanceScheduler(
       checkAborted(signal);
       const breached = deadlineBreached(row.confirmedAt, now, dependencies.deletionDeadlineDays);
       if (row.status !== "pending" || breached) {
+        const correlationId = stableCorrelationId(`lifecycle:workspace:${row.deletionId}`);
         await dependencies.alert.record({
           event: "lifecycle_purge_attention",
           deletionType: "workspace",
           deletionId: row.deletionId,
           status: row.status,
           deadlineBreached: breached,
+          requestId: correlationId,
+          correlationId,
         });
       }
       if (breached) continue;
@@ -332,12 +391,15 @@ export function createMaintenanceScheduler(
       checkAborted(signal);
       const breached = deadlineBreached(row.confirmedAt, now, dependencies.deletionDeadlineDays);
       if (row.status !== "pending" || breached) {
+        const correlationId = stableCorrelationId(`lifecycle:account:${row.accountDeletionId}`);
         await dependencies.alert.record({
           event: "lifecycle_purge_attention",
           deletionType: "account",
           deletionId: row.accountDeletionId,
           status: row.status,
           deadlineBreached: breached,
+          requestId: correlationId,
+          correlationId,
         });
       }
       if (breached || !row.allWorkspacePurgesComplete) continue;

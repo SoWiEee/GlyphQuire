@@ -59,7 +59,12 @@ import {
   type PersonalWorkspaceProvisioner,
 } from "./modules/workspaces/WorkspaceService.js";
 import { createAuthRoutes } from "./routes/auth.js";
-import { healthRoutes } from "./routes/health.js";
+import {
+  createHealthRoutes,
+  createReadinessState,
+  type Phase6ReadinessState,
+} from "./routes/health.js";
+import { createPhase6PreflightRoutes } from "./routes/internal-phase6-preflight.js";
 import { createNoteRoutes } from "./routes/v1/notes.js";
 import { createVersionRoutes } from "./routes/v1/versions.js";
 import { ThemeServiceImpl, type ThemeService } from "./modules/themes/ThemeService.js";
@@ -109,7 +114,16 @@ export interface AppDependencies {
   rateLimit?: RateLimitPort;
   clock?: Clock;
   logger?: AppSecurityLogger;
+  readiness?: Phase6ReadinessState;
   getDirectPeer?: (context: Context) => string | undefined;
+}
+
+export function createOperationalLogger(logger: AppSecurityLogger = defaultAppLogger) {
+  return {
+    error(entry: Parameters<AppSecurityLogger["error"]>[0]) {
+      logger.error(entry);
+    },
+  } satisfies AppSecurityLogger;
 }
 
 function resolvedEnv(input: Env | EnvInput): Env {
@@ -204,7 +218,8 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
   const maintenanceService =
     dependencies.maintenanceService ??
     new MaintenanceServiceImpl(db, jobDispatcher, operatorAuthorizer);
-  const logger = dependencies.logger ?? defaultAppLogger;
+  const logger = createOperationalLogger(dependencies.logger);
+  const readiness = dependencies.readiness ?? createReadinessState();
   const rateLimit =
     dependencies.rateLimit ??
     (env.PRODUCTION
@@ -270,6 +285,10 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
 
   const app = new Hono<{ Variables: SecurityVariables }>();
   app.use("*", createSecurityHeadersMiddleware());
+  app.use("*", async (_context, next) => {
+    readiness.recordRequest();
+    await next();
+  });
   app.use("*", createCorsMiddleware(env.WEB_ORIGIN));
   app.use("/api/auth/*", clientIp);
   app.use("/api/v1/*", clientIp);
@@ -284,7 +303,15 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
       keySecret: env.BETTER_AUTH_SECRET,
     }),
   );
-  app.onError(createErrorHandler(logger as SecurityLogger));
+  const errorHandler = createErrorHandler(logger as SecurityLogger);
+  app.onError((error, context) => {
+    readiness.recordError();
+    return errorHandler(error, context);
+  });
+  app.use("/api/v1/*", async (_context, next) => {
+    if (!readiness.ready) throw new PublicApiError("SERVICE_UNAVAILABLE", 503);
+    await next();
+  });
 
   // Anonymous read-only sharing must run before authenticated v1 context and
   // personal-workspace provisioning, while retaining IP, origin, limiter,
@@ -308,7 +335,82 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
     }),
   );
   app.use("/api/v1/*", ensurePersonalWorkspace);
-  app.route("/api", healthRoutes);
+
+  const expectedRuntimeRole = process.env.PHASE6_EXPECTED_RUNTIME_ROLE ?? "unavailable";
+  const expectedMigrationRole = process.env.PHASE6_EXPECTED_MIGRATION_ROLE ?? "unavailable";
+  const expectedWorkerId = process.env.PHASE6_EXPECTED_WORKER_ID ?? "unavailable";
+  const expectedBucket = env.PHASE5_ENABLED
+    ? (process.env.PHASE6_EXPECTED_BUCKET ?? env.S3_BUCKET)
+    : "unavailable";
+  const expectedImageDigest = process.env.PHASE6_EXPECTED_IMAGE_DIGEST ?? "unavailable";
+  const expectedMigrationJournalSha =
+    process.env.PHASE6_EXPECTED_MIGRATION_JOURNAL_SHA ?? "unavailable";
+  const preflightProbeToken = process.env.PHASE6_PREFLIGHT_PROBE_TOKEN;
+  const preflightOperatorId =
+    process.env.PHASE6_PREFLIGHT_OPERATOR_ID ??
+    (env.PHASE5_ENABLED ? env.PHASE5_OPERATOR_IDS[0] : undefined);
+  const preflightRoutes = createPhase6PreflightRoutes({
+    operatorAuthorizer,
+    expected: {
+      runtimeRole: expectedRuntimeRole,
+      migrationRole: expectedMigrationRole,
+      workerId: expectedWorkerId,
+      bucket: expectedBucket,
+      imageDigest: expectedImageDigest,
+      migrationJournalSha: expectedMigrationJournalSha,
+    },
+    probeToken: preflightProbeToken,
+    probeOperatorId: preflightOperatorId,
+    probe: async () => {
+      let database = false;
+      try {
+        await db.execute("select 1");
+        database = true;
+      } catch {
+        // The preflight response contains only the fixed boolean result.
+      }
+      const identitiesConfigured =
+        expectedRuntimeRole !== "unavailable" &&
+        expectedMigrationRole !== "unavailable" &&
+        expectedWorkerId !== "unavailable" &&
+        expectedImageDigest !== "unavailable" &&
+        expectedMigrationJournalSha !== "unavailable";
+      return {
+        health: readiness.healthy,
+        readiness: readiness.ready,
+        database,
+        objectStorage: env.PHASE5_ENABLED && storage !== undefined,
+        roles: identitiesConfigured,
+        worker: expectedWorkerId !== "unavailable",
+        image: expectedImageDigest !== "unavailable",
+        migrationJournal: expectedMigrationJournalSha !== "unavailable",
+      };
+    },
+  });
+  app.use("/api/internal/phase6/*", async (context, next) => {
+    if (
+      preflightProbeToken !== undefined &&
+      context.req.header("authorization") === `Bearer ${preflightProbeToken}`
+    ) {
+      await next();
+      return;
+    }
+    let session: Awaited<ReturnType<typeof auth.api.getSession>>;
+    try {
+      session = await auth.api.getSession({ headers: context.req.raw.headers });
+    } catch {
+      throw new PublicApiError("SERVICE_UNAVAILABLE", 503);
+    }
+    if (!session?.user.id) throw new PublicApiError("NOTE_NOT_FOUND", 404);
+    context.set("requestContext", {
+      requestId: context.get("requestId"),
+      actorId: session.user.id,
+      session: session.session,
+    });
+    await next();
+  });
+  app.route("/api", createHealthRoutes(readiness));
+  app.route("/api", preflightRoutes);
   app.route("/api", authRoutes);
   app.route("/api/v1", createNoteRoutes(noteService));
   app.route("/api/v1", createVersionRoutes(noteService));
@@ -323,6 +425,7 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
   return {
     app,
     ready: limiterReady,
+    readiness,
     async close() {
       try {
         ownedStorage?.destroy?.();

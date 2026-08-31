@@ -42,10 +42,11 @@ export type PublicErrorMessage =
 export interface SecurityLogEntry {
   event: "api_request_failed";
   requestId: string;
+  correlationId: string;
   code: ApiErrorCode;
   status: number;
   method: string;
-  routeClass: "auth" | "api_v1" | "health" | "other";
+  routeClass: "auth" | "api_v1" | "health" | "internal" | "other";
 }
 
 export interface SecurityLogger {
@@ -101,6 +102,7 @@ function routeClass(path: string): SecurityLogEntry["routeClass"] {
   if (path === "/api/auth" || path.startsWith("/api/auth/")) return "auth";
   if (path === "/api/v1" || path.startsWith("/api/v1/")) return "api_v1";
   if (path === "/api/health") return "health";
+  if (path === "/api/internal" || path.startsWith("/api/internal/")) return "internal";
   return "other";
 }
 
@@ -113,6 +115,7 @@ export function createErrorHandler(logger: SecurityLogger = defaultLogger): Erro
       logger.error({
         event: "api_request_failed",
         requestId,
+        correlationId: requestId,
         code: mapped.code,
         status: mapped.status,
         method: context.req.method,
