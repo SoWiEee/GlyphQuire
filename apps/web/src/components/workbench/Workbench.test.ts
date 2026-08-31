@@ -6,6 +6,7 @@ import { defineComponent, h, nextTick } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Workbench from "./Workbench.vue";
 import type { EditorSession, EditorSessionState } from "../../editors/editor-session.types.js";
+import type { NoteResult } from "@glyphquire/api-contract";
 
 const NOTE_ID = "44444444-4444-4444-8444-444444444444";
 const OTHER_NOTE_ID = "55555555-5555-4555-8555-555555555555";
@@ -72,6 +73,22 @@ function fakeSession(initialState = state()) {
       current = next;
       for (const listener of listeners) listener(next);
     },
+  };
+}
+
+function noteResult(overrides: Partial<NoteResult> = {}): NoteResult {
+  return {
+    id: NOTE_ID,
+    workspaceId: "33333333-3333-4333-8333-333333333333",
+    title: "Authorized",
+    revision: 2,
+    visibility: "private",
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-01T00:00:00.000Z",
+    deletedAt: null,
+    contentMarkdown: "# Restored",
+    schemaVersion: 1,
+    ...overrides,
   };
 }
 
@@ -267,6 +284,105 @@ describe("Workbench EditorSession composition", () => {
     view?.dispatch({ changes: { from: view.state.doc.length, insert: "+CURRENT-USER" } });
     expect(currentAuthority.edit).toHaveBeenCalledWith("CURRENT-SERVER-AUTHORITY+CURRENT-USER");
     expect(staleAuthority.edit).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("adopts a validated restored session as the next autosave base revision", async () => {
+    const current = fakeSession(state({ baseRevision: 1, markdown: "# Current" }));
+    const replacement = fakeSession(state({ baseRevision: 2, markdown: "# Restored" }));
+    const sessionFactory = vi
+      .fn()
+      .mockResolvedValueOnce(current.session)
+      .mockResolvedValueOnce({
+        session: replacement.session,
+        context: {
+          userId: "11111111-1111-4111-8111-111111111111",
+          workspaceId: "33333333-3333-4333-8333-333333333333",
+        },
+      });
+    const VersionHistoryStub = defineComponent({
+      props: { noteId: { type: String, required: true }, currentRevision: { type: Number } },
+      emits: ["restored"],
+      setup(_, { emit }) {
+        return () => h("button", { onClick: () => emit("restored", noteResult()) }, "restore");
+      },
+    });
+    const wrapper = mount(Workbench, {
+      props: {
+        initialNotes: [{ id: NOTE_ID, title: "Authorized", markdown: "# Current" }],
+        phase5WorkspaceId: "33333333-3333-4333-8333-333333333333",
+        phase5NoteId: NOTE_ID,
+        sessionFactory,
+      },
+      global: {
+        stubs: { SourceEditor: SourceEditorStub, VersionHistory: VersionHistoryStub },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.get('button[aria-label="Open context tools"]').trigger("click");
+    await wrapper.get('button[aria-label="Open version history"]').trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === "restore")!
+      .trigger("click");
+    await flushPromises();
+
+    expect(replacement.session.snapshot().baseRevision).toBe(2);
+    expect(current.session.dispose).toHaveBeenCalledOnce();
+    expect(replacement.session.dispose).not.toHaveBeenCalled();
+
+    const source = wrapper.get('[data-testid="session-source"]');
+    source.element.textContent = "# Restored\nnext";
+    await source.trigger("input");
+    expect(replacement.edit).toHaveBeenCalledWith("# Restored\nnext");
+
+    wrapper.unmount();
+  });
+
+  it("keeps the old session usable when restored session validation fails", async () => {
+    const current = fakeSession(state({ baseRevision: 1, markdown: "# Current" }));
+    const replacement = fakeSession(state({ baseRevision: 99, markdown: "# Wrong" }));
+    const sessionFactory = vi
+      .fn()
+      .mockResolvedValueOnce(current.session)
+      .mockResolvedValueOnce(replacement.session);
+    const VersionHistoryStub = defineComponent({
+      props: { noteId: { type: String, required: true }, currentRevision: { type: Number } },
+      emits: ["restored"],
+      setup(_, { emit }) {
+        return () => h("button", { onClick: () => emit("restored", noteResult()) }, "restore");
+      },
+    });
+    const wrapper = mount(Workbench, {
+      props: {
+        initialNotes: [{ id: NOTE_ID, title: "Authorized", markdown: "# Current" }],
+        phase5WorkspaceId: "33333333-3333-4333-8333-333333333333",
+        phase5NoteId: NOTE_ID,
+        sessionFactory,
+      },
+      global: {
+        stubs: { SourceEditor: SourceEditorStub, VersionHistory: VersionHistoryStub },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.get('button[aria-label="Open context tools"]').trigger("click");
+    await wrapper.get('button[aria-label="Open version history"]').trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === "restore")!
+      .trigger("click");
+    await flushPromises();
+
+    expect(replacement.session.dispose).toHaveBeenCalledOnce();
+    expect(current.session.dispose).not.toHaveBeenCalled();
+    current.edit.mockClear();
+    const source = wrapper.get('[data-testid="session-source"]');
+    source.element.textContent = "# Still current";
+    await source.trigger("input");
+    expect(current.edit).toHaveBeenCalledWith("# Still current");
+
     wrapper.unmount();
   });
 });

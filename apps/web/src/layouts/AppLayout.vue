@@ -13,6 +13,7 @@
 import { computed, provide } from "vue";
 import { RouterView, useRoute } from "vue-router";
 import { THEME_INJECTION_KEY, useTheme } from "../themes/ThemeProvider.js";
+import { provideWorkbenchHostContext } from "../components/workbench/WorkbenchContext.js";
 
 const route = useRoute();
 const isFullBleed = computed(() => route.meta.fullBleed === true);
@@ -22,4 +23,5 @@ const isFullBleed = computed(() => route.meta.fullBleed === true);
 // ThemeContext.  Provide one application-scoped context here so every page
 // beneath AppLayout observes the same tokens, variants, and dark-mode state.
 provide(THEME_INJECTION_KEY, useTheme());
+provideWorkbenchHostContext({});
 </script>

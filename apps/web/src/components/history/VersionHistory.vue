@@ -1,11 +1,12 @@
 <template>
-  <div class="flex h-full min-h-0" aria-label="Version history">
+  <div class="gq-version-history flex h-full min-h-0" aria-label="Version history">
     <div class="flex w-72 shrink-0 flex-col border-r border-gray-200">
       <div class="flex items-center justify-between px-3 py-2">
         <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500">History</h2>
         <button
           type="button"
           class="rounded px-1.5 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+          :disabled="!hasValidRevision"
           @click="checkpointOpen = true"
         >
           Checkpoint
@@ -49,6 +50,7 @@
         <button
           type="button"
           class="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          :disabled="!hasValidRevision"
           @click="confirmRestore = true"
         >
           Restore this version
@@ -60,7 +62,7 @@
   <CheckpointDialog
     v-if="checkpointOpen"
     :note-id="noteId"
-    :base-revision="currentRevision"
+    :base-revision="currentRevision ?? 0"
     @created="onCheckpointCreated"
     @cancel="checkpointOpen = false"
   />
@@ -89,7 +91,7 @@ import type { CheckpointNoteResult, NoteResult, NoteVersionResult } from "@glyph
 
 const props = defineProps<{
   noteId: string;
-  currentRevision: number;
+  currentRevision: number | null;
 }>();
 
 const emit = defineEmits<{
@@ -104,6 +106,9 @@ const confirmRestore = ref(false);
 
 const versions = computed(() => store.summariesByNote.get(props.noteId) ?? []);
 const hasMore = computed(() => Boolean(store.cursorByNote.get(props.noteId)));
+const hasValidRevision = computed(
+  () => Number.isInteger(props.currentRevision) && (props.currentRevision ?? 0) > 0,
+);
 
 async function load(): Promise<void> {
   await store.load(props.noteId);
@@ -133,7 +138,7 @@ function onCheckpointCreated(result: CheckpointNoteResult): void {
 async function onConfirmRestore(): Promise<void> {
   confirmRestore.value = false;
   const version = selectedVersion.value;
-  if (!version) return;
+  if (!version || !hasValidRevision.value || props.currentRevision === null) return;
   const result = await store.restoreVersion(props.noteId, version.id, props.currentRevision);
   emit("restored", result);
 }

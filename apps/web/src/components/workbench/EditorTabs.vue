@@ -2,7 +2,7 @@
   <div
     role="tablist"
     aria-label="Open notes"
-    class="flex items-center border-b border-gray-200 bg-white"
+    class="gq-editor-tabs flex items-center overflow-x-auto border-b border-gray-200 bg-white"
   >
     <div
       v-for="tab in tabs"

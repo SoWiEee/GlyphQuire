@@ -1,18 +1,58 @@
 <template>
-  <div class="flex h-screen flex-col">
+  <div class="gq-workbench-shell flex h-screen flex-col">
     <TopBar
       ref="topBarRef"
       :note-title="activeNote?.title ?? null"
       :mode="mode"
+      :workspace-name="effectiveWorkspaceName"
+      :account-label="effectiveAccountLabel"
       @update:mode="onModeChange"
       @open-palette="openPalette"
       @open-theme-editor="themeStore.openEditor()"
+      @account-action="onAccountAction"
     />
 
-    <div class="flex min-h-0 flex-1">
-      <ExplorerPane :notes="notes" :active-note-id="activeNoteId" @select="openNote" />
+    <div class="gq-workbench-body flex min-h-0 flex-1">
+      <div
+        id="gq-explorer-pane"
+        class="gq-explorer-slot"
+        :class="{ 'gq-explorer-slot--open': explorerOpen }"
+      >
+        <ExplorerPane
+          :notes="notes"
+          :active-note-id="activeNoteId"
+          :workspace-available="workspaceAvailable"
+          @select="openNote"
+          @search="() => openPhase5Panel('search')"
+          @shared-links="onSharedLinks"
+        />
+      </div>
 
-      <div class="flex min-w-0 flex-1 flex-col">
+      <div class="gq-editor-column flex min-w-0 flex-1 flex-col">
+        <div
+          class="gq-workbench-panel-toggles flex items-center gap-2 border-b border-gray-200 px-3 py-2"
+        >
+          <button
+            type="button"
+            class="gq-workbench-panel-toggle rounded border border-gray-300 px-2 py-1 text-xs text-gray-700"
+            aria-label="Open explorer"
+            aria-controls="gq-explorer-pane"
+            :aria-expanded="explorerOpen"
+            @click="explorerOpen = !explorerOpen"
+          >
+            Explorer
+          </button>
+          <button
+            type="button"
+            class="gq-workbench-panel-toggle rounded border border-gray-300 px-2 py-1 text-xs text-gray-700"
+            aria-label="Open context tools"
+            aria-controls="context-rail"
+            :aria-expanded="contextRailOpen"
+            @click="contextRailOpen = true"
+          >
+            Context
+          </button>
+        </div>
         <EditorTabs
           :tabs="openTabs"
           :active-tab-id="activeNoteId"
@@ -54,6 +94,20 @@
           </div>
         </div>
       </div>
+
+      <ContextRail
+        :open="contextRailOpen"
+        :compact="compactScreen"
+        :note-title="activeNote?.title ?? null"
+        :workspace-available="workspaceAvailable"
+        :note-available="Boolean(activeNote)"
+        :outline="outline"
+        :current-revision="phase5BaseRevision"
+        :read-only="sessionState?.readOnly ?? true"
+        @close="contextRailOpen = false"
+        @action="onContextAction"
+        @select-outline="onSelectOutline"
+      />
     </div>
 
     <StatusBar :note-title="activeNote?.title ?? null" :mode="mode" :word-count="wordCount" />
@@ -99,6 +153,18 @@
           v-else-if="phase5Panel === 'share' && phase5NoteId"
           :note-id="phase5NoteId"
         />
+        <VersionHistory
+          v-else-if="phase5Panel === 'history' && phase5NoteId"
+          :note-id="phase5NoteId"
+          :current-revision="phase5BaseRevision"
+          @restored="onHistoryRestored"
+        />
+        <SharedLinksPanel
+          v-else-if="phase5Panel === 'shared-links'"
+          :links="phase5Store.shareLinks"
+          @open="onSharedLinkOpen"
+          @revoke="onSharedLinkRevoke"
+        />
       </div>
     </div>
 
@@ -112,6 +178,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { canonicalUuidSchema } from "@glyphquire/api-contract";
 import CommandPalette from "./CommandPalette.vue";
+import ContextRail from "./ContextRail.vue";
 import EditorTabs from "./EditorTabs.vue";
 import ExplorerPane from "./ExplorerPane.vue";
 import StatusBar from "./StatusBar.vue";
@@ -124,18 +191,26 @@ import AssetManager from "../assets/AssetManager.vue";
 import SearchPalette from "../search/SearchPalette.vue";
 import TransferDialog from "../transfer/TransferDialog.vue";
 import ShareLinkDialog from "../share/ShareLinkDialog.vue";
+import SharedLinksPanel from "../share/SharedLinksPanel.vue";
+import VersionHistory from "../history/VersionHistory.vue";
 import { useThemeStore } from "../../stores/theme.js";
+import { usePhase5Store } from "../../stores/phase5.js";
 import {
   createBookkeepingModeAdapter,
   createLiveModeAdapter,
   type WorkbenchModeAdapterShim,
 } from "../../editors/WorkbenchModeAdapterShim.js";
 import type { EditorSession, EditorSessionState } from "../../editors/editor-session.types.js";
+import type { NoteResult } from "@glyphquire/api-contract";
 import type {
   WorkbenchCommand,
+  ContextAction,
+  OutlineEntry,
+  WorkbenchAccountAction,
   WorkbenchEditorMode,
   WorkbenchNote,
   WorkbenchSessionFactory,
+  WorkbenchSessionHandle,
 } from "./types.js";
 import {
   createAssetResolver,
@@ -143,6 +218,7 @@ import {
 } from "../../editors/visual/asset-resolver.js";
 
 const themeStore = useThemeStore();
+const phase5Store = usePhase5Store();
 
 const DEFAULT_NOTES: WorkbenchNote[] = [
   {
@@ -167,9 +243,15 @@ const props = defineProps<{
   sessionFactory?: WorkbenchSessionFactory;
   phase5WorkspaceId?: string;
   phase5NoteId?: string;
+  workspaceName?: string;
+  accountLabel?: string;
 }>();
 
-type Phase5Panel = "assets" | "search" | "transfer" | "share";
+const emit = defineEmits<{
+  "account-action": [action: WorkbenchAccountAction];
+}>();
+
+type Phase5Panel = "assets" | "search" | "transfer" | "share" | "history" | "shared-links";
 
 function routePhase5Context(): { workspaceId: string | null; noteId: string | null } {
   if (typeof location === "undefined") return { workspaceId: null, noteId: null };
@@ -183,6 +265,7 @@ function routePhase5Context(): { workspaceId: string | null; noteId: string | nu
 }
 
 const routeContext = routePhase5Context();
+const activeSessionContext = shallowRef<WorkbenchSessionHandle["context"]>();
 function firstCanonicalUuid(...candidates: Array<string | null | undefined>): string | null {
   for (const candidate of candidates) {
     const parsed = canonicalUuidSchema.safeParse(candidate);
@@ -191,14 +274,18 @@ function firstCanonicalUuid(...candidates: Array<string | null | undefined>): st
   return null;
 }
 const phase5WorkspaceId = computed(() => {
-  return firstCanonicalUuid(props.phase5WorkspaceId, routeContext.workspaceId);
+  return firstCanonicalUuid(
+    props.phase5WorkspaceId,
+    activeSessionContext.value?.workspaceId,
+    props.sessionFactory ? routeContext.workspaceId : null,
+  );
 });
 const phase5NoteId = computed(() => {
   return firstCanonicalUuid(props.phase5NoteId, activeNoteId.value, routeContext.noteId);
 });
 const phase5BaseRevision = computed(() => {
   const revision = sessionState.value?.baseRevision;
-  return Number.isInteger(revision) && (revision ?? 0) > 0 ? revision : undefined;
+  return Number.isInteger(revision) && (revision ?? 0) > 0 ? revision : null;
 });
 const phase5Panel = ref<Phase5Panel | null>(null);
 const phase5CloseRef = ref<HTMLButtonElement | null>(null);
@@ -212,6 +299,10 @@ const phase5PanelLabel = computed(() => {
       return "Import and export";
     case "share":
       return "Share link";
+    case "history":
+      return "Version history";
+    case "shared-links":
+      return "Shared links";
     default:
       return "Phase 5 tools";
   }
@@ -232,6 +323,9 @@ const initialNoteId = notes.value[0]?.id ?? null;
 const openTabIds = ref<string[]>(initialNoteId ? [initialNoteId] : []);
 const activeNoteId = ref<string | null>(initialNoteId);
 const paletteOpen = ref(false);
+const explorerOpen = ref(true);
+const contextRailOpen = ref(false);
+const compactScreen = ref(false);
 const topBarRef = ref<InstanceType<typeof TopBar> | null>(null);
 const activeSession = shallowRef<EditorSession>();
 const sessionState = shallowRef<EditorSessionState>();
@@ -276,6 +370,40 @@ const mode = computed<WorkbenchEditorMode>(() => {
   const sessionMode = sessionState.value?.mode;
   return sessionMode === "visual" || sessionMode === "split" ? sessionMode : "source";
 });
+
+const workspaceAvailable = computed(() => phase5WorkspaceId.value !== null);
+const effectiveWorkspaceName = computed(
+  () => activeSessionContext.value?.workspaceName ?? props.workspaceName,
+);
+const effectiveAccountLabel = computed(
+  () => activeSessionContext.value?.accountLabel ?? props.accountLabel,
+);
+
+function extractOutline(markdown: string): OutlineEntry[] {
+  const seen = new Map<string, number>();
+  const entries: OutlineEntry[] = [];
+  for (const line of markdown.split("\n")) {
+    const match = /^(#{1,3})\s+(.+)$/.exec(line);
+    if (!match) continue;
+    const depth = match[1].length as 1 | 2 | 3;
+    const label = match[2].trim();
+    if (!label) continue;
+    const base =
+      label
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/gu, "")
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}\s-]/gu, "")
+        .trim()
+        .replace(/[\s-]+/gu, "-") || "heading";
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    entries.push({ id: count === 0 ? base : `${base}-${count}`, depth, label });
+  }
+  return entries;
+}
+
+const outline = computed<OutlineEntry[]>(() => extractOutline(activeMarkdown.value));
 
 const wordCount = computed(() => {
   const text = activeMarkdown.value.trim();
@@ -332,6 +460,49 @@ function onModeChange(nextMode: WorkbenchEditorMode): void {
   });
 }
 
+function onAccountAction(action: WorkbenchAccountAction): void {
+  emit("account-action", action);
+}
+
+function onContextAction(action: Exclude<ContextAction, "outline">): void {
+  if (action === "history") {
+    if (!phase5NoteId.value || phase5BaseRevision.value === null) return;
+    phase5Panel.value = "history";
+    void nextTick(() => phase5CloseRef.value?.focus());
+  } else {
+    openPhase5Panel(action);
+  }
+  contextRailOpen.value = false;
+}
+
+function onSharedLinks(): void {
+  if (!phase5WorkspaceId.value) return;
+  openPhase5Panel("shared-links");
+}
+
+function onSharedLinkOpen(noteId: string): void {
+  if (notes.value.some((note) => note.id === noteId)) openNote(noteId);
+  closePhase5Panel();
+}
+
+async function onSharedLinkRevoke(linkId: string): Promise<void> {
+  try {
+    await phase5Store.revokeShareLink(linkId);
+  } catch {
+    // The store owns the user-facing error projection for failed revocations.
+  }
+}
+
+function onSelectOutline(id: string): void {
+  const escapedId =
+    typeof CSS !== "undefined" && typeof CSS.escape === "function"
+      ? CSS.escape(id)
+      : id.replace(/[^a-zA-Z0-9_-]/gu, "\\$&");
+  document
+    .querySelector<HTMLElement>(`[data-editor-outline-id="${escapedId}"]`)
+    ?.scrollIntoView({ block: "center" });
+}
+
 function openPalette(): void {
   paletteOpen.value = true;
 }
@@ -344,6 +515,7 @@ function closePalette(): void {
 }
 
 function openPhase5Panel(panel: Phase5Panel): void {
+  if (!phase5WorkspaceId.value) return;
   phase5Panel.value = panel;
   void nextTick(() => phase5CloseRef.value?.focus());
 }
@@ -368,6 +540,97 @@ function insertAssetReference(reference: string): void {
 function selectSearchResult(noteId: string): void {
   if (notes.value.some((note) => note.id === noteId)) openNote(noteId);
   closePhase5Panel();
+}
+
+function normalizeSessionHandle(
+  value: EditorSession | WorkbenchSessionHandle,
+): WorkbenchSessionHandle {
+  return "session" in value ? value : { session: value };
+}
+
+async function onHistoryRestored(result: NoteResult): Promise<void> {
+  const currentNote = activeNote.value;
+  const expectedNoteId = phase5NoteId.value;
+  if (
+    !currentNote ||
+    !expectedNoteId ||
+    result.id !== expectedNoteId ||
+    result.id !== currentNote.id ||
+    result.workspaceId !== phase5WorkspaceId.value
+  )
+    return;
+  if (!props.sessionFactory) return;
+  const expectedMarkdown = result.contentMarkdown;
+  const expectedRevision = result.revision;
+  if (!isValidRevision(expectedRevision)) return;
+
+  const note: WorkbenchNote = { ...currentNote, markdown: expectedMarkdown };
+  const previous = activeSession.value;
+  const previousUnsubscribe = unsubscribeSession;
+  const previousDetach = detachModeAdapters;
+  let replacement: WorkbenchSessionHandle | undefined;
+  let nextUnsubscribe: (() => void) | undefined;
+  let nextDetach: (() => void) | undefined;
+
+  try {
+    replacement = normalizeSessionHandle(await props.sessionFactory(note));
+    const nextSnapshot = replacement.session.snapshot();
+    if (nextSnapshot.noteId !== expectedNoteId) throw new Error("Restored note mismatch");
+    if (nextSnapshot.baseRevision !== expectedRevision)
+      throw new Error("Invalid restored revision");
+    if (nextSnapshot.markdown !== expectedMarkdown) throw new Error("Restored content mismatch");
+
+    nextUnsubscribe = replacement.session.subscribe((state) => {
+      if (activeSession.value === replacement?.session) sessionState.value = state;
+    });
+
+    // The old adapter pair is detached before binding the replacement pair,
+    // while the old session remains available until the replacement is ready.
+    previousDetach?.();
+    detachModeAdapters = undefined;
+    sourceModeAdapter = undefined;
+    visualModeAdapter = undefined;
+    visualMarkdown.value = nextSnapshot.markdown;
+    visualEditorReadOnly.value = true;
+    sourceModeAdapter = createBookkeepingModeAdapter(nextSnapshot.markdown);
+    visualModeAdapter = createLiveModeAdapter(visualMarkdown, visualEditorReadOnly);
+    try {
+      nextDetach = await replacement.session.attachModeAdapters({
+        source: sourceModeAdapter,
+        visual: visualModeAdapter,
+      });
+    } catch {
+      sourceModeAdapter = undefined;
+      visualModeAdapter = undefined;
+    }
+
+    activeSession.value = replacement.session;
+    activeSessionContext.value = replacement.context;
+    sessionState.value = nextSnapshot;
+    unsubscribeSession = nextUnsubscribe;
+    detachModeAdapters = nextDetach;
+    const noteToUpdate = notes.value.find((existing) => existing.id === note.id);
+    if (noteToUpdate) noteToUpdate.markdown = expectedMarkdown;
+
+    previousUnsubscribe?.();
+    if (previous) await previous.dispose();
+  } catch {
+    nextUnsubscribe?.();
+    nextDetach?.();
+    if (replacement) await replacement.session.dispose();
+    // Creation and validation failures leave the existing authority selected.
+    // Restore its subscriptions and projection references without fabricating
+    // a conflict state.
+    unsubscribeSession = previousUnsubscribe;
+    detachModeAdapters = previousDetach;
+    activeSession.value = previous;
+    sessionState.value = previous?.snapshot();
+    return;
+  }
+}
+
+function isValidRevision(value: number): boolean {
+  return Number.isInteger(value) && value > 0;
 }
 
 const commands = computed<WorkbenchCommand[]>(() => [
@@ -436,6 +699,16 @@ function onGlobalKeydown(event: KeyboardEvent): void {
   }
 }
 
+let compactMediaQuery: MediaQueryList | undefined;
+
+function updateCompactScreen(): void {
+  compactScreen.value = compactMediaQuery ? !compactMediaQuery.matches : false;
+}
+
+function onCompactScreenChange(): void {
+  updateCompactScreen();
+}
+
 function detachActiveModeAdapters(): void {
   detachModeAdapters?.();
   detachModeAdapters = undefined;
@@ -452,38 +725,41 @@ async function activateSession(note: WorkbenchNote | null): Promise<void> {
   unsubscribeSession = undefined;
   detachActiveModeAdapters();
   activeSession.value = undefined;
+  activeSessionContext.value = undefined;
   sessionState.value = undefined;
   if (previous) await previous.dispose();
   if (generation !== sessionGeneration || !note || !props.sessionFactory) return;
 
-  let next: EditorSession;
+  let nextValue: EditorSession | WorkbenchSessionHandle;
   try {
-    next = await props.sessionFactory(note);
+    nextValue = await props.sessionFactory(note);
   } catch {
     return;
   }
+  const next = normalizeSessionHandle(nextValue);
   if (generation !== sessionGeneration) {
-    await next.dispose();
+    await next.session.dispose();
     return;
   }
 
-  activeSession.value = next;
-  sessionState.value = next.snapshot();
-  unsubscribeSession = next.subscribe((state) => {
-    if (activeSession.value === next) sessionState.value = state;
+  activeSession.value = next.session;
+  activeSessionContext.value = next.context;
+  sessionState.value = next.session.snapshot();
+  unsubscribeSession = next.session.subscribe((state) => {
+    if (activeSession.value === next.session) sessionState.value = state;
   });
 
-  const initialMarkdown = next.snapshot().markdown;
+  const initialMarkdown = next.session.snapshot().markdown;
   visualMarkdown.value = initialMarkdown;
   visualEditorReadOnly.value = true;
   sourceModeAdapter = createBookkeepingModeAdapter(initialMarkdown);
   visualModeAdapter = createLiveModeAdapter(visualMarkdown, visualEditorReadOnly);
   try {
-    const detach = await next.attachModeAdapters({
+    const detach = await next.session.attachModeAdapters({
       source: sourceModeAdapter,
       visual: visualModeAdapter,
     });
-    if (generation !== sessionGeneration || activeSession.value !== next) {
+    if (generation !== sessionGeneration || activeSession.value !== next.session) {
       detach();
       return;
     }
@@ -499,18 +775,98 @@ async function activateSession(note: WorkbenchNote | null): Promise<void> {
 
 watch(activeNote, (note) => void activateSession(note), { immediate: true });
 
-onMounted(() => window.addEventListener("keydown", onGlobalKeydown, true));
+onMounted(() => {
+  window.addEventListener("keydown", onGlobalKeydown, true);
+  if (typeof window.matchMedia === "function") {
+    compactMediaQuery = window.matchMedia("(min-width: 48rem)");
+    updateCompactScreen();
+    if (typeof compactMediaQuery.addEventListener === "function") {
+      compactMediaQuery.addEventListener("change", onCompactScreenChange);
+    } else {
+      compactMediaQuery.addListener(onCompactScreenChange);
+    }
+  }
+});
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onGlobalKeydown, true);
+  if (compactMediaQuery) {
+    if (typeof compactMediaQuery.removeEventListener === "function") {
+      compactMediaQuery.removeEventListener("change", onCompactScreenChange);
+    } else {
+      compactMediaQuery.removeListener(onCompactScreenChange);
+    }
+    compactMediaQuery = undefined;
+  }
   sessionGeneration += 1;
   unsubscribeSession?.();
   unsubscribeSession = undefined;
   detachActiveModeAdapters();
   const session = activeSession.value;
   activeSession.value = undefined;
+  activeSessionContext.value = undefined;
   sessionState.value = undefined;
   if (session) void session.dispose();
   releaseVisualAssetResolver?.();
   releaseVisualAssetResolver = undefined;
 });
 </script>
+
+<style scoped>
+.gq-workbench-body {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  background: var(--gq-canvas, #fff);
+}
+
+.gq-explorer-slot {
+  min-width: 14rem;
+  overflow: hidden;
+}
+
+.gq-editor-column {
+  min-width: 0;
+  background: var(--gq-canvas, #fff);
+}
+
+.gq-workbench-panel-toggles {
+  display: none;
+}
+
+@media (max-width: 47.999rem) {
+  .gq-workbench-body {
+    display: block;
+  }
+
+  .gq-explorer-slot {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    z-index: 30;
+    width: min(88vw, 20rem);
+    min-width: 0;
+    background: var(--gq-surface, #fff);
+    box-shadow: 0.75rem 0 2rem rgb(15 23 42 / 18%);
+    transform: translateX(-105%);
+    transition: transform 150ms ease;
+  }
+
+  .gq-explorer-slot--open {
+    transform: translateX(0);
+  }
+
+  .gq-workbench-panel-toggles {
+    display: flex;
+  }
+
+  .gq-workbench-panel-toggle {
+    min-height: 2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gq-explorer-slot {
+    transition: none;
+  }
+}
+</style>

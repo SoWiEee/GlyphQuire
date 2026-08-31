@@ -11,16 +11,37 @@
     @resolved="onConflictResolved"
     @dismiss="onConflictDismissed"
   />
-  <Workbench v-else />
+  <Workbench
+    v-else
+    :session-factory="sessionFactory"
+    :phase5-workspace-id="hostContext.workspaceId"
+    :workspace-name="hostContext.workspaceName"
+    :account-label="hostContext.accountLabel"
+    @account-action="forwardAccountAction"
+  />
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { storeToRefs } from "pinia";
-import Workbench from "@/components/workbench/Workbench.vue";
-import ConflictWorkspace from "@/components/conflict/ConflictWorkspace.vue";
-import { NoteClient } from "@/api/NoteClient.js";
-import { IndexedDbDraftStore } from "@/persistence/DraftStore.js";
-import { useConflictStore } from "@/stores/conflict.js";
+import Workbench from "../components/workbench/Workbench.vue";
+import ConflictWorkspace from "../components/conflict/ConflictWorkspace.vue";
+import { NoteClient } from "../api/NoteClient.js";
+import { IndexedDbDraftStore } from "../persistence/DraftStore.js";
+import { useConflictStore } from "../stores/conflict.js";
+import {
+  useWorkbenchHostContext,
+  type WorkbenchAccountAction,
+} from "../components/workbench/WorkbenchContext.js";
+import type { WorkbenchSessionFactory } from "../components/workbench/types.js";
+
+const props = defineProps<{
+  sessionFactory?: WorkbenchSessionFactory;
+  onAccountAction?: (action: WorkbenchAccountAction) => void;
+}>();
+
+const hostContext = useWorkbenchHostContext();
+const sessionFactory = computed(() => props.sessionFactory ?? hostContext.sessionFactory);
 
 // Whatever surfaces a REVISION_CONFLICT from a live editing session (an
 // EditorSession subscriber today; a future in-workbench autosave surface
@@ -40,5 +61,9 @@ function onConflictResolved(): void {
 
 function onConflictDismissed(): void {
   conflictStore.clear();
+}
+
+function forwardAccountAction(action: WorkbenchAccountAction): void {
+  (props.onAccountAction ?? hostContext.onAccountAction)?.(action);
 }
 </script>
