@@ -248,9 +248,10 @@ describeWithLegacyPostgres("Phase 0 local Compose role upgrade", () => {
     );
     const db = createDb(migrationDatabaseUrl!);
     try {
-      await new MigrationRunner({ databaseUrl: migrationDatabaseUrl!, migrationsDirectory }).execute(
-        db,
-      );
+      await new MigrationRunner({
+        databaseUrl: migrationDatabaseUrl!,
+        migrationsDirectory,
+      }).execute(db);
     } finally {
       await db.$client.end();
     }
