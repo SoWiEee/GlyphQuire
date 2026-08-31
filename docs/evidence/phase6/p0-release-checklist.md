@@ -20,3 +20,10 @@ to be passed exactly once.
 | P0-12 | Custom Blocks              | Workspace scope, immutable versions, fallback, and round-trip preservation | SPEC §11.3; MARKDOWN_SPEC §29 | Golden and integration tests                | blocked |
 | P0-13 | Conflict recovery          | 409 preserves drafts and supports comparison/merge                         | SPEC §10.3                    | Conflict/reload E2E test                    | blocked |
 | P0-14 | Browser/accessibility      | Latest-two browsers, WCAG 2.2 AA, and assistive technology smoke           | SPEC §41                      | axe, keyboard, and screen-reader evidence   | blocked |
+
+The release gate is `infra/phase6/phase6-release-gate.sh` (also exposed as
+`pnpm test:release:phase6`). It fails closed while any row or required evidence
+is blocked and never emits `release-decision.json` without an immutable
+candidate/publication SHA and explicit release-owner approval. Local WebKit
+diagnostics, mocked browser runs, and placeholder screen-reader files do not
+count as P0 evidence.

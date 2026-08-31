@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glyphquire.example/schemas/phase6/screen-reader-evidence.schema.json",
+  "title": "GlyphQuire Phase 6 manual screen-reader evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "scrubbed",
+    "platform",
+    "screenReader",
+    "performer",
+    "reviewer",
+    "candidateSourceSha",
+    "evidencePublicationSha",
+    "capturedAt",
+    "flow",
+    "recording"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["blocked", "passed"] },
+    "scrubbed": { "const": true },
+    "platform": { "enum": ["macOS", "Windows"] },
+    "screenReader": { "enum": ["VoiceOver", "NVDA"] },
+    "performer": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "reviewer": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "candidateSourceSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "evidencePublicationSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "flow": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["step", "result"],
+        "properties": {
+          "step": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "result": { "enum": ["passed", "failed"] },
+          "findingCount": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "recording": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reference", "sha256"],
+      "properties": {
+        "reference": {
+          "type": "string",
+          "pattern": "^(?!placeholder$)(?!sample$)[A-Za-z0-9._/-]{8,240}$"
+        },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "blockingReason": { "type": "string", "minLength": 1, "maxLength": 240 }
+  }
+}
