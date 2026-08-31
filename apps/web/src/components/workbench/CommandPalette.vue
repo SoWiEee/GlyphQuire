@@ -1,14 +1,15 @@
 <template>
   <div
     class="fixed inset-0 z-50 flex items-start justify-center bg-black/30 pt-24"
-    @keydown.escape="emit('close')"
-    @click.self="emit('close')"
+    @click.self="closePalette"
   >
     <div
+      ref="dialogRef"
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
       class="w-full max-w-md rounded-lg bg-white shadow-xl"
+      @keydown="onDialogKeydown"
     >
       <input
         ref="inputRef"
@@ -19,9 +20,6 @@
         aria-label="Filter commands"
         aria-controls="command-palette-options"
         :aria-activedescendant="activeDescendant"
-        @keydown.down.prevent="move(1)"
-        @keydown.up.prevent="move(-1)"
-        @keydown.enter.prevent="runHighlighted"
       />
       <ul
         id="command-palette-options"
@@ -45,7 +43,12 @@
             <span v-if="command.hint" class="text-xs text-gray-600">{{ command.hint }}</span>
           </div>
         </li>
-        <li v-if="filtered.length === 0" class="px-4 py-2 text-sm text-gray-600">
+        <li
+          v-if="filtered.length === 0"
+          data-testid="command-palette-empty"
+          role="status"
+          class="px-4 py-2 text-sm text-gray-600"
+        >
           No matching commands.
         </li>
       </ul>
@@ -61,17 +64,27 @@ const props = defineProps<{
   commands: WorkbenchCommand[];
   /** Commands supplied by a capability-gated surface, such as maintenance. */
   additionalCommands?: WorkbenchCommand[];
+  initialQuery?: string;
+  categoryFilter?: WorkbenchCommand["category"];
 }>();
 
 const emit = defineEmits<{
   close: [];
 }>();
 
-const query = ref("");
+const query = ref(props.initialQuery ?? "");
 const highlightedIndex = ref(0);
 const inputRef = ref<HTMLInputElement | null>(null);
+const dialogRef = ref<HTMLElement | null>(null);
+const opener = ref<HTMLElement | null>(null);
+const closed = ref(false);
 
-const availableCommands = computed(() => [...props.commands, ...(props.additionalCommands ?? [])]);
+const availableCommands = computed(() => {
+  const commands = [...props.commands, ...(props.additionalCommands ?? [])];
+  return props.categoryFilter
+    ? commands.filter((command) => command.category === props.categoryFilter)
+    : commands;
+});
 const filtered = computed(() => {
   const needle = query.value.trim().toLowerCase();
   if (!needle) return availableCommands.value;
@@ -89,9 +102,19 @@ function move(delta: number): void {
   highlightedIndex.value = (highlightedIndex.value + delta + count) % count;
 }
 
-function run(command: WorkbenchCommand): void {
-  command.run();
+function closePalette(): void {
+  if (closed.value) return;
+  closed.value = true;
   emit("close");
+  void nextTick(() => opener.value?.focus());
+}
+
+function run(command: WorkbenchCommand): void {
+  try {
+    command.run();
+  } finally {
+    closePalette();
+  }
 }
 
 function runHighlighted(): void {
@@ -100,10 +123,67 @@ function runHighlighted(): void {
 }
 
 onMounted(() => {
+  const activeElement = document.activeElement;
+  if (activeElement instanceof HTMLElement) opener.value = activeElement;
   void nextTick(() => inputRef.value?.focus());
 });
 
-watch(query, () => {
+watch([query, () => props.categoryFilter], () => {
   highlightedIndex.value = 0;
 });
+
+watch(
+  () => props.initialQuery,
+  (initialQuery) => {
+    query.value = initialQuery ?? "";
+    highlightedIndex.value = 0;
+  },
+);
+
+function onDialogKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closePalette();
+    return;
+  }
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    move(1);
+    return;
+  }
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    move(-1);
+    return;
+  }
+  if (event.key === "Home") {
+    event.preventDefault();
+    if (filtered.value.length > 0) highlightedIndex.value = 0;
+    return;
+  }
+  if (event.key === "End") {
+    event.preventDefault();
+    if (filtered.value.length > 0) highlightedIndex.value = filtered.value.length - 1;
+    return;
+  }
+  if (event.key === "Enter") {
+    event.preventDefault();
+    runHighlighted();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const focusable = dialogRef.value?.querySelectorAll<HTMLElement>(
+    'button, input, [href], [tabindex]:not([tabindex="-1"])',
+  );
+  if (!focusable || focusable.length === 0) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 </script>

@@ -1,3 +1,7 @@
+import type { EditorSelection } from "./editor-session.types.js";
+
+export type { EditorSelection } from "./editor-session.types.js";
+
 /**
  * The seam between the workbench shell and any concrete editor implementation.
  *
@@ -11,6 +15,12 @@ export interface EditorAdapter {
   setMarkdown(markdown: string): void;
   /** Read the editor's current document as Markdown source. */
   getMarkdown(): string;
+  /** Read the current editor selection in its native text-coordinate space. */
+  getSelection?(): EditorSelection | null;
+  /** Restore a selection in the editor's native text-coordinate space. */
+  setSelection?(selection: EditorSelection): void;
+  /** Replace a range as one user-visible, undoable editor transaction. */
+  replaceRange?(from: number, to: number, insert: string): void;
   /** Toggle whether the editor accepts edits. */
   setReadOnly(readOnly: boolean): void;
   /** Subscribe to document changes. Returns an unsubscribe function. */

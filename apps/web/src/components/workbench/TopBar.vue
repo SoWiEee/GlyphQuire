@@ -120,7 +120,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
-import type { WorkbenchAccountAction, WorkbenchEditorMode } from "./types.js";
+import type { ToolbarAction, WorkbenchAccountAction, WorkbenchEditorMode } from "./types.js";
 
 defineProps<{
   noteTitle: string | null;
@@ -134,6 +134,7 @@ const emit = defineEmits<{
   "open-palette": [];
   "open-theme-editor": [];
   "account-action": [action: WorkbenchAccountAction];
+  "toolbar-action": [action: ToolbarAction];
 }>();
 
 const accountMenuOpen = ref(false);

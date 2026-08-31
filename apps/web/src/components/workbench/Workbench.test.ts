@@ -217,6 +217,31 @@ describe("Workbench EditorSession composition", () => {
     wrapper.unmount();
   });
 
+  it("opens block command discovery for an empty source paragraph and replaces only the slash", async () => {
+    const authority = fakeSession(state({ markdown: "before\n\nnext" }));
+    const wrapper = mount(Workbench, {
+      props: {
+        initialNotes: [{ id: NOTE_ID, title: "Authorized", markdown: "seed" }],
+        sessionFactory: async () => authority.session,
+      },
+    });
+    await flushPromises();
+
+    const view = EditorView.findFromDOM(wrapper.get(".cm-editor").element as HTMLElement);
+    expect(view).not.toBeNull();
+    view?.dispatch({ changes: { from: 7, insert: "/" } });
+    await nextTick();
+
+    expect(wrapper.get('[role="dialog"]').text()).toContain("Code block");
+    expect(wrapper.get('[role="dialog"]').text()).not.toContain("Switch to Visual mode");
+    await wrapper.get('[role="option"]:last-child').trigger("click");
+
+    expect(authority.edit).toHaveBeenCalledWith("before\n```\n\n```\nnext");
+    expect(authority.edit).toHaveBeenCalledTimes(2);
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it("projects takeover or expiry revocation to read-only immediately", async () => {
     const authority = fakeSession();
     const wrapper = mount(Workbench, {

@@ -6,10 +6,12 @@ import { MAX_MARKDOWN_BYTES } from "@glyphquire/api-contract";
 import { createDocumentEngine, semanticNormalize } from "@glyphquire/document-engine";
 import { editorViewCtx, type Editor } from "@milkdown/kit/core";
 import { Fragment, Slice } from "@milkdown/kit/prose/model";
-import { AllSelection } from "@milkdown/kit/prose/state";
+import { undo } from "@milkdown/kit/prose/history";
+import { AllSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import VisualEditor from "../../components/visual/VisualEditor.vue";
 import { MilkdownVisualAdapter } from "./MilkdownVisualAdapter.js";
+import { BLOCK_COMMANDS } from "../../components/workbench/markdown-format.js";
 import type { VisualAssetResolver } from "./asset-resolver.js";
 import {
   blockWarningAttrsFromSource,
@@ -120,6 +122,115 @@ describe("MilkdownVisualAdapter", () => {
     expect(host.querySelector(".milkdown .ProseMirror")).not.toBeNull();
     adapter.focus();
     expect(document.activeElement).toBe(host.querySelector(".ProseMirror"));
+  });
+
+  it("applies visual toolbar formatting through one native ProseMirror transaction", async () => {
+    const markdown = ["---", "glyphquire-spec: 1", "---", "", "Hello", ""].join("\n");
+    const { adapter } = await mountedAdapter(markdown);
+    cleanups.push(() => adapter.destroy());
+    const view = proseMirrorView(adapter);
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1, 6)));
+    const dispatch = vi.spyOn(view, "dispatch");
+
+    expect(adapter.applyVisualToolbarAction("bold")).toBe(true);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(adapter.getMarkdown()).toContain("**Hello**");
+  });
+
+  it("keeps one undo step for a visual toolbar action", async () => {
+    const markdown = ["---", "glyphquire-spec: 1", "---", "", "Hello", ""].join("\n");
+    const { adapter } = await mountedAdapter(markdown);
+    cleanups.push(() => adapter.destroy());
+    const view = proseMirrorView(adapter);
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1, 6)));
+
+    expect(adapter.applyVisualToolbarAction("bold")).toBe(true);
+    expect(adapter.getMarkdown()).toContain("**Hello**");
+    expect(undo(view.state, view.dispatch.bind(view))).toBe(true);
+    expect(adapter.getMarkdown()).not.toContain("**Hello**");
+    expect(undo(view.state, view.dispatch.bind(view))).toBe(false);
+  });
+
+  it("uses native block transactions for heading and list toolbar actions", async () => {
+    const markdown = ["---", "glyphquire-spec: 1", "---", "", "Hello", ""].join("\n");
+    const { adapter } = await mountedAdapter(markdown);
+    cleanups.push(() => adapter.destroy());
+    const view = proseMirrorView(adapter);
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1, 6)));
+
+    expect(adapter.applyVisualToolbarAction("heading")).toBe(true);
+    expect(adapter.getMarkdown()).toContain("## Hello");
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1, 6)));
+    expect(adapter.applyVisualToolbarAction("bulletList")).toBe(true);
+    expect(adapter.getMarkdown()).toContain("- Hello");
+  });
+
+  it("detects an empty-paragraph slash and replaces its native range", async () => {
+    const markdown = ["---", "glyphquire-spec: 1", "---", "", "", ""].join("\n");
+    const { adapter } = await mountedAdapter(markdown);
+    cleanups.push(() => adapter.destroy());
+    const listener = vi.fn();
+    adapter.onSlashCommand(listener);
+    adapter.onChange(() => undefined);
+    const view = proseMirrorView(adapter);
+    view.dispatch(view.state.tr.insertText("/", 1));
+    await nextListenerFlush();
+
+    expect(listener).toHaveBeenCalledOnce();
+    const request = listener.mock.calls[0][0];
+    expect(request.query).toBe("");
+    expect(request.slashRange.to - request.slashRange.from).toBe(1);
+    // The wrapper may project the same canonical source after the session
+    // receives the slash update; that must not discard the native range.
+    adapter.setMarkdown(adapter.getMarkdown());
+    expect(adapter.replaceRange(request.slashRange.from, request.slashRange.to, "## ", 3)).toBe(
+      true,
+    );
+    expect(adapter.getMarkdown()).toContain("##");
+  });
+
+  it("inserts the explicit code block command through the native visual transaction", async () => {
+    const markdown = ["---", "glyphquire-spec: 1", "---", "", "", ""].join("\n");
+    const { adapter } = await mountedAdapter(markdown);
+    cleanups.push(() => adapter.destroy());
+    const listener = vi.fn();
+    adapter.onSlashCommand(listener);
+    const view = proseMirrorView(adapter);
+    view.dispatch(view.state.tr.insertText("/", 1));
+    await nextListenerFlush();
+    const request = listener.mock.calls[0][0];
+
+    expect(
+      adapter.replaceRange(
+        request.slashRange.from,
+        request.slashRange.to,
+        BLOCK_COMMANDS[3].markdown,
+        BLOCK_COMMANDS[3].cursorOffset,
+      ),
+    ).toBe(true);
+    expect(adapter.getMarkdown()).toContain("```");
+  });
+
+  it("accepts an empty visual list item and suppresses slash discovery in code", async () => {
+    const listMarkdown = ["---", "glyphquire-spec: 1", "---", "", "- ", ""].join("\n");
+    const list = await mountedAdapter(listMarkdown);
+    cleanups.push(() => list.adapter.destroy());
+    const listListener = vi.fn();
+    list.adapter.onSlashCommand(listListener);
+    const listView = proseMirrorView(list.adapter);
+    listView.dispatch(listView.state.tr.insertText("/"));
+    await nextListenerFlush();
+    expect(listListener).toHaveBeenCalledOnce();
+
+    const codeMarkdown = ["---", "glyphquire-spec: 1", "---", "", "```", "", "```", ""].join("\n");
+    const code = await mountedAdapter(codeMarkdown);
+    cleanups.push(() => code.adapter.destroy());
+    const codeListener = vi.fn();
+    code.adapter.onSlashCommand(codeListener);
+    const codeView = proseMirrorView(code.adapter);
+    codeView.dispatch(codeView.state.tr.insertText("/"));
+    await nextListenerFlush();
+    expect(codeListener).not.toHaveBeenCalled();
   });
 
   it("silently projects authoritative Markdown and preserves semantic AST", async () => {

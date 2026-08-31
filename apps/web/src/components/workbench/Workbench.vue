@@ -10,6 +10,14 @@
       @open-palette="openPalette"
       @open-theme-editor="themeStore.openEditor()"
       @account-action="onAccountAction"
+      @toolbar-action="onToolbarAction"
+    />
+
+    <EditorToolbar
+      :disabled="toolbarDisabled"
+      :mode="mode"
+      @action="onToolbarAction"
+      @open-palette="openPalette"
     />
 
     <div class="gq-workbench-body flex min-h-0 flex-1">
@@ -67,20 +75,25 @@
         >
           <SourceEditor
             v-if="mode === 'source' && activeNote"
+            ref="sourceEditorRef"
             :key="activeNote.id"
             :markdown="activeMarkdown"
             :read-only="sourceReadOnly"
             @update:markdown="onMarkdownChange"
+            @slash-command="onSlashCommand"
           />
           <VisualEditor
             v-else-if="mode === 'visual' && activeNote"
+            ref="visualEditorRef"
             :key="activeNote.id"
             :markdown="visualMarkdown"
             :read-only="visualReadOnly"
             @update:markdown="onVisualMarkdownChange"
+            @slash-command="onSlashCommand"
           />
           <SplitEditor
             v-else-if="mode === 'split' && activeNote"
+            ref="splitEditorRef"
             :key="activeNote.id"
             :source-markdown="activeMarkdown"
             :source-read-only="sourceReadOnly"
@@ -88,6 +101,7 @@
             :visual-read-only="visualReadOnly"
             @update:source-markdown="onMarkdownChange"
             @update:visual-markdown="onVisualMarkdownChange"
+            @slash-command="onSlashCommand"
           />
           <div v-else class="flex h-full items-center justify-center text-sm text-gray-400">
             Open a note from the Explorer to start editing.
@@ -168,7 +182,13 @@
       </div>
     </div>
 
-    <CommandPalette v-if="paletteOpen" :commands="commands" @close="closePalette" />
+    <CommandPalette
+      v-if="paletteOpen"
+      :commands="paletteCommands"
+      :initial-query="paletteInitialQuery"
+      :category-filter="paletteCategoryFilter"
+      @close="closePalette"
+    />
 
     <ThemeEditorPanel v-if="themeStore.editorOpen" @close="themeStore.closeEditor()" />
   </div>
@@ -179,6 +199,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { canonicalUuidSchema } from "@glyphquire/api-contract";
 import CommandPalette from "./CommandPalette.vue";
 import ContextRail from "./ContextRail.vue";
+import EditorToolbar from "./EditorToolbar.vue";
 import EditorTabs from "./EditorTabs.vue";
 import ExplorerPane from "./ExplorerPane.vue";
 import StatusBar from "./StatusBar.vue";
@@ -211,7 +232,15 @@ import type {
   WorkbenchNote,
   WorkbenchSessionFactory,
   WorkbenchSessionHandle,
+  ToolbarAction,
+  WorkbenchEditorHandle,
+  SlashCommandRequest,
 } from "./types.js";
+import {
+  BLOCK_COMMANDS,
+  materializeBlockCommand,
+  type BlockCommandDefinition,
+} from "./markdown-format.js";
 import {
   createAssetResolver,
   registerVisualAssetResolver,
@@ -323,10 +352,15 @@ const initialNoteId = notes.value[0]?.id ?? null;
 const openTabIds = ref<string[]>(initialNoteId ? [initialNoteId] : []);
 const activeNoteId = ref<string | null>(initialNoteId);
 const paletteOpen = ref(false);
+const paletteInitialQuery = ref<string | undefined>();
+const paletteCategoryFilter = ref<WorkbenchCommand["category"]>();
 const explorerOpen = ref(true);
 const contextRailOpen = ref(false);
 const compactScreen = ref(false);
 const topBarRef = ref<InstanceType<typeof TopBar> | null>(null);
+const sourceEditorRef = ref<WorkbenchEditorHandle | null>(null);
+const visualEditorRef = ref<WorkbenchEditorHandle | null>(null);
+const splitEditorRef = ref<WorkbenchEditorHandle | null>(null);
 const activeSession = shallowRef<EditorSession>();
 const sessionState = shallowRef<EditorSessionState>();
 let unsubscribeSession: (() => void) | undefined;
@@ -371,6 +405,18 @@ const mode = computed<WorkbenchEditorMode>(() => {
   const sessionMode = sessionState.value?.mode;
   return sessionMode === "visual" || sessionMode === "split" ? sessionMode : "source";
 });
+
+const activeSurfaceRef = computed<WorkbenchEditorHandle | null>(() => {
+  if (mode.value === "visual") return visualEditorRef.value;
+  if (mode.value === "split") return splitEditorRef.value;
+  return sourceEditorRef.value;
+});
+const toolbarDisabled = computed(
+  () => !activeNote.value || !activeSession.value || sessionState.value?.readOnly !== false,
+);
+const slashRequest = shallowRef<
+  (SlashCommandRequest & { readonly surface: WorkbenchEditorHandle }) | null
+>(null);
 
 const workspaceAvailable = computed(() => phase5WorkspaceId.value !== null);
 const effectiveWorkspaceName = computed(
@@ -449,6 +495,24 @@ function onVisualMarkdownChange(markdown: string): void {
   visualModeAdapter?.syncFromUi(markdown, true);
 }
 
+function onToolbarAction(action: ToolbarAction): void {
+  const session = activeSession.value;
+  if (!session || session.snapshot().readOnly) return;
+  const surface = activeSurfaceRef.value;
+  if (!surface?.applyToolbarAction(action)) return;
+  sessionState.value = session.snapshot();
+}
+
+function onSlashCommand(request: SlashCommandRequest): void {
+  const session = activeSession.value;
+  const surface = activeSurfaceRef.value;
+  if (!session || session.snapshot().readOnly || !surface) return;
+  slashRequest.value = { ...request, surface };
+  paletteInitialQuery.value = "";
+  paletteCategoryFilter.value = "block";
+  paletteOpen.value = true;
+}
+
 function toggleMode(): void {
   onModeChange(mode.value === "source" ? "visual" : "source");
 }
@@ -505,14 +569,37 @@ function onSelectOutline(id: string): void {
 }
 
 function openPalette(): void {
+  slashRequest.value = null;
+  paletteInitialQuery.value = undefined;
+  paletteCategoryFilter.value = undefined;
   paletteOpen.value = true;
 }
 
 function closePalette(): void {
   paletteOpen.value = false;
+  slashRequest.value = null;
+  paletteInitialQuery.value = undefined;
+  paletteCategoryFilter.value = undefined;
   topBarRef.value?.$el
     ?.querySelector<HTMLButtonElement>('[aria-label="Open command palette"]')
     ?.focus();
+}
+
+function onBlockCommand(definition: BlockCommandDefinition): void {
+  const request = slashRequest.value;
+  const session = activeSession.value;
+  if (!request || !session || session.snapshot().readOnly) return;
+  if (
+    request.surface.replaceRange(
+      request.slashRange.from,
+      request.slashRange.to,
+      definition.markdown,
+      definition.cursorOffset,
+    )
+  ) {
+    sessionState.value = session.snapshot();
+  }
+  closePalette();
 }
 
 function openPhase5Panel(panel: Phase5Panel): void {
@@ -721,12 +808,14 @@ const commands = computed<WorkbenchCommand[]>(() => [
     id: "toggle-mode",
     label: mode.value === "source" ? "Switch to Visual mode" : "Switch to Source mode",
     hint: "Mode",
+    category: "format",
     run: toggleMode,
   },
   ...notes.value.map((note) => ({
     id: `open-${note.id}`,
     label: `Open "${note.title}"`,
     hint: "Note",
+    category: "note",
     run: () => openNote(note.id),
   })),
   ...(activeNoteId.value
@@ -735,6 +824,7 @@ const commands = computed<WorkbenchCommand[]>(() => [
           id: "close-active-tab",
           label: `Close "${activeNote.value?.title ?? ""}"`,
           hint: "Tab",
+          category: "note",
           run: () => closeTab(activeNoteId.value as string),
         },
       ]
@@ -745,18 +835,21 @@ const commands = computed<WorkbenchCommand[]>(() => [
           id: "phase5-assets",
           label: "Manage assets",
           hint: "Workspace",
+          category: "workspace",
           run: () => openPhase5Panel("assets"),
         },
         {
           id: "phase5-search",
           label: "Search notes",
           hint: "Workspace",
+          category: "workspace",
           run: () => openPhase5Panel("search"),
         },
         {
           id: "phase5-transfer",
           label: "Import or export",
           hint: "Workspace",
+          category: "workspace",
           run: () => openPhase5Panel("transfer"),
         },
       ]
@@ -767,11 +860,21 @@ const commands = computed<WorkbenchCommand[]>(() => [
           id: "phase5-share",
           label: "Create read-only share link",
           hint: "Note",
+          category: "note",
           run: () => openPhase5Panel("share"),
         },
       ]
     : []),
 ]);
+
+const blockCommands = computed<WorkbenchCommand[]>(() =>
+  paletteOpen.value && slashRequest.value
+    ? BLOCK_COMMANDS.map((definition) => materializeBlockCommand(definition, onBlockCommand))
+    : [],
+);
+const paletteCommands = computed<WorkbenchCommand[]>(() =>
+  slashRequest.value ? blockCommands.value : commands.value,
+);
 
 function onGlobalKeydown(event: KeyboardEvent): void {
   const isPaletteShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";

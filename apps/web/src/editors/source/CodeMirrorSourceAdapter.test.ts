@@ -111,6 +111,57 @@ describe("CodeMirrorSourceAdapter", () => {
     expect(adapter.getMarkdown()).toBe("locked!");
   });
 
+  it("applies a selection-aware toolbar action using Markdown offsets", () => {
+    const { adapter } = mountedAdapter();
+    cleanup = () => adapter.destroy();
+
+    adapter.setMarkdown("éclair");
+    adapter.setSelection({ anchor: 1, head: 4 });
+    expect(adapter.applyToolbarAction("bold")).toBe(true);
+    expect(adapter.getMarkdown()).toBe("é**cla**ir");
+    expect(adapter.getSelection()).toEqual({ anchor: 1, head: 8 });
+  });
+
+  it("records one undo step for a toolbar action and fails closed when locked", () => {
+    const { adapter } = mountedAdapter();
+    cleanup = () => adapter.destroy();
+
+    adapter.setMarkdown("hello");
+    adapter.setReadOnly(true);
+    expect(adapter.applyToolbarAction("bold")).toBe(false);
+    expect(adapter.getMarkdown()).toBe("hello");
+    adapter.setReadOnly(false);
+    adapter.setSelection({ anchor: 0, head: 5 });
+    expect(adapter.applyToolbarAction("bold")).toBe(true);
+    expect(adapter.getMarkdown()).toBe("**hello**");
+    expect(adapter.undo()).toBe(true);
+    expect(adapter.getMarkdown()).toBe("hello");
+    expect(adapter.undo()).toBe(false);
+  });
+
+  it("emits slash discovery only for empty paragraphs or list items", () => {
+    const { adapter } = mountedAdapter();
+    cleanup = () => adapter.destroy();
+    const listener = vi.fn();
+    adapter.onSlashCommand(listener);
+
+    adapter.setMarkdown("\n");
+    adapter.setSelection({ anchor: 0, head: 0 });
+    adapter.getView().dispatch({ changes: { from: 0, insert: "/" } });
+    expect(listener).toHaveBeenCalledOnce();
+    expect(listener.mock.calls[0][0].slashRange).toEqual({ from: 0, to: 1 });
+
+    listener.mockClear();
+    adapter.setMarkdown("- ");
+    adapter.getView().dispatch({ changes: { from: 2, insert: "/" } });
+    expect(listener).toHaveBeenCalledOnce();
+
+    listener.mockClear();
+    adapter.setMarkdown("```\n\n```");
+    adapter.getView().dispatch({ changes: { from: 4, insert: "/" } });
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   it("projects the readOnly state onto the CodeMirror view's editable contentDOM", () => {
     const { adapter, host } = mountedAdapter();
     cleanup = () => adapter.destroy();

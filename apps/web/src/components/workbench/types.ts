@@ -1,5 +1,14 @@
 import type { EditorSession } from "../../editors/editor-session.types.js";
 
+/** The small set of actions kept visible in the balanced editor toolbar. */
+export type ToolbarAction = "bold" | "italic" | "heading" | "bulletList" | "link";
+
+/** A surface handle owned by the active Source, Visual, or Split pane. */
+export interface WorkbenchEditorHandle {
+  applyToolbarAction(action: ToolbarAction): boolean;
+  replaceRange(from: number, to: number, insert: string, cursorOffset?: number): boolean;
+}
+
 /** A single in-memory note the workbench can open into a tab. */
 export interface WorkbenchNote {
   id: string;
@@ -30,7 +39,13 @@ export interface WorkbenchCommand {
   id: string;
   label: string;
   hint?: string;
+  category?: "format" | "block" | "note" | "workspace";
   run: () => void;
+}
+
+export interface SlashCommandRequest {
+  readonly query: string;
+  readonly slashRange: { readonly from: number; readonly to: number };
 }
 
 /** Opens the one authoritative browser session for a selected note. */
