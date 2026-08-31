@@ -96,4 +96,4 @@ External/configuration checks produced the required blocked semantics:
   did not fabricate external evidence or alter the historical/user-owned
   records.
 
-Implementation commit: pending
+Implementation commit: `84382ee`
