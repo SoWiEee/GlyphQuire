@@ -1,3 +1,4 @@
+/* Hallmark · pre-emit critique: P5 H4 E5 S4 R5 V5 */
 :root {
   --gq-color-background: #f7f3ed;
   --gq-color-surface: #fffdf9;
@@ -30,6 +31,10 @@
   --gq-status-warning: var(--gq-color-warning);
   --gq-status-danger: var(--gq-color-danger);
   --gq-focus-ring: 0 0 0 3px color-mix(in srgb, var(--gq-color-accent) 34%, transparent);
+  --gq-color-scrim: rgb(15 23 42 / 35%);
+  --gq-shadow-panel-left: 0.75rem 0 2rem rgb(15 23 42 / 18%);
+  --gq-shadow-panel-right: -0.75rem 0 2rem rgb(15 23 42 / 18%);
+  --gq-easing-standard: ease;
 }
 
 html,
@@ -132,8 +137,8 @@ body,
 .gq-topbar__mode {
   color: var(--gq-color-muted);
   transition:
-    background-color 120ms ease,
-    color 120ms ease;
+    background-color 120ms var(--gq-easing-standard),
+    color 120ms var(--gq-easing-standard);
 }
 
 .gq-topbar__mode:hover:not([aria-checked="true"]) {
@@ -152,8 +157,8 @@ body,
   color: var(--gq-color-foreground);
   background: var(--gq-surface);
   transition:
-    background-color 120ms ease,
-    border-color 120ms ease;
+    background-color 120ms var(--gq-easing-standard),
+    border-color 120ms var(--gq-easing-standard);
 }
 
 .gq-topbar__action:hover {
@@ -202,7 +207,7 @@ body,
 .gq-explorer__note,
 .gq-explorer__action {
   color: var(--gq-color-foreground);
-  transition: background-color 120ms ease;
+  transition: background-color 120ms var(--gq-easing-standard);
 }
 
 .gq-explorer__note:hover:not([aria-current="true"]),
@@ -234,8 +239,8 @@ body,
   border-color: var(--gq-color-border);
   color: var(--gq-color-muted);
   transition:
-    background-color 120ms ease,
-    color 120ms ease;
+    background-color 120ms var(--gq-easing-standard),
+    color 120ms var(--gq-easing-standard);
 }
 
 .gq-editor-tabs__tab:hover:not([aria-selected="true"]),

@@ -195,7 +195,7 @@ onBeforeUnmount(releaseTrap);
   inset: 0;
   width: 100%;
   border: 0;
-  background: rgb(15 23 42 / 35%);
+  background: var(--gq-color-scrim);
 }
 
 .gq-context-rail {
@@ -203,8 +203,8 @@ onBeforeUnmount(releaseTrap);
   flex-direction: column;
   gap: 1rem;
   overflow-y: auto;
-  background: var(--gq-surface, white);
-  color: var(--gq-color-foreground, #111827);
+  background: var(--gq-surface);
+  color: var(--gq-color-foreground);
 }
 
 .gq-context-rail__header {
@@ -213,7 +213,7 @@ onBeforeUnmount(releaseTrap);
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem;
-  border-bottom: 1px solid var(--gq-color-border, #d1d5db);
+  border-bottom: 1px solid var(--gq-color-border);
 }
 
 .gq-context-rail__outline,
@@ -229,11 +229,11 @@ onBeforeUnmount(releaseTrap);
   padding: 0.375rem 0.5rem;
   text-align: left;
   font-size: 0.875rem;
-  color: var(--gq-color-foreground, #374151);
+  color: var(--gq-color-foreground);
 }
 
 .gq-context-rail__actions button:hover:not(:disabled) {
-  background: var(--gq-surface-muted, #f3f4f6);
+  background: var(--gq-surface-muted);
 }
 
 .gq-context-rail__actions button:disabled {
@@ -246,7 +246,7 @@ onBeforeUnmount(releaseTrap);
     width: 18rem;
     min-width: 18rem;
     height: 100%;
-    border-inline-start: 1px solid var(--gq-color-border, #d1d5db);
+    border-inline-start: 1px solid var(--gq-color-border);
   }
 }
 
@@ -257,7 +257,7 @@ onBeforeUnmount(releaseTrap);
     right: 0;
     width: min(88vw, 22rem);
     height: 100%;
-    box-shadow: -0.75rem 0 2rem rgb(15 23 42 / 18%);
+    box-shadow: var(--gq-shadow-panel-right);
   }
 }
 </style>

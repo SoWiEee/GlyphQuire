@@ -1121,7 +1121,7 @@ onBeforeUnmount(() => {
   position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  background: var(--gq-canvas, #fff);
+  background: var(--gq-canvas);
 }
 
 .gq-explorer-slot {
@@ -1131,7 +1131,7 @@ onBeforeUnmount(() => {
 
 .gq-editor-column {
   min-width: 0;
-  background: var(--gq-canvas, #fff);
+  background: var(--gq-canvas);
 }
 
 .gq-workbench-panel-toggles {
@@ -1150,10 +1150,10 @@ onBeforeUnmount(() => {
     z-index: 30;
     width: min(88vw, 20rem);
     min-width: 0;
-    background: var(--gq-surface, #fff);
-    box-shadow: 0.75rem 0 2rem rgb(15 23 42 / 18%);
+    background: var(--gq-surface);
+    box-shadow: var(--gq-shadow-panel-left);
     transform: translateX(-105%);
-    transition: transform 150ms ease;
+    transition: transform 150ms var(--gq-easing-standard);
   }
 
   .gq-explorer-slot--open {
