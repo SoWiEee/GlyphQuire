@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glyphquire.example/schemas/phase6/performance-evidence.schema.json",
+  "title": "GlyphQuire Phase 6 performance load evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "scrubbed",
+    "producer",
+    "recordedAt",
+    "identity",
+    "workload",
+    "api",
+    "integrity"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["blocked", "failed", "passed"] },
+    "scrubbed": { "const": true },
+    "producer": { "const": "phase6-performance-load" },
+    "recordedAt": { "type": "string", "format": "date-time" },
+    "blockingReason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[A-Za-z0-9 .,;:_()/-]+$"
+    },
+    "identity": { "$ref": "#/$defs/identity" },
+    "workload": { "$ref": "#/$defs/workload" },
+    "api": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["getNote", "autosave", "search"],
+      "properties": {
+        "getNote": { "$ref": "#/$defs/sample" },
+        "autosave": { "$ref": "#/$defs/sample" },
+        "search": { "$ref": "#/$defs/sample" }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "uploads",
+        "integrityChecks",
+        "newDeadLetters",
+        "errors",
+        "searchFreshWithin60Seconds"
+      ],
+      "properties": {
+        "uploads": { "type": "integer", "minimum": 0 },
+        "integrityChecks": { "type": "integer", "minimum": 0 },
+        "newDeadLetters": { "type": "integer", "minimum": 0 },
+        "errors": { "type": "integer", "minimum": 0 },
+        "searchFreshWithin60Seconds": { "type": "boolean" }
+      }
+    }
+  },
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "environmentManifestSha256",
+        "candidateSourceSha",
+        "lockfileSha256",
+        "imageDigests",
+        "host"
+      ],
+      "properties": {
+        "environmentManifestSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+        "candidateSourceSha": { "type": ["string", "null"], "pattern": "^[a-f0-9]{40}$" },
+        "lockfileSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+        "imageDigests": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["api", "web", "worker"],
+          "properties": {
+            "api": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+            "web": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+            "worker": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+          }
+        },
+        "host": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": [
+            "platform",
+            "architecture",
+            "cpuCount",
+            "cpuQuotaVcpus",
+            "effectiveVcpus",
+            "memoryLimitBytes",
+            "cgroupCpuMax",
+            "cgroupMemoryMax"
+          ],
+          "properties": {
+            "platform": { "const": "linux" },
+            "architecture": { "const": "x86-64" },
+            "cpuCount": { "type": "integer", "minimum": 1 },
+            "cpuQuotaVcpus": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+            "effectiveVcpus": { "type": "number", "exclusiveMinimum": 0 },
+            "memoryLimitBytes": { "type": "integer", "minimum": 1 },
+            "cgroupCpuMax": { "type": "string", "minLength": 1 },
+            "cgroupMemoryMax": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "durationMs",
+        "actors",
+        "workspaces",
+        "notesPerWorkspace",
+        "noteBytes",
+        "assetBytes",
+        "autosaveIntervalMs",
+        "searchIntervalMs",
+        "assetIntervalMs",
+        "warmupMs"
+      ],
+      "properties": {
+        "durationMs": { "type": "integer", "minimum": 1000, "maximum": 1800000 },
+        "actors": { "const": 5 },
+        "workspaces": { "const": 5 },
+        "notesPerWorkspace": { "const": 1000 },
+        "noteBytes": { "const": 102400 },
+        "assetBytes": { "const": 5242880 },
+        "autosaveIntervalMs": { "const": 2000 },
+        "searchIntervalMs": { "const": 10000 },
+        "assetIntervalMs": { "const": 300000 },
+        "warmupMs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "p50Ms", "p95Ms", "p99Ms", "thresholdMs"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 0 },
+        "p50Ms": { "type": ["number", "null"], "minimum": 0 },
+        "p95Ms": { "type": ["number", "null"], "minimum": 0 },
+        "p99Ms": { "type": ["number", "null"], "minimum": 0 },
+        "thresholdMs": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}

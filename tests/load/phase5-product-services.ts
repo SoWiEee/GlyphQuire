@@ -11,14 +11,24 @@
  *   PHASE5_LOAD_OPERATOR_COOKIE='session=...'
  */
 import { createHash, randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { isAbsolute, resolve } from "node:path";
 import {
   assetResponseSchema,
   canonicalUuidSchema,
   deadLetterResponseSchema,
   noteResultSchema,
+  notePageSchema,
   saveNoteInputSchema,
   searchResponseSchema,
 } from "../../packages/api-contract/src/index.js";
+import {
+  measurePhase6Environment,
+  validatePhase6EnvironmentManifest,
+  type Phase6EnvironmentManifest,
+  type Phase6ImageDigests,
+} from "./phase6-environment.js";
 
 const NOTE_BYTES = 100 * 1024;
 const ASSET_BYTES = 5 * 1024 * 1024;
@@ -27,7 +37,13 @@ const SEARCH_INTERVAL_MS = 10_000;
 const ASSET_INTERVAL_MS = 5 * 60_000;
 const DEFAULT_DURATION_MS = 30 * 60_000;
 const DEFAULT_USERS = 5;
+const REQUIRED_RELEASE_USERS = 5;
+const REQUIRED_NOTES_PER_WORKSPACE = 1_000;
 const REQUEST_TIMEOUT_MS = 10_000;
+const DEFAULT_PERFORMANCE_EVIDENCE_PATH = "docs/evidence/phase6/performance-load.json";
+const REPOSITORY_ROOT = resolve(import.meta.dirname, "../..");
+const SOURCE_SHA_PATTERN = /^[a-f0-9]{40}$/u;
+const IMAGE_DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/u;
 
 type MetricName = "getNote" | "autosave" | "search";
 
@@ -57,7 +73,55 @@ interface Metrics {
   errors: string[];
 }
 
-function parseDuration(value: string): number {
+export interface Phase5LoadConfig {
+  readonly durationMs: number;
+  readonly users: number;
+  readonly environmentManifestPath?: string;
+}
+
+export interface Phase5LoadIdentity {
+  readonly environmentManifestSha256: string | null;
+  readonly candidateSourceSha: string | null;
+  readonly lockfileSha256: string | null;
+  readonly imageDigests: Phase6ImageDigests | null;
+  readonly host: Phase6EnvironmentManifest["host"] | null;
+}
+
+export interface Phase5LoadReport {
+  readonly schemaVersion: 1;
+  readonly status: "blocked" | "failed" | "passed";
+  readonly scrubbed: true;
+  readonly producer: "phase6-performance-load";
+  readonly recordedAt: string;
+  readonly blockingReason?: string;
+  readonly identity: Phase5LoadIdentity;
+  readonly workload: {
+    readonly durationMs: number;
+    readonly actors: number;
+    readonly workspaces: number;
+    readonly notesPerWorkspace: number;
+    readonly noteBytes: number;
+    readonly assetBytes: number;
+    readonly autosaveIntervalMs: number;
+    readonly searchIntervalMs: number;
+    readonly assetIntervalMs: number;
+    readonly warmupMs: number;
+  };
+  readonly api: {
+    readonly getNote: ReturnType<typeof summarizeSamples> & { readonly thresholdMs: 500 };
+    readonly autosave: ReturnType<typeof summarizeSamples> & { readonly thresholdMs: 1_000 };
+    readonly search: ReturnType<typeof summarizeSamples> & { readonly thresholdMs: 500 };
+  };
+  readonly integrity: {
+    readonly uploads: number;
+    readonly integrityChecks: number;
+    readonly newDeadLetters: number;
+    readonly errors: number;
+    readonly searchFreshWithin60Seconds: boolean;
+  };
+}
+
+export function parsePhase5Duration(value: string): number {
   const match = /^(\d+)(ms|s|m)$/u.exec(value);
   if (!match) throw new Error("duration must use ms, s, or m");
   const unit = match[2] === "m" ? 60_000 : match[2] === "s" ? 1_000 : 1;
@@ -68,19 +132,39 @@ function parseDuration(value: string): number {
   return milliseconds;
 }
 
-function cliConfig(): { durationMs: number; users: number } {
+export function parsePhase5CliConfig(argumentsToParse: readonly string[]): Phase5LoadConfig {
   let durationMs = DEFAULT_DURATION_MS;
   let users = DEFAULT_USERS;
-  for (const argument of process.argv.slice(2)) {
+  let environmentManifestPath: string | undefined;
+  for (const argument of argumentsToParse) {
     if (argument === "--") continue;
-    if (argument.startsWith("--duration=")) durationMs = parseDuration(argument.slice(11));
+    if (argument.startsWith("--duration=")) durationMs = parsePhase5Duration(argument.slice(11));
     else if (argument.startsWith("--users=")) users = Number(argument.slice(8));
-    else throw new Error("Only --duration=<time> and --users=<count> are supported");
+    else if (argument.startsWith("--environment-manifest=")) {
+      const path = argument.slice("--environment-manifest=".length);
+      if (
+        !path ||
+        path.length > 4096 ||
+        path.includes("\0") ||
+        environmentManifestPath !== undefined
+      ) {
+        throw new Error("environment manifest path is invalid");
+      }
+      environmentManifestPath = path;
+    } else {
+      throw new Error(
+        "Only --duration=<time>, --users=<count>, and --environment-manifest=<path> are supported",
+      );
+    }
   }
   if (!Number.isInteger(users) || users < 1 || users > 5) {
     throw new Error("users must be an integer from 1 through 5");
   }
-  return { durationMs, users };
+  return { durationMs, users, ...(environmentManifestPath ? { environmentManifestPath } : {}) };
+}
+
+function cliConfig(): Phase5LoadConfig {
+  return parsePhase5CliConfig(process.argv.slice(2));
 }
 
 function safeBaseUrl(raw: string): string {
@@ -98,7 +182,138 @@ function safeBaseUrl(raw: string): string {
   return url.origin;
 }
 
-function loadActors(raw: string, expected: number): ActorInput[] {
+function hasExactKeys(
+  value: unknown,
+  required: readonly string[],
+  optional: readonly string[] = [],
+): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const allowed = new Set([...required, ...optional]);
+  const keys = Object.keys(value);
+  return required.every((key) => keys.includes(key)) && keys.every((key) => allowed.has(key));
+}
+
+function assertStrictPhase6ManifestShape(
+  value: unknown,
+): asserts value is Phase6EnvironmentManifest {
+  const required = [
+    "schemaVersion",
+    "status",
+    "scrubbed",
+    "producer",
+    "measuredAt",
+    "host",
+    "topology",
+    "candidateSourceSha",
+    "lockfileSha256",
+    "nodeVersion",
+    "pnpmVersion",
+    "imageDigests",
+    "manifestSha256",
+  ] as const;
+  if (!hasExactKeys(value, required, ["blockingReason"])) {
+    throw new Error("environment manifest failed strict shape validation");
+  }
+  const manifest = value as Record<string, unknown>;
+  if (
+    manifest.blockingReason !== undefined &&
+    (typeof manifest.blockingReason !== "string" || manifest.blockingReason.length === 0)
+  ) {
+    throw new Error("environment manifest blocking reason is invalid");
+  }
+  if (typeof manifest.measuredAt !== "string" || Number.isNaN(Date.parse(manifest.measuredAt))) {
+    throw new Error("environment manifest timestamp is invalid");
+  }
+  if (
+    !hasExactKeys(manifest.host, [
+      "platform",
+      "architecture",
+      "cpuCount",
+      "cpuQuotaVcpus",
+      "effectiveVcpus",
+      "memoryLimitBytes",
+      "cgroupCpuMax",
+      "cgroupMemoryMax",
+    ]) ||
+    !hasExactKeys(manifest.topology, ["sameHost", "compose", "network", "services"]) ||
+    !hasExactKeys(manifest.imageDigests, ["api", "web", "worker"])
+  ) {
+    throw new Error("environment manifest failed strict nested shape validation");
+  }
+  const topology = manifest.topology as Record<string, unknown>;
+  if (
+    !Array.isArray(topology.services) ||
+    topology.services.length !== 4 ||
+    topology.services.join(",") !== "api,worker,postgres,object-storage"
+  ) {
+    throw new Error("environment manifest service topology is invalid");
+  }
+}
+
+function expectedCandidateSourceSha(): string {
+  const configured = process.env.PHASE6_CANDIDATE_SOURCE_SHA;
+  if (configured !== undefined) {
+    if (!SOURCE_SHA_PATTERN.test(configured)) throw new Error("candidate source SHA is invalid");
+    return configured;
+  }
+  try {
+    const value = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: REPOSITORY_ROOT,
+      encoding: "utf8",
+    }).trim();
+    if (!SOURCE_SHA_PATTERN.test(value)) throw new Error();
+    return value;
+  } catch {
+    throw new Error("candidate source SHA is unavailable");
+  }
+}
+
+async function expectedLockfileSha256(): Promise<string> {
+  try {
+    return createHash("sha256")
+      .update(await readFile(resolve(REPOSITORY_ROOT, "pnpm-lock.yaml")))
+      .digest("hex");
+  } catch {
+    throw new Error("lockfile SHA-256 is unavailable");
+  }
+}
+
+function expectedImageDigests(): Phase6ImageDigests {
+  const configured = (name: "API" | "WEB" | "WORKER"): string => {
+    const value =
+      process.env[`PHASE6_${name}_IMAGE_DIGEST`] ?? process.env[`PHASE6_IMAGE_DIGEST_${name}`];
+    if (!value || !IMAGE_DIGEST_PATTERN.test(value)) {
+      throw new Error(`immutable ${name.toLowerCase()} image digest is unavailable`);
+    }
+    return value;
+  };
+  return { api: configured("API"), web: configured("WEB"), worker: configured("WORKER") };
+}
+
+export async function loadPhase6EnvironmentManifest(
+  manifestPath: string,
+): Promise<Phase6EnvironmentManifest> {
+  const destination = isAbsolute(manifestPath)
+    ? manifestPath
+    : resolve(REPOSITORY_ROOT, manifestPath);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(destination, "utf8"));
+  } catch {
+    throw new Error("environment manifest is unavailable or invalid");
+  }
+  assertStrictPhase6ManifestShape(parsed);
+  const measurement = await measurePhase6Environment();
+  return validatePhase6EnvironmentManifest(parsed, {
+    expectedCandidateSourceSha: expectedCandidateSourceSha(),
+    expectedLockfileSha256: await expectedLockfileSha256(),
+    expectedImageDigests: expectedImageDigests(),
+    currentMeasurement: measurement,
+    requirePassed: true,
+  });
+}
+
+export function loadActors(raw: string, expected: number): ActorInput[] {
   let value: unknown;
   try {
     value = JSON.parse(raw);
@@ -151,6 +366,15 @@ function percentile(samples: readonly number[], quantile: number): number | null
   if (samples.length === 0) return null;
   const sorted = [...samples].sort((left, right) => left - right);
   return sorted[Math.ceil(sorted.length * quantile) - 1] ?? null;
+}
+
+function summarizeSamples(samples: readonly number[]) {
+  return {
+    count: samples.length,
+    p50Ms: percentile(samples, 0.5),
+    p95Ms: percentile(samples, 0.95),
+    p99Ms: percentile(samples, 0.99),
+  };
 }
 
 async function jsonRequest(
@@ -233,6 +457,47 @@ async function initializeActor(
     nextAssetAt: 0,
     latestSearchRevision: 0,
   };
+}
+
+async function verifySeededNotes(
+  baseUrl: string,
+  actor: ActorInput,
+  metrics: Metrics,
+): Promise<void> {
+  let cursor: string | undefined;
+  let count = 0;
+  let selectedNoteSeen = false;
+  for (let page = 0; page < REQUIRED_NOTES_PER_WORKSPACE / 100; page += 1) {
+    const query = new URLSearchParams({ pageSize: "100" });
+    if (cursor) query.set("cursor", cursor);
+    const raw = await jsonRequest(
+      baseUrl,
+      actor.cookie,
+      `/api/v1/workspaces/${actor.workspaceId}/notes?${query.toString()}`,
+      { method: "GET" },
+      200,
+      null,
+      metrics,
+      false,
+    );
+    const result = notePageSchema.safeParse(raw);
+    if (
+      !result.success ||
+      result.data.items.some((item) => item.workspaceId !== actor.workspaceId)
+    ) {
+      throw new Error("seeded note page failed contract or tenant validation");
+    }
+    count += result.data.items.length;
+    if (result.data.items.some((item) => item.id === actor.noteId)) selectedNoteSeen = true;
+    if (count > REQUIRED_NOTES_PER_WORKSPACE) {
+      throw new Error("workspace contains more than the required seeded note count");
+    }
+    if (!result.data.nextCursor) break;
+    cursor = result.data.nextCursor;
+  }
+  if (count !== REQUIRED_NOTES_PER_WORKSPACE || !selectedNoteSeen) {
+    throw new Error("workspace does not contain exactly the required seeded note count");
+  }
 }
 
 async function autosaveAndRead(
@@ -392,8 +657,96 @@ async function deadLetterIds(
   throw new Error("dead-letter pagination exceeded its bounded page count");
 }
 
+function emptyLoadIdentity(): Phase5LoadIdentity {
+  return {
+    environmentManifestSha256: null,
+    candidateSourceSha: null,
+    lockfileSha256: null,
+    imageDigests: null,
+    host: null,
+  };
+}
+
+function manifestLoadIdentity(manifest: Phase6EnvironmentManifest): Phase5LoadIdentity {
+  return {
+    environmentManifestSha256: manifest.manifestSha256,
+    candidateSourceSha: manifest.candidateSourceSha,
+    lockfileSha256: manifest.lockfileSha256,
+    imageDigests: manifest.imageDigests,
+    host: manifest.host,
+  };
+}
+
+function buildPerformanceReport(
+  config: Phase5LoadConfig,
+  identity: Phase5LoadIdentity,
+  metrics: Metrics,
+  warmupMs: number,
+  newDeadLetters: number,
+  searchFreshWithin60Seconds: boolean,
+  status: Phase5LoadReport["status"],
+  blockingReason?: string,
+): Phase5LoadReport {
+  return {
+    schemaVersion: 1,
+    status,
+    scrubbed: true,
+    producer: "phase6-performance-load",
+    recordedAt: new Date().toISOString(),
+    ...(blockingReason ? { blockingReason } : {}),
+    identity,
+    workload: {
+      durationMs: config.durationMs,
+      actors: config.users,
+      workspaces: config.users,
+      notesPerWorkspace: REQUIRED_NOTES_PER_WORKSPACE,
+      noteBytes: NOTE_BYTES,
+      assetBytes: ASSET_BYTES,
+      autosaveIntervalMs: AUTOSAVE_INTERVAL_MS,
+      searchIntervalMs: SEARCH_INTERVAL_MS,
+      assetIntervalMs: ASSET_INTERVAL_MS,
+      warmupMs,
+    },
+    api: {
+      getNote: { ...summarizeSamples(metrics.getNote), thresholdMs: 500 },
+      autosave: { ...summarizeSamples(metrics.autosave), thresholdMs: 1_000 },
+      search: { ...summarizeSamples(metrics.search), thresholdMs: 500 },
+    },
+    integrity: {
+      uploads: metrics.uploads,
+      integrityChecks: metrics.integrityChecks,
+      newDeadLetters,
+      errors: metrics.errors.length,
+      searchFreshWithin60Seconds,
+    },
+  };
+}
+
+async function writePerformanceReport(
+  report: Phase5LoadReport,
+  path = process.env.PHASE6_PERFORMANCE_LOAD_EVIDENCE_FILE ?? DEFAULT_PERFORMANCE_EVIDENCE_PATH,
+): Promise<void> {
+  const destination = isAbsolute(path) ? path : resolve(REPOSITORY_ROOT, path);
+  await mkdir(resolve(destination, ".."), { recursive: true });
+  const temporary = `${destination}.${process.pid}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(report, null, 2)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  await rename(temporary, destination);
+}
+
+class Phase5LoadBlockedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "Phase5LoadBlockedError";
+  }
+}
+
 async function run(): Promise<void> {
   const config = cliConfig();
+  const productionProfile =
+    config.durationMs === DEFAULT_DURATION_MS && config.users === REQUIRED_RELEASE_USERS;
   const baseRaw = process.env.PHASE5_LOAD_BASE_URL;
   const actorsRaw = process.env.PHASE5_LOAD_ACTORS_JSON;
   const operatorCookie = process.env.PHASE5_LOAD_OPERATOR_COOKIE;
@@ -404,11 +757,74 @@ async function run(): Promise<void> {
     process.exitCode = 2;
     return;
   }
+  if (productionProfile && !config.environmentManifestPath) {
+    const metrics: Metrics = {
+      getNote: [],
+      autosave: [],
+      search: [],
+      uploads: 0,
+      integrityChecks: 0,
+      errors: [],
+    };
+    await writePerformanceReport(
+      buildPerformanceReport(
+        config,
+        emptyLoadIdentity(),
+        metrics,
+        120_000,
+        0,
+        false,
+        "blocked",
+        "measured Phase 6 environment manifest is required for the release profile",
+      ),
+    );
+    console.error(
+      "PHASE5_LOAD_SKIPPED_RELEASE_BLOCKER: --environment-manifest=<path> is required for the 30m/5-user release profile",
+    );
+    process.exitCode = 2;
+    return;
+  }
   if (operatorCookie.length > 4096 || /[\r\n]/u.test(operatorCookie)) {
     throw new Error("operator cookie is invalid");
   }
   const baseUrl = safeBaseUrl(baseRaw);
-  const inputs = loadActors(actorsRaw, config.users);
+  let manifest: Phase6EnvironmentManifest | undefined;
+  if (config.environmentManifestPath) {
+    try {
+      manifest = await loadPhase6EnvironmentManifest(config.environmentManifestPath);
+    } catch {
+      if (productionProfile) {
+        const metrics: Metrics = {
+          getNote: [],
+          autosave: [],
+          search: [],
+          uploads: 0,
+          integrityChecks: 0,
+          errors: [],
+        };
+        await writePerformanceReport(
+          buildPerformanceReport(
+            config,
+            emptyLoadIdentity(),
+            metrics,
+            120_000,
+            0,
+            false,
+            "blocked",
+            "measured Phase 6 environment manifest is unavailable or invalid",
+          ),
+        );
+        console.error(
+          "PHASE5_LOAD_SKIPPED_RELEASE_BLOCKER: measured Phase 6 environment manifest is unavailable or invalid",
+        );
+        process.exitCode = 2;
+        return;
+      }
+      throw new Error("environment manifest is unavailable or invalid");
+    }
+  }
+  const identity = manifest ? manifestLoadIdentity(manifest) : emptyLoadIdentity();
+  const inputs = loadActors(actorsRaw, productionProfile ? REQUIRED_RELEASE_USERS : config.users);
   const metrics: Metrics = {
     getNote: [],
     autosave: [],
@@ -417,6 +833,9 @@ async function run(): Promise<void> {
     integrityChecks: 0,
     errors: [],
   };
+  if (productionProfile) {
+    await Promise.all(inputs.map((input) => verifySeededNotes(baseUrl, input, metrics)));
+  }
   const baselineDeadLetters = await deadLetterIds(baseUrl, operatorCookie, metrics);
   const actors = await Promise.all(
     inputs.map((input, index) => initializeActor(baseUrl, input, index, metrics)),
@@ -460,8 +879,6 @@ async function run(): Promise<void> {
 
   const finalDeadLetters = await deadLetterIds(baseUrl, operatorCookie, metrics);
   const newDeadLetters = [...finalDeadLetters].filter((id) => !baselineDeadLetters.has(id));
-  const productionProfile =
-    config.durationMs === DEFAULT_DURATION_MS && config.users === DEFAULT_USERS;
   const p95 = {
     getNote: percentile(metrics.getNote, 0.95),
     autosave: percentile(metrics.autosave, 0.95),
@@ -483,12 +900,17 @@ async function run(): Promise<void> {
         p95.search < 500 &&
         p95.autosave !== null &&
         p95.autosave < 1_000));
-  const summarize = (samples: readonly number[]) => ({
-    count: samples.length,
-    p50Ms: percentile(samples, 0.5),
-    p95Ms: percentile(samples, 0.95),
-    p99Ms: percentile(samples, 0.99),
-  });
+  const report = buildPerformanceReport(
+    config,
+    identity,
+    metrics,
+    warmupEndsAt - startedAt,
+    newDeadLetters.length,
+    fresh,
+    productionProfile ? (passed ? "passed" : "failed") : "blocked",
+    productionProfile || passed ? undefined : "short load is smoke-only and cannot satisfy P0-08",
+  );
+  if (productionProfile) await writePerformanceReport(report);
   console.log(
     JSON.stringify({
       status: productionProfile ? (passed ? "PASS" : "FAIL") : "SMOKE_ONLY",
@@ -497,9 +919,9 @@ async function run(): Promise<void> {
       warmupMs: warmupEndsAt - startedAt,
       noteBytes: NOTE_BYTES,
       assetBytes: ASSET_BYTES,
-      getNote: summarize(metrics.getNote),
-      autosave: summarize(metrics.autosave),
-      search: summarize(metrics.search),
+      getNote: report.api.getNote,
+      autosave: report.api.autosave,
+      search: report.api.search,
       uploads: metrics.uploads,
       integrityChecks: metrics.integrityChecks,
       newDeadLetters: newDeadLetters.length,
@@ -510,9 +932,17 @@ async function run(): Promise<void> {
   if (!passed) process.exitCode = 1;
 }
 
-run().catch(() => {
-  console.error(
-    "PHASE5_LOAD_FAILED: see sanitized counters; credentials and document content omitted",
-  );
-  process.exitCode = 1;
-});
+const invokedScript = process.argv[1] ? resolve(process.argv[1]) : "";
+if (invokedScript === resolve(import.meta.filename)) {
+  run().catch((error: unknown) => {
+    if (error instanceof Phase5LoadBlockedError) {
+      console.error(`PHASE5_LOAD_SKIPPED_RELEASE_BLOCKER: ${error.message}`);
+      process.exitCode = 2;
+      return;
+    }
+    console.error(
+      "PHASE5_LOAD_FAILED: see sanitized counters; credentials and document content omitted",
+    );
+    process.exitCode = 1;
+  });
+}

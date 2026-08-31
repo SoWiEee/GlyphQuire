@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "status": "blocked",
+  "scrubbed": true,
+  "provider": "browserstack",
+  "producer": "phase6-browserstack",
+  "producerVersion": "1.0.0",
+  "capturedAt": "2026-08-31T00:00:00.000Z",
+  "externalEvidenceAvailable": false,
+  "blockingReason": "BrowserStack credentials are unavailable",
+  "targets": [
+    {
+      "targetId": "chrome-latest",
+      "browser": "Chrome",
+      "browserVersion": "latest",
+      "os": "Windows",
+      "osVersion": "11",
+      "status": "blocked",
+      "blockingReason": "BrowserStack credentials are unavailable"
+    },
+    {
+      "targetId": "chrome-latest-1",
+      "browser": "Chrome",
+      "browserVersion": "latest-1",
+      "os": "Windows",
+      "osVersion": "11",
+      "status": "blocked",
+      "blockingReason": "BrowserStack credentials are unavailable"
+    },
+    {
+      "targetId": "firefox-latest",
+      "browser": "Firefox",
+      "browserVersion": "latest",
+      "os": "Windows",
+      "osVersion": "11",
+      "status": "blocked",
+      "blockingReason": "BrowserStack credentials are unavailable"
+    },
+    {
+      "targetId": "firefox-latest-1",
+      "browser": "Firefox",
+      "browserVersion": "latest-1",
+      "os": "Windows",
+      "osVersion": "11",
+      "status": "blocked",
+      "blockingReason": "BrowserStack credentials are unavailable"
+    },
+    {
+      "targetId": "edge-latest",
+      "browser": "Edge",
+      "browserVersion": "latest",
+      "os": "Windows",
+      "osVersion": "11",
+      "status": "blocked",
+      "blockingReason": "BrowserStack credentials are unavailable"
+    },
+    {
+      "targetId": "edge-latest-1",
+      "browser": "Edge",
+      "browserVersion": "latest-1",
+      "os": "Windows",
+      "osVersion": "11",
+      "status": "blocked",
+      "blockingReason": "BrowserStack credentials are unavailable"
+    },
+    {
+      "targetId": "safari-latest",
+      "browser": "Safari",
+      "browserVersion": "latest",
+      "os": "OS X",
+      "osVersion": "Sequoia",
+      "status": "blocked",
+      "blockingReason": "BrowserStack credentials are unavailable"
+    },
+    {
+      "targetId": "safari-latest-1",
+      "browser": "Safari",
+      "browserVersion": "latest-1",
+      "os": "OS X",
+      "osVersion": "Sonoma",
+      "status": "blocked",
+      "blockingReason": "BrowserStack credentials are unavailable"
+    }
+  ],
+  "summary": {
+    "expectedTargets": 8,
+    "passedTargets": 0,
+    "failedTargets": 0,
+    "blockedTargets": 8,
+    "providerSessionIds": 0,
+    "numericVersions": 0
+  }
+}

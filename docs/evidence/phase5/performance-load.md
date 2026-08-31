@@ -27,3 +27,16 @@ the three required environment inputs were absent. The production profile was
 credentials were supplied. Therefore p50/p95/p99,
 sample counts, image digest, 4-vCPU/8-GB host details, data volume, queue drain,
 and error budget are absent. **This is a release blocker.**
+
+Phase 6 keeps this runner as the API burst harness. The release profile must
+first create a measured host manifest and pass it explicitly:
+
+```sh
+pnpm test:load:phase6-environment
+pnpm test:load:phase5 -- --duration=30m --users=5 \
+  --environment-manifest=docs/evidence/phase6/performance-environment.json
+```
+
+The runner rejects self-declared resource values, validates the manifest
+identity/hash, and writes the sanitized result to
+`docs/evidence/phase6/performance-load.json`.

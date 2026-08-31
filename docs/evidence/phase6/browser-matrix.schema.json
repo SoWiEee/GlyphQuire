@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glyphquire.example/schemas/phase6/browser-matrix.schema.json",
+  "title": "GlyphQuire Phase 6 BrowserStack matrix evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "scrubbed",
+    "provider",
+    "producer",
+    "producerVersion",
+    "capturedAt",
+    "externalEvidenceAvailable",
+    "targets",
+    "summary"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["blocked", "failed", "passed"] },
+    "scrubbed": { "const": true },
+    "provider": { "const": "browserstack" },
+    "producer": { "const": "phase6-browserstack" },
+    "producerVersion": { "const": "1.0.0" },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "externalEvidenceAvailable": { "type": "boolean" },
+    "blockingReason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[A-Za-z0-9 .,;:_()/-]+$"
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "items": { "$ref": "#/$defs/target" }
+    },
+    "summary": { "$ref": "#/$defs/summary" }
+  },
+  "$defs": {
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targetId", "browser", "browserVersion", "os", "osVersion", "status"],
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "enum": [
+            "chrome-latest",
+            "chrome-latest-1",
+            "firefox-latest",
+            "firefox-latest-1",
+            "edge-latest",
+            "edge-latest-1",
+            "safari-latest",
+            "safari-latest-1"
+          ]
+        },
+        "browser": { "enum": ["Chrome", "Firefox", "Edge", "Safari"] },
+        "browserVersion": { "enum": ["latest", "latest-1"] },
+        "os": { "enum": ["Windows", "OS X"] },
+        "osVersion": {
+          "type": "string",
+          "enum": ["11", "Sequoia", "Sonoma"]
+        },
+        "status": { "enum": ["blocked", "failed", "passed"] },
+        "blockingReason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "^[A-Za-z0-9 .,;:_()/-]+$"
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+        },
+        "resolvedBrowserVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+(?:\\.[0-9]+){0,3}$"
+        },
+        "resolvedOsVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+(?:\\.[0-9]+){0,3}$"
+        },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "finishedAt": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "blocked" } } },
+          "then": { "required": ["blockingReason"] }
+        },
+        {
+          "if": { "properties": { "status": { "const": "passed" } } },
+          "then": {
+            "required": [
+              "sessionId",
+              "resolvedBrowserVersion",
+              "resolvedOsVersion",
+              "startedAt",
+              "finishedAt"
+            ]
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "failed" } } },
+          "then": { "required": ["blockingReason", "startedAt", "finishedAt"] }
+        }
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expectedTargets",
+        "passedTargets",
+        "failedTargets",
+        "blockedTargets",
+        "providerSessionIds",
+        "numericVersions"
+      ],
+      "properties": {
+        "expectedTargets": { "const": 8 },
+        "passedTargets": { "type": "integer", "minimum": 0, "maximum": 8 },
+        "failedTargets": { "type": "integer", "minimum": 0, "maximum": 8 },
+        "blockedTargets": { "type": "integer", "minimum": 0, "maximum": 8 },
+        "providerSessionIds": { "type": "integer", "minimum": 0, "maximum": 8 },
+        "numericVersions": { "type": "integer", "minimum": 0, "maximum": 8 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "blocked" } } },
+      "then": {
+        "required": ["blockingReason"],
+        "properties": {
+          "externalEvidenceAvailable": { "const": false },
+          "targets": {
+            "items": { "properties": { "status": { "const": "blocked" } } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "passed" } } },
+      "then": {
+        "properties": {
+          "externalEvidenceAvailable": { "const": true },
+          "targets": {
+            "items": { "properties": { "status": { "const": "passed" } } }
+          },
+          "summary": {
+            "properties": {
+              "passedTargets": { "const": 8 },
+              "failedTargets": { "const": 0 },
+              "blockedTargets": { "const": 0 },
+              "providerSessionIds": { "const": 8 },
+              "numericVersions": { "const": 8 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "failed" } } },
+      "then": {
+        "properties": { "externalEvidenceAvailable": { "const": true } }
+      }
+    }
+  ]
+}

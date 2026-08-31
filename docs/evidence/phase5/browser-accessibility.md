@@ -30,3 +30,10 @@ not be reported as PostgreSQL/MinIO full-stack evidence. Playwright/axe cannot
 substitute for an actual screen reader. Record browser versions, operating
 systems, timestamps, flow, failures, and immutable artifact links after the
 manual/release-CI runs; do not paste note or token contents.
+
+Phase 6 adds an explicit local Playwright diagnostic matrix (`chromium`,
+`msedge`, `firefox`, and `webkit`) plus a credential-free BrowserStack
+capability template. Local WebKit is never counted as Safari evidence; the
+eight-provider target result is written to
+`docs/evidence/phase6/browser-matrix.json` only after BrowserStack resolves
+every requested capability and returns numeric session metadata.
