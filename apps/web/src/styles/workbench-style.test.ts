@@ -61,6 +61,12 @@ describe("workbench stylesheet", () => {
     expect(stylesheet).toContain(".gq-context-rail {");
   });
 
+  it("keeps the writable visual surface visibly focused", () => {
+    expect(stylesheet).toContain(".gq-editor-surface .ProseMirror:focus-visible");
+    expect(stylesheet).toContain("outline: 2px solid var(--gq-color-accent);");
+    expect(stylesheet).toContain("box-shadow: var(--gq-focus-ring);");
+  });
+
   it.each([
     ["light", defaultTheme],
     ["dark", defaultDarkTheme],
