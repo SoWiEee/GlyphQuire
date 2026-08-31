@@ -331,6 +331,7 @@ const activeSession = shallowRef<EditorSession>();
 const sessionState = shallowRef<EditorSessionState>();
 let unsubscribeSession: (() => void) | undefined;
 let sessionGeneration = 0;
+let historyRestoreToken = 0;
 
 // Visual's pane has no other display or edit-routing path of its own (unlike
 // Source, which stays on the EditorSessionState-driven props/session.edit()
@@ -548,6 +549,66 @@ function normalizeSessionHandle(
   return "session" in value ? value : { session: value };
 }
 
+function createStagedLiveModeAdapter(initialMarkdown: string): {
+  adapter: WorkbenchModeAdapterShim;
+  commit: () => void;
+} {
+  let markdown = initialMarkdown;
+  let readOnly = true;
+  let target:
+    | { markdown: typeof visualMarkdown; readOnly: typeof visualEditorReadOnly }
+    | undefined;
+  const listeners = new Set<(nextMarkdown: string) => void>();
+
+  const syncFromUi = (nextMarkdown: string, notify: boolean): void => {
+    markdown = nextMarkdown;
+    if (target) target.markdown.value = nextMarkdown;
+    if (notify) {
+      for (const listener of listeners) listener(nextMarkdown);
+    }
+  };
+
+  return {
+    adapter: {
+      setMarkdown(nextMarkdown: string): void {
+        syncFromUi(nextMarkdown, false);
+      },
+      getMarkdown(): string {
+        return target?.markdown.value ?? markdown;
+      },
+      setReadOnly(nextReadOnly: boolean): void {
+        readOnly = nextReadOnly;
+        if (target) target.readOnly.value = nextReadOnly;
+      },
+      onChange(listener: (nextMarkdown: string) => void): () => void {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      syncFromUi,
+    },
+    commit(): void {
+      target = { markdown: visualMarkdown, readOnly: visualEditorReadOnly };
+      target.markdown.value = markdown;
+      target.readOnly.value = readOnly;
+    },
+  };
+}
+
+function isCurrentHistoryRestore(
+  token: number,
+  generation: number,
+  noteId: string,
+  session: EditorSession,
+): boolean {
+  return (
+    historyRestoreToken === token &&
+    sessionGeneration === generation &&
+    activeNoteId.value === noteId &&
+    activeNote.value?.id === noteId &&
+    activeSession.value === session
+  );
+}
+
 async function onHistoryRestored(result: NoteResult): Promise<void> {
   const currentNote = activeNote.value;
   const expectedNoteId = phase5NoteId.value;
@@ -566,65 +627,87 @@ async function onHistoryRestored(result: NoteResult): Promise<void> {
 
   const note: WorkbenchNote = { ...currentNote, markdown: expectedMarkdown };
   const previous = activeSession.value;
+  if (!previous) return;
+  const expectedGeneration = sessionGeneration;
+  const expectedActiveNoteId = activeNoteId.value;
+  const restoreToken = ++historyRestoreToken;
   const previousUnsubscribe = unsubscribeSession;
   const previousDetach = detachModeAdapters;
   let replacement: WorkbenchSessionHandle | undefined;
   let nextUnsubscribe: (() => void) | undefined;
   let nextDetach: (() => void) | undefined;
+  let committed = false;
+
+  const disposeReplacement = async (): Promise<void> => {
+    nextUnsubscribe?.();
+    nextDetach?.();
+    if (replacement && replacement.session !== activeSession.value) {
+      await replacement.session.dispose();
+    }
+  };
 
   try {
     replacement = normalizeSessionHandle(await props.sessionFactory(note));
+    if (
+      !isCurrentHistoryRestore(restoreToken, expectedGeneration, expectedActiveNoteId, previous)
+    ) {
+      await disposeReplacement();
+      return;
+    }
+
     const nextSnapshot = replacement.session.snapshot();
     if (nextSnapshot.noteId !== expectedNoteId) throw new Error("Restored note mismatch");
     if (nextSnapshot.baseRevision !== expectedRevision)
       throw new Error("Invalid restored revision");
     if (nextSnapshot.markdown !== expectedMarkdown) throw new Error("Restored content mismatch");
 
+    const nextSourceModeAdapter = createBookkeepingModeAdapter(nextSnapshot.markdown);
+    const nextVisualModeAdapter = createStagedLiveModeAdapter(nextSnapshot.markdown);
     nextUnsubscribe = replacement.session.subscribe((state) => {
-      if (activeSession.value === replacement?.session) sessionState.value = state;
+      if (historyRestoreToken === restoreToken && activeSession.value === replacement?.session) {
+        sessionState.value = state;
+      }
     });
 
-    // The old adapter pair is detached before binding the replacement pair,
-    // while the old session remains available until the replacement is ready.
-    previousDetach?.();
-    detachModeAdapters = undefined;
-    sourceModeAdapter = undefined;
-    visualModeAdapter = undefined;
-    visualMarkdown.value = nextSnapshot.markdown;
-    visualEditorReadOnly.value = true;
-    sourceModeAdapter = createBookkeepingModeAdapter(nextSnapshot.markdown);
-    visualModeAdapter = createLiveModeAdapter(visualMarkdown, visualEditorReadOnly);
     try {
       nextDetach = await replacement.session.attachModeAdapters({
-        source: sourceModeAdapter,
-        visual: visualModeAdapter,
+        source: nextSourceModeAdapter,
+        visual: nextVisualModeAdapter.adapter,
       });
     } catch {
-      sourceModeAdapter = undefined;
-      visualModeAdapter = undefined;
+      // Visual/Split stay unavailable when the replacement cannot attach its
+      // adapters; Source still remains authoritative through session.edit().
+      nextDetach = undefined;
     }
 
+    if (
+      !isCurrentHistoryRestore(restoreToken, expectedGeneration, expectedActiveNoteId, previous)
+    ) {
+      await disposeReplacement();
+      return;
+    }
+
+    // Keep the old adapter pair and authority untouched until the replacement
+    // has passed every async boundary above. The commit below is synchronous,
+    // so a newer restore or note activation cannot interleave with the swap.
+    previousDetach?.();
+    nextVisualModeAdapter.commit();
+    sourceModeAdapter = nextSourceModeAdapter;
+    visualModeAdapter = nextVisualModeAdapter.adapter;
     activeSession.value = replacement.session;
     activeSessionContext.value = replacement.context;
     sessionState.value = nextSnapshot;
     unsubscribeSession = nextUnsubscribe;
     detachModeAdapters = nextDetach;
+    committed = true;
     const noteToUpdate = notes.value.find((existing) => existing.id === note.id);
     if (noteToUpdate) noteToUpdate.markdown = expectedMarkdown;
 
     previousUnsubscribe?.();
-    if (previous) await previous.dispose();
+    await previous.dispose();
   } catch {
-    nextUnsubscribe?.();
-    nextDetach?.();
-    if (replacement) await replacement.session.dispose();
-    // Creation and validation failures leave the existing authority selected.
-    // Restore its subscriptions and projection references without fabricating
-    // a conflict state.
-    unsubscribeSession = previousUnsubscribe;
-    detachModeAdapters = previousDetach;
-    activeSession.value = previous;
-    sessionState.value = previous?.snapshot();
+    if (committed) return;
+    await disposeReplacement();
     return;
   }
 }

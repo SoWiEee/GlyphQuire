@@ -46,7 +46,7 @@ function state(overrides: Partial<EditorSessionState> = {}): EditorSessionState 
   };
 }
 
-function fakeSession(initialState = state()) {
+function fakeSession(initialState = state(), attachModeAdapters = vi.fn(async () => () => {})) {
   let current = initialState;
   const listeners = new Set<(next: EditorSessionState) => void>();
   const edit = vi.fn((markdown: string) => {
@@ -57,7 +57,7 @@ function fakeSession(initialState = state()) {
     snapshot: () => current,
     edit,
     switchMode: vi.fn(async () => ({ success: true, mode: "source" as const })),
-    attachModeAdapters: vi.fn(async () => () => {}),
+    attachModeAdapters,
     saveNow: vi.fn(async () => undefined),
     requestTakeover: vi.fn(async () => false),
     subscribe(listener) {
@@ -382,6 +382,197 @@ describe("Workbench EditorSession composition", () => {
     source.element.textContent = "# Still current";
     await source.trigger("input");
     expect(current.edit).toHaveBeenCalledWith("# Still current");
+
+    wrapper.unmount();
+  });
+
+  it("rejects a delayed restore after switching to another note", async () => {
+    const current = fakeSession(state({ noteId: NOTE_ID, markdown: "# Current" }));
+    const nextNote = fakeSession(state({ noteId: OTHER_NOTE_ID, markdown: "# Other current" }));
+    const staleReplacement = fakeSession(
+      state({ noteId: NOTE_ID, baseRevision: 2, markdown: "# Restored" }),
+    );
+    const delayedRestore = deferred<EditorSession>();
+    let noteFactoryCalls = 0;
+    const sessionFactory = vi.fn((note: { id: string }) => {
+      if (note.id === NOTE_ID) {
+        noteFactoryCalls += 1;
+        return noteFactoryCalls === 1 ? Promise.resolve(current.session) : delayedRestore.promise;
+      }
+      return Promise.resolve(nextNote.session);
+    });
+    const VersionHistoryStub = defineComponent({
+      props: { noteId: { type: String, required: true }, currentRevision: { type: Number } },
+      emits: ["restored"],
+      setup(_, { emit }) {
+        return () => h("button", { onClick: () => emit("restored", noteResult()) }, "restore");
+      },
+    });
+    const wrapper = mount(Workbench, {
+      props: {
+        initialNotes: [
+          { id: NOTE_ID, title: "Current", markdown: "# Current" },
+          { id: OTHER_NOTE_ID, title: "Other", markdown: "# Other seed" },
+        ],
+        phase5WorkspaceId: "33333333-3333-4333-8333-333333333333",
+        phase5NoteId: NOTE_ID,
+        sessionFactory,
+      },
+      global: {
+        stubs: { SourceEditor: SourceEditorStub, VersionHistory: VersionHistoryStub },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.get('button[aria-label="Open context tools"]').trigger("click");
+    await wrapper.get('button[aria-label="Open version history"]').trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === "restore")!
+      .trigger("click");
+    await nextTick();
+    expect(sessionFactory).toHaveBeenCalledTimes(2);
+
+    await wrapper.findAll('nav[aria-label="Notes explorer"] button')[1]!.trigger("click");
+    await flushPromises();
+    expect(wrapper.get('[data-testid="session-source"]').text()).toBe("# Other current");
+
+    delayedRestore.resolve(staleReplacement.session);
+    await flushPromises();
+
+    expect(staleReplacement.session.dispose).toHaveBeenCalledOnce();
+    expect(nextNote.session.dispose).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid="session-source"]').text()).toBe("# Other current");
+    const source = wrapper.get('[data-testid="session-source"]');
+    source.element.textContent = "# Other edit";
+    await source.trigger("input");
+    expect(nextNote.edit).toHaveBeenCalledWith("# Other edit");
+    expect(staleReplacement.edit).not.toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
+  it("lets the newest overlapping restore win", async () => {
+    const current = fakeSession(state({ baseRevision: 1, markdown: "# Current" }));
+    const olderReplacement = fakeSession(state({ baseRevision: 2, markdown: "# Older restore" }));
+    const newerReplacement = fakeSession(state({ baseRevision: 2, markdown: "# Newer restore" }));
+    const olderRestore = deferred<EditorSession>();
+    const newerRestore = deferred<EditorSession>();
+    let noteFactoryCalls = 0;
+    const sessionFactory = vi.fn(() => {
+      noteFactoryCalls += 1;
+      if (noteFactoryCalls === 1) return Promise.resolve(current.session);
+      return noteFactoryCalls === 2 ? olderRestore.promise : newerRestore.promise;
+    });
+    const restoredResults = [
+      noteResult({ contentMarkdown: "# Older restore" }),
+      noteResult({ contentMarkdown: "# Newer restore" }),
+    ];
+    let restoreCount = 0;
+    const VersionHistoryStub = defineComponent({
+      props: { noteId: { type: String, required: true }, currentRevision: { type: Number } },
+      emits: ["restored"],
+      setup(_, { emit }) {
+        return () =>
+          h(
+            "button",
+            { onClick: () => emit("restored", restoredResults[restoreCount++]!) },
+            "restore",
+          );
+      },
+    });
+    const wrapper = mount(Workbench, {
+      props: {
+        initialNotes: [{ id: NOTE_ID, title: "Current", markdown: "# Current" }],
+        phase5WorkspaceId: "33333333-3333-4333-8333-333333333333",
+        phase5NoteId: NOTE_ID,
+        sessionFactory,
+      },
+      global: {
+        stubs: { SourceEditor: SourceEditorStub, VersionHistory: VersionHistoryStub },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.get('button[aria-label="Open context tools"]').trigger("click");
+    await wrapper.get('button[aria-label="Open version history"]').trigger("click");
+    const restoreButton = () =>
+      wrapper.findAll("button").find((button) => button.text() === "restore")!;
+    await restoreButton().trigger("click");
+    await restoreButton().trigger("click");
+    await nextTick();
+    expect(sessionFactory).toHaveBeenCalledTimes(3);
+
+    newerRestore.resolve(newerReplacement.session);
+    await flushPromises();
+    expect(wrapper.get('[data-testid="session-source"]').text()).toBe("# Newer restore");
+    expect(current.session.dispose).toHaveBeenCalledOnce();
+    expect(newerReplacement.session.dispose).not.toHaveBeenCalled();
+
+    olderRestore.resolve(olderReplacement.session);
+    await flushPromises();
+    expect(olderReplacement.session.dispose).toHaveBeenCalledOnce();
+    expect(newerReplacement.session.dispose).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid="session-source"]').text()).toBe("# Newer restore");
+    const source = wrapper.get('[data-testid="session-source"]');
+    source.element.textContent = "# Newer edit";
+    await source.trigger("input");
+    expect(newerReplacement.edit).toHaveBeenCalledWith("# Newer edit");
+    expect(olderReplacement.edit).not.toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
+  it("does not route pending replacement edits through the current session", async () => {
+    const current = fakeSession(state({ baseRevision: 1, markdown: "# Current" }));
+    const attachment = deferred<() => void>();
+    const pendingReplacement = fakeSession(
+      state({ baseRevision: 2, markdown: "# Restored" }),
+      vi.fn(() => attachment.promise),
+    );
+    const sessionFactory = vi
+      .fn()
+      .mockResolvedValueOnce(current.session)
+      .mockResolvedValueOnce(pendingReplacement.session);
+    const VersionHistoryStub = defineComponent({
+      props: { noteId: { type: String, required: true }, currentRevision: { type: Number } },
+      emits: ["restored"],
+      setup(_, { emit }) {
+        return () => h("button", { onClick: () => emit("restored", noteResult()) }, "restore");
+      },
+    });
+    const wrapper = mount(Workbench, {
+      props: {
+        initialNotes: [{ id: NOTE_ID, title: "Current", markdown: "# Current" }],
+        phase5WorkspaceId: "33333333-3333-4333-8333-333333333333",
+        phase5NoteId: NOTE_ID,
+        sessionFactory,
+      },
+      global: {
+        stubs: { SourceEditor: SourceEditorStub, VersionHistory: VersionHistoryStub },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.get('button[aria-label="Open context tools"]').trigger("click");
+    await wrapper.get('button[aria-label="Open version history"]').trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === "restore")!
+      .trigger("click");
+    await nextTick();
+    expect(pendingReplacement.session.attachModeAdapters).toHaveBeenCalledOnce();
+
+    current.edit.mockClear();
+    pendingReplacement.edit("# Pending replacement edit");
+    expect(current.edit).not.toHaveBeenCalled();
+    expect(current.session.snapshot().markdown).toBe("# Current");
+
+    attachment.resolve(() => {});
+    await flushPromises();
+    expect(wrapper.get('[data-testid="session-source"]').text()).toBe("# Restored");
+    expect(current.session.dispose).toHaveBeenCalledOnce();
+    expect(pendingReplacement.session.dispose).not.toHaveBeenCalled();
 
     wrapper.unmount();
   });
