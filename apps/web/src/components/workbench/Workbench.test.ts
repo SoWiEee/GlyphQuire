@@ -6,6 +6,9 @@ import { defineComponent, h, nextTick } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NoteConflict } from "@glyphquire/api-contract";
 import Workbench from "./Workbench.vue";
+import EditorTabs from "./EditorTabs.vue";
+import StatusBar from "./StatusBar.vue";
+import TopBar from "./TopBar.vue";
 import type {
   EditorModeAdapters,
   EditorSession,
@@ -163,6 +166,34 @@ describe("Workbench EditorSession composition", () => {
     const pinia = createPinia();
     setActivePinia(pinia);
     config.global.plugins = [pinia];
+  });
+
+  it("marks active navigation mode, tab, and status surfaces with semantic hooks", () => {
+    const topBar = mount(TopBar, {
+      props: { noteTitle: "Field notes", mode: "source" },
+    });
+    expect(topBar.get("header").classes()).toContain("gq-topbar");
+    expect(topBar.get('[role="radio"][aria-checked="true"]').attributes("data-active")).toBe(
+      "true",
+    );
+
+    const tabs = mount(EditorTabs, {
+      props: {
+        tabs: [{ id: NOTE_ID, title: "Field notes", markdown: "# Notes" }],
+        activeTabId: NOTE_ID,
+      },
+    });
+    expect(tabs.get('[role="tab"][aria-selected="true"]').attributes("data-active")).toBe("true");
+
+    const status = mount(StatusBar, {
+      props: {
+        noteTitle: "Field notes",
+        mode: "source",
+        wordCount: 2,
+        saveState: "saved",
+      },
+    });
+    expect(status.get("footer").classes()).toContain("gq-statusbar");
   });
 
   it("surfaces save failures, retries the active session, and leaves conflicts read-only without identity", async () => {

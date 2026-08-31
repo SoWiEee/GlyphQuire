@@ -1,7 +1,7 @@
 <template>
-  <div class="flex h-full min-h-0 w-full" data-testid="split-editor">
+  <div class="gq-split-editor flex h-full min-h-0 w-full" data-testid="split-editor">
     <div
-      class="min-w-0 flex-1 overflow-auto border-r border-gray-200"
+      class="gq-editor-pane gq-editor-pane--source min-w-0 flex-1 overflow-auto border-r"
       role="group"
       aria-label="Source pane"
     >
@@ -14,7 +14,11 @@
         @slash-command="onSlashCommand"
       />
     </div>
-    <div class="min-w-0 flex-1 overflow-auto" role="group" aria-label="Visual pane">
+    <div
+      class="gq-editor-pane gq-editor-pane--visual min-w-0 flex-1 overflow-auto"
+      role="group"
+      aria-label="Visual pane"
+    >
       <VisualEditor
         ref="visualEditorRef"
         :markdown="visualMarkdown"

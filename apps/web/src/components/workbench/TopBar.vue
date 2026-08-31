@@ -1,18 +1,16 @@
 <template>
-  <header
-    class="gq-top-bar flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2"
-  >
+  <header class="gq-topbar gq-top-bar flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <span class="text-sm font-semibold text-gray-900">GlyphQuire</span>
-      <span class="text-sm text-gray-400" aria-hidden="true">/</span>
-      <span v-if="workspaceName" class="text-sm text-gray-500">{{ workspaceName }}</span>
-      <span v-if="workspaceName" class="text-sm text-gray-400" aria-hidden="true">/</span>
-      <span class="text-sm text-gray-600">{{ noteTitle ?? "No note open" }}</span>
+      <span class="gq-topbar__brand text-sm font-semibold">GlyphQuire</span>
+      <span class="gq-topbar__separator text-sm" aria-hidden="true">/</span>
+      <span v-if="workspaceName" class="gq-topbar__workspace text-sm">{{ workspaceName }}</span>
+      <span v-if="workspaceName" class="gq-topbar__separator text-sm" aria-hidden="true">/</span>
+      <span class="gq-topbar__note text-sm">{{ noteTitle ?? "No note open" }}</span>
     </div>
 
     <div class="flex items-center gap-2">
       <div
-        class="flex items-center rounded-md border border-gray-300 p-0.5"
+        class="gq-topbar__modes flex items-center rounded-md border p-0.5"
         role="radiogroup"
         aria-label="Editor mode"
       >
@@ -20,8 +18,9 @@
           type="button"
           role="radio"
           :aria-checked="mode === 'source'"
-          class="rounded px-2 py-1 text-xs font-medium"
-          :class="mode === 'source' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'"
+          class="gq-topbar__mode rounded px-2 py-1 text-xs font-medium"
+          :class="{ 'gq-topbar__mode--active': mode === 'source' }"
+          :data-active="mode === 'source' ? 'true' : undefined"
           @click="emit('update:mode', 'source')"
         >
           Source
@@ -30,8 +29,9 @@
           type="button"
           role="radio"
           :aria-checked="mode === 'visual'"
-          class="rounded px-2 py-1 text-xs font-medium"
-          :class="mode === 'visual' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'"
+          class="gq-topbar__mode rounded px-2 py-1 text-xs font-medium"
+          :class="{ 'gq-topbar__mode--active': mode === 'visual' }"
+          :data-active="mode === 'visual' ? 'true' : undefined"
           @click="emit('update:mode', 'visual')"
         >
           Visual
@@ -40,8 +40,9 @@
           type="button"
           role="radio"
           :aria-checked="mode === 'split'"
-          class="rounded px-2 py-1 text-xs font-medium"
-          :class="mode === 'split' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'"
+          class="gq-topbar__mode rounded px-2 py-1 text-xs font-medium"
+          :class="{ 'gq-topbar__mode--active': mode === 'split' }"
+          :data-active="mode === 'split' ? 'true' : undefined"
           @click="emit('update:mode', 'split')"
         >
           Split
@@ -50,7 +51,7 @@
 
       <button
         type="button"
-        class="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        class="gq-topbar__action rounded-md border px-3 py-1 text-xs font-medium"
         aria-label="Open theme editor"
         @click="emit('open-theme-editor')"
       >
@@ -59,18 +60,18 @@
 
       <button
         type="button"
-        class="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        class="gq-topbar__action rounded-md border px-3 py-1 text-xs font-medium"
         aria-label="Open command palette"
         @click="emit('open-palette')"
       >
         Commands
-        <kbd class="ml-1 rounded bg-gray-100 px-1 text-[10px] text-gray-600">⌘K</kbd>
+        <kbd class="gq-topbar__key ml-1 rounded px-1 text-[10px]">⌘K</kbd>
       </button>
 
       <div v-if="accountLabel" class="relative">
         <button
           type="button"
-          class="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          class="gq-topbar__action rounded-md border px-2 py-1 text-xs font-medium"
           aria-label="Open account menu"
           :aria-expanded="accountMenuOpen"
           aria-haspopup="menu"
@@ -82,14 +83,14 @@
           v-if="accountMenuOpen"
           role="menu"
           aria-label="Account menu"
-          class="absolute right-0 z-20 mt-2 grid min-w-36 gap-1 rounded-md border border-gray-200 bg-white p-1 shadow-lg"
+          class="gq-topbar__menu absolute right-0 z-20 mt-2 grid min-w-36 gap-1 rounded-md border p-1 shadow-lg"
           @keydown.esc="accountMenuOpen = false"
         >
           <button
             type="button"
             role="menuitem"
             aria-label="Theme"
-            class="rounded px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100"
+            class="gq-topbar__menu-item rounded px-2 py-1.5 text-left text-sm"
             @click="onAccountAction('theme')"
           >
             Theme
@@ -98,7 +99,7 @@
             type="button"
             role="menuitem"
             aria-label="Sign out"
-            class="rounded px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100"
+            class="gq-topbar__menu-item rounded px-2 py-1.5 text-left text-sm"
             @click="onAccountAction('sign-out')"
           >
             Sign out
@@ -107,7 +108,7 @@
             type="button"
             role="menuitem"
             aria-label="Close menu"
-            class="rounded px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100"
+            class="gq-topbar__menu-item rounded px-2 py-1.5 text-left text-sm"
             @click="accountMenuOpen = false"
           >
             Close menu

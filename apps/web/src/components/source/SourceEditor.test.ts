@@ -7,6 +7,16 @@ import { EditorView } from "@codemirror/view";
 describe("SourceEditor", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it("exposes a paper-canvas surface hook and locked state marker", () => {
+    const wrapper = mount(SourceEditor, { props: { markdown: "private draft" } });
+
+    const surface = wrapper.get('[data-testid="source-editor-host"]');
+    expect(surface.classes()).toContain("gq-editor-surface");
+    expect(surface.attributes("data-read-only")).toBe("true");
+
+    wrapper.unmount();
+  });
+
   it("mounts fail-safe read-only when no authority explicitly grants writes", () => {
     const wrapper = mount(SourceEditor, { props: { markdown: "private draft" } });
 

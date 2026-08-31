@@ -49,6 +49,18 @@ describe("workbench stylesheet", () => {
     );
   });
 
+  it("defines navigation and editor surface hooks from theme tokens", () => {
+    expect(stylesheet).toContain(".gq-editor-surface {");
+    expect(stylesheet).toContain("background: var(--gq-surface);");
+    expect(stylesheet).toContain("color: var(--gq-color-foreground);");
+    expect(stylesheet).toContain("font-family: var(--gq-typography-body-font);");
+    expect(stylesheet).toContain("width: min(68ch, 100%);");
+    expect(stylesheet).toContain('.gq-editor-tabs [aria-selected="true"]');
+    expect(stylesheet).toContain("border-bottom: 2px solid var(--gq-color-accent);");
+    expect(stylesheet).toContain(".gq-explorer,");
+    expect(stylesheet).toContain(".gq-context-rail {");
+  });
+
   it.each([
     ["light", defaultTheme],
     ["dark", defaultDarkTheme],

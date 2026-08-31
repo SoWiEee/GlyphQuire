@@ -35,6 +35,17 @@ const props = {
 };
 
 describe("SplitEditor", () => {
+  it("marks the split editor and each pane with semantic surface hooks", () => {
+    const wrapper = mount(SplitEditor, {
+      props,
+      global: { stubs: { SourceEditor: SourcePane, VisualEditor: VisualPane } },
+    });
+
+    expect(wrapper.get('[data-testid="split-editor"]').classes()).toContain("gq-split-editor");
+    expect(wrapper.get('[aria-label="Source pane"]').classes()).toContain("gq-editor-pane");
+    expect(wrapper.get('[aria-label="Visual pane"]').classes()).toContain("gq-editor-pane");
+  });
+
   it("delegates toolbar and replacement actions to the writable pane", () => {
     const wrapper = mount(SplitEditor, {
       props,

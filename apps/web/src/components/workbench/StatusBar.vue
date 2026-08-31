@@ -1,16 +1,21 @@
 <template>
   <footer
-    class="flex items-center justify-between border-t border-gray-200 bg-gray-900 px-4 py-1 text-xs text-gray-200"
+    class="gq-statusbar flex items-center justify-between border-t px-4 py-1 text-xs"
     role="status"
     aria-live="polite"
   >
-    <span aria-label="Active note">
+    <span class="gq-statusbar__note" aria-label="Active note">
       {{ noteTitle ?? "No note open" }}
     </span>
-    <div class="flex items-center gap-4">
-      <StatusIndicator class="text-gray-100" :state="saveState" :detail="saveDetail" compact />
-      <span aria-label="Editor mode">{{ modeLabel }}</span>
-      <span aria-label="Word count">{{ wordCount }} words</span>
+    <div class="gq-statusbar__details flex items-center gap-4">
+      <StatusIndicator
+        class="gq-statusbar__indicator"
+        :state="saveState"
+        :detail="saveDetail"
+        compact
+      />
+      <span class="gq-statusbar__mode" aria-label="Editor mode">{{ modeLabel }}</span>
+      <span class="gq-statusbar__word-count" aria-label="Word count">{{ wordCount }} words</span>
     </div>
   </footer>
 </template>

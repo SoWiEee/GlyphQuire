@@ -1,5 +1,10 @@
 <template>
-  <div ref="hostRef" class="h-full w-full overflow-auto text-sm" data-testid="visual-editor-host" />
+  <div
+    ref="hostRef"
+    class="gq-editor-surface gq-visual-editor"
+    :data-read-only="readOnly ? 'true' : 'false'"
+    data-testid="visual-editor-host"
+  />
 </template>
 
 <script setup lang="ts">

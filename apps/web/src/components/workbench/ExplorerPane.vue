@@ -1,21 +1,18 @@
 <template>
   <nav
-    class="gq-explorer-pane w-56 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50"
+    class="gq-explorer gq-explorer-pane w-56 shrink-0 overflow-y-auto border-r"
     aria-label="Notes explorer"
   >
-    <h2 class="px-3 pt-3 pb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+    <h2 class="gq-explorer__heading px-3 pt-3 pb-2 text-xs font-semibold uppercase tracking-wide">
       Notes
     </h2>
     <ul class="pb-3">
       <li v-for="note in notes" :key="note.id">
         <button
           type="button"
-          class="flex w-full items-center px-3 py-1.5 text-left text-sm"
-          :class="
-            note.id === activeNoteId
-              ? 'bg-gray-200 font-medium text-gray-900'
-              : 'text-gray-700 hover:bg-gray-100'
-          "
+          class="gq-explorer__note flex w-full items-center px-3 py-1.5 text-left text-sm"
+          :class="{ 'gq-explorer__note--active': note.id === activeNoteId }"
+          :data-active="note.id === activeNoteId ? 'true' : undefined"
           :aria-current="note.id === activeNoteId ? 'true' : undefined"
           @click="emit('select', note.id)"
         >
@@ -24,7 +21,7 @@
       </li>
     </ul>
 
-    <div class="grid gap-1 border-t border-gray-200 px-3 py-3">
+    <div class="gq-explorer__actions grid gap-1 border-t px-3 py-3">
       <p v-if="!workspaceAvailable" id="explorer-workspace-unavailable" class="sr-only">
         Workspace actions are unavailable until an authenticated workspace is selected.
       </p>
@@ -32,7 +29,7 @@
         type="button"
         aria-label="Search notes"
         :aria-describedby="workspaceAvailable ? undefined : 'explorer-workspace-unavailable'"
-        class="rounded px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+        class="gq-explorer__action rounded px-2 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
         :disabled="!workspaceAvailable"
         @click="emit('search')"
       >
@@ -42,7 +39,7 @@
         type="button"
         aria-label="Open shared links"
         :aria-describedby="workspaceAvailable ? undefined : 'explorer-workspace-unavailable'"
-        class="rounded px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+        class="gq-explorer__action rounded px-2 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
         :disabled="!workspaceAvailable"
         @click="emit('shared-links')"
       >

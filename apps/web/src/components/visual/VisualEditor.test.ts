@@ -8,6 +8,16 @@ const markdown = ["---", "glyphquire-spec: 1", "---", "", "# Research", "", "Bod
 describe("VisualEditor", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it("exposes a paper-canvas surface hook and locked state marker", () => {
+    const wrapper = mount(VisualEditor, { props: { markdown } });
+
+    const surface = wrapper.get('[data-testid="visual-editor-host"]');
+    expect(surface.classes()).toContain("gq-editor-surface");
+    expect(surface.attributes("data-read-only")).toBe("true");
+
+    wrapper.unmount();
+  });
+
   it("renders canonical heading anchors on the visual surface", async () => {
     const wrapper = mount(VisualEditor, { props: { markdown } });
     await flushPromises();
