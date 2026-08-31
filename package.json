@@ -13,7 +13,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "test:integration": "pnpm --filter @glyphquire/api test:integration && pnpm --filter @glyphquire/queue test:integration",
-    "test:integration:phase6": "vitest run --config /dev/null tests/integration/phase6-release-checklist.test.ts tests/integration/phase6-deployment.test.ts tests/integration/phase6-preflight-route.test.ts tests/integration/phase6-backup-restore.test.ts",
+    "test:integration:phase6": "vitest run --config /dev/null tests/integration/phase6-release-checklist.test.ts tests/integration/phase6-deployment.test.ts tests/integration/phase6-preflight-route.test.ts tests/integration/phase6-backup-restore.test.ts tests/integration/phase6-screen-reader-evidence.test.ts tests/integration/phase6-release-gate.test.ts",
     "test:integration:phase6-observability": "bash infra/observability/phase6-observability-test.sh",
     "test:release:phase6": "bash infra/phase6/phase6-release-gate.sh",
     "test:cross-package": "vitest run --config vitest.config.ts",
