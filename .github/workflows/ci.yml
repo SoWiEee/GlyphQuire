@@ -68,8 +68,8 @@ jobs:
       - name: Cross-package scaffold
         run: pnpm test:cross-package
 
-      - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Install local Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
 
       - name: Chrome E2E, accessibility, security, and performance evidence
         run: pnpm test:e2e
