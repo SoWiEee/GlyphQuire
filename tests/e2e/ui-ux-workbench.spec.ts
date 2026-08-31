@@ -109,8 +109,27 @@ test.describe("Task 6 workbench UI acceptance", () => {
       await expect(status.locator('[data-status-icon="unavailable"]')).toHaveText("×");
       const statusColor = await status
         .locator('[data-status-icon="unavailable"]')
-        .evaluate((element) => getComputedStyle(element).color);
-      expect(statusColor).toMatch(/^rgb/iu);
+        .evaluate((element) => {
+          const style = getComputedStyle(element);
+          const tokenValue = style.getPropertyValue("--gq-status-danger").trim();
+          const tokenProbe = document.createElement("span");
+          tokenProbe.style.color = tokenValue;
+          document.body.append(tokenProbe);
+          const resolvedTokenColor = getComputedStyle(tokenProbe).color;
+          tokenProbe.remove();
+          return {
+            renderedColor: style.color,
+            statusToken: tokenValue,
+            dangerToken: getComputedStyle(document.documentElement)
+              .getPropertyValue("--gq-color-danger")
+              .trim(),
+            resolvedTokenColor,
+          };
+        });
+      expect(statusColor.statusToken).toBe(statusColor.dangerToken);
+      expect(statusColor.statusToken).toBe("#a13d3d");
+      expect(statusColor.dangerToken).toBe("#a13d3d");
+      expect(statusColor.renderedColor).toBe(statusColor.resolvedTokenColor);
 
       axeFindings.push(...(await criticalAxeFindings(page)));
     });

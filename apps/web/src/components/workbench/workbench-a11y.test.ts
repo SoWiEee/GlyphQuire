@@ -43,8 +43,38 @@ describe("Workbench accessibility smoke", () => {
     await flushPromises();
 
     expect(wrapper.get('button[aria-label="Open shared links"]').isDisabled()).toBe(true);
-    await wrapper.get('button[aria-label="Open account menu"]').trigger("click");
-    await wrapper.get('button[aria-label="Sign out"]').trigger("click");
+
+    const accountButton = wrapper.get('button[aria-label="Open account menu"]').element;
+    accountButton.focus();
+    accountButton.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+    );
+    // happy-dom does not synthesize a native button click from keydown; this is
+    // the browser's default Enter activation represented explicitly in the smoke.
+    accountButton.click();
+    await nextTick();
+    expect(wrapper.get('[role="menu"][aria-label="Account menu"]').exists()).toBe(true);
+
+    const accountMenu = wrapper.get('[role="menu"][aria-label="Account menu"]').element;
+    accountMenu.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+    );
+    await nextTick();
+    expect(wrapper.find('[role="menu"][aria-label="Account menu"]').exists()).toBe(false);
+
+    accountButton.focus();
+    accountButton.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+    );
+    accountButton.click();
+    await nextTick();
+    const signOutButton = wrapper.get('button[aria-label="Sign out"]').element;
+    signOutButton.focus();
+    signOutButton.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+    );
+    signOutButton.click();
+    await nextTick();
     expect(wrapper.emitted("account-action")).toEqual([["sign-out"]]);
 
     wrapper.unmount();

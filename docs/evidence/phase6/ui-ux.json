@@ -48,7 +48,7 @@
     {
       "id": "theme-contrast",
       "status": "passed",
-      "evidence": "Default light and dark foreground, muted, accent, border, and focus color pairs met the WCAG AA thresholds."
+      "evidence": "Default light and dark foreground, muted, accent, and border color pairs met the WCAG AA thresholds."
     },
     {
       "id": "axe",
