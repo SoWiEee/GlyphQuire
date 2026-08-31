@@ -9,7 +9,7 @@ import {
   rateLimitBuckets,
   rateLimitReservations,
   readRepositoryMigrations,
-  runDatabaseMigrations,
+  MigrationRunner,
   verifyMigrationBaseline,
   type Database,
 } from "@glyphquire/database";
@@ -1225,7 +1225,9 @@ describeWithPostgres("Better Auth cookie and trusted-origin integration", () => 
     await adminDb.$client.unsafe(`create database "${databaseName}"`);
     adminUrl.pathname = `/${databaseName}`;
     db = createDb(adminUrl.toString());
-    await runDatabaseMigrations(db, { migrationsFolder: migrationsDirectory });
+    await new MigrationRunner({ databaseUrl: adminUrl.toString(), migrationsDirectory }).execute(
+      db,
+    );
   });
 
   afterAll(async () => {
@@ -1551,7 +1553,7 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
       );
     }
     expect(await verifyMigrationBaseline(freshUrl, migrationsDirectory)).toBe("empty");
-    await runDatabaseMigrations(freshDb, { migrationsFolder: migrationsDirectory });
+    await new MigrationRunner({ databaseUrl: freshUrl, migrationsDirectory }).execute(freshDb);
 
     const roleSuffix = randomUUID().replaceAll("-", "").slice(0, 20);
     providerRuntimeRole = `provider_runtime_${roleSuffix}`;
@@ -1669,7 +1671,7 @@ describeWithPostgres("atomic PostgreSQL rate limiting and migration paths", () =
       body: await phase0AppHttpResponse.json(),
     };
     expect(await verifyMigrationBaseline(phase0Url, migrationsDirectory)).toBe("baselined");
-    await runDatabaseMigrations(phase0Db, { migrationsFolder: migrationsDirectory });
+    await new MigrationRunner({ databaseUrl: phase0Url, migrationsDirectory }).execute(phase0Db);
   });
 
   afterAll(async () => {

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { MigrationRunner } from "../migrations/MigrationRunner.js";
 import { getTableConfig, type AnyPgTable } from "drizzle-orm/pg-core";
 import postgres, { type Sql } from "postgres";
 import { afterAll, beforeAll, describe, expect, expectTypeOf, it } from "vitest";
@@ -453,7 +453,7 @@ describeWithPostgres("note persistence database constraints", () => {
     await verifyMigrationBaseline(databaseUrl, migrationsDirectory);
     const db = createDb(databaseUrl);
     try {
-      await migrate(db, { migrationsFolder: migrationsDirectory });
+      await new MigrationRunner({ databaseUrl, migrationsDirectory }).execute(db);
     } finally {
       await db.$client.end();
     }

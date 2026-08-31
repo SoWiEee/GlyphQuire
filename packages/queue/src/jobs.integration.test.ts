@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { createDb, jobs, runDatabaseMigrations, type Database } from "@glyphquire/database";
+import { createDb, jobs, MigrationRunner, type Database } from "@glyphquire/database";
 import { eq } from "drizzle-orm";
 import { PostgresJobDispatcher, type JobHandler } from "./jobs.js";
 
@@ -31,7 +31,10 @@ describeWithPostgres("PostgresJobDispatcher claim ownership", () => {
     databaseName = `glyphquire_p5_claim_${randomUUID().replaceAll("-", "")}`;
     await admin.$client.unsafe(`create database "${databaseName}"`);
     database = createDb(urlForDatabase(url.toString(), databaseName));
-    await runDatabaseMigrations(database, { migrationsFolder: migrationsDirectory });
+    await new MigrationRunner({
+      databaseUrl: url.toString(),
+      migrationsDirectory,
+    }).execute(database);
   });
 
   afterAll(async () => {

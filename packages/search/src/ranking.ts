@@ -112,11 +112,11 @@ function compareRankedResults(left: RankedSearchResult, right: RankedSearchResul
  * `relevance` preserves the backend relevance score, while `weighted-v1`
  * derives the score from title/tags/headings/body.
  */
-export function rankSearchResults(
-  documents: readonly SearchRankingDocument[],
+export function rankSearchResults<T extends SearchRankingDocument>(
+  documents: readonly T[],
   query: string,
   ranking: SearchRanking = DEFAULT_SEARCH_RANKING,
-): RankedSearchResult[] {
+): Array<T & RankedSearchResult> {
   if (ranking !== "relevance" && ranking !== "weighted-v1") {
     throw new RangeError("Unsupported search ranking");
   }

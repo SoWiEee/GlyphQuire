@@ -7,19 +7,16 @@ import {
   type ExportFormat,
   type ExportResult,
 } from "@glyphquire/api-contract";
-import { idempotencyKeySchema, opaqueAuthIdSchema } from "@glyphquire/api-contract/jobs";
-import type { JobDispatcher, TransactionalJobDispatcher } from "@glyphquire/queue";
+import { opaqueAuthIdSchema } from "@glyphquire/api-contract/jobs";
+import type { JobDispatcher } from "@glyphquire/queue";
 import type { ObjectStoragePort } from "@glyphquire/storage";
 import { and, eq, isNull, lte, ne } from "drizzle-orm";
 import { PublicApiError } from "../../middleware/error-handler.js";
+import { TransferCoordinator } from "./TransferCoordinator.js";
 
 const DEFAULT_EXPORT_EXPIRY_SECONDS = 30 * 24 * 60 * 60;
 const DEFAULT_DOWNLOAD_URL_EXPIRY_SECONDS = 5 * 60;
 const MILLISECONDS_PER_SECOND = 1_000;
-
-type DbTransaction = Parameters<Database["transaction"]>[0] extends (tx: infer Tx) => unknown
-  ? Tx
-  : never;
 
 export type ExportStartScope =
   | { workspaceId: string; noteId?: never }
@@ -50,27 +47,6 @@ interface ResolvedScope {
 
 function invalidExport(status: 400 | 404 = 400): never {
   throw new PublicApiError("EXPORT_FAILED", status);
-}
-
-function isTransactionalDispatcher(
-  dispatcher: JobDispatcher,
-): dispatcher is TransactionalJobDispatcher {
-  return (
-    "withDatabaseExecutor" in dispatcher && typeof dispatcher.withDatabaseExecutor === "function"
-  );
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const candidate = error as { code?: string; cause?: { code?: string } };
-  return candidate.code === "23505" || candidate.cause?.code === "23505";
-}
-
-function positiveBoundedSeconds(value: number, label: string): number {
-  if (!Number.isInteger(value) || value < 1 || value > 31_536_000) {
-    throw new Error(`Invalid ${label}`);
-  }
-  return value;
 }
 
 function toResult(row: Export): ExportResult {
@@ -109,6 +85,7 @@ export class ExportServiceImpl implements ExportService {
   private readonly expirySeconds: number;
   private readonly downloadUrlExpirySeconds: number;
   private readonly clock: () => number;
+  private readonly coordinator: TransferCoordinator;
 
   constructor(
     private readonly db: Database,
@@ -116,11 +93,12 @@ export class ExportServiceImpl implements ExportService {
     private readonly dispatcher: JobDispatcher,
     options: ExportServiceOptions = {},
   ) {
-    this.expirySeconds = positiveBoundedSeconds(
+    this.coordinator = new TransferCoordinator(this.db, this.dispatcher);
+    this.expirySeconds = this.coordinator.validateSeconds(
       options.expirySeconds ?? DEFAULT_EXPORT_EXPIRY_SECONDS,
       "export expiry",
     );
-    this.downloadUrlExpirySeconds = positiveBoundedSeconds(
+    this.downloadUrlExpirySeconds = this.coordinator.validateSeconds(
       options.downloadUrlExpirySeconds ?? DEFAULT_DOWNLOAD_URL_EXPIRY_SECONDS,
       "export download URL expiry",
     );
@@ -128,13 +106,6 @@ export class ExportServiceImpl implements ExportService {
       throw new Error("Invalid export download URL expiry");
     }
     this.clock = options.clock ?? Date.now;
-  }
-
-  private transactionDispatcher(tx: DbTransaction): JobDispatcher {
-    if (!isTransactionalDispatcher(this.dispatcher)) {
-      throw new Error("JOB_FAILED: transactional enqueue unavailable");
-    }
-    return this.dispatcher.withDatabaseExecutor(tx);
   }
 
   private async resolveScope(actorId: string, scope: ExportStartScope): Promise<ResolvedScope> {
@@ -207,38 +178,22 @@ export class ExportServiceImpl implements ExportService {
     idempotencyKey: string,
   ): Promise<ExportResult> {
     const parsedFormat = exportFormatSchema.safeParse(format);
-    if (
-      !opaqueAuthIdSchema.safeParse(actorId).success ||
-      !scope ||
-      typeof scope !== "object" ||
-      Array.isArray(scope) ||
-      Object.getPrototypeOf(scope) !== Object.prototype ||
-      Object.keys(scope).some((key) => key !== "workspaceId" && key !== "noteId") ||
-      !parsedFormat.success ||
-      !idempotencyKeySchema.safeParse(idempotencyKey).success
-    ) {
-      invalidExport();
-    }
+    this.coordinator.validateIdentity(actorId, idempotencyKey, invalidExport);
+    this.coordinator.validateScopeShape(scope, ["workspaceId", "noteId"], invalidExport);
+    if (!parsedFormat.success) invalidExport();
 
     const requestedFormat = parsedFormat.data;
     const resolved = await this.resolveScope(actorId, scope);
     const requestHash = hashRequest(resolved, requestedFormat);
-    const replay = await this.existingReplay(
-      actorId,
-      resolved.workspaceId,
-      idempotencyKey,
-      requestHash,
-    );
-    if (replay) return replay;
-
     const exportId = randomUUID();
     const now = new Date(this.clock());
     if (!Number.isFinite(now.getTime())) throw new Error("Invalid export clock");
-    const expiresAt = new Date(now.getTime() + this.expirySeconds * MILLISECONDS_PER_SECOND);
+    const expiresAt = this.coordinator.expiryAt(now, this.expirySeconds, "export expiry");
     const objectKey = `workspace/${resolved.workspaceId}/exports/${exportId}/artifact`;
 
-    try {
-      const row = await this.db.transaction(async (tx) => {
+    const row = await this.coordinator.run({
+      replay: () => this.existingReplay(actorId, resolved.workspaceId, idempotencyKey, requestHash),
+      transaction: async (tx, dispatcher) => {
         const [inserted] = await tx
           .insert(exports)
           .values({
@@ -258,27 +213,16 @@ export class ExportServiceImpl implements ExportService {
           })
           .returning();
         if (!inserted) throw new Error("Export insert returned no row");
-        await this.transactionDispatcher(tx).enqueue({
+        await dispatcher.enqueue({
           workspaceId: resolved.workspaceId,
           type: "export",
           payload: { workspaceId: resolved.workspaceId, exportId },
           idempotencyKey: `export-${exportId}`,
         });
-        return inserted;
-      });
-      return toResult(row);
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        const raced = await this.existingReplay(
-          actorId,
-          resolved.workspaceId,
-          idempotencyKey,
-          requestHash,
-        );
-        if (raced) return raced;
-      }
-      throw error;
-    }
+        return toResult(inserted);
+      },
+    });
+    return row;
   }
 
   private async loadAuthorized(actorId: string, exportId: string): Promise<Export> {

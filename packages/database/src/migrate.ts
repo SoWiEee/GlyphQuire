@@ -1,8 +1,6 @@
-import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { fileURLToPath } from "node:url";
 import { migrationEnvSchema } from "@glyphquire/shared";
-import { createDb } from "./client.js";
-import { verifyMigrationBaseline } from "./migrations/verify-baseline.js";
+import { MigrationRunner } from "./migrations/MigrationRunner.js";
 
 const parsed = migrationEnvSchema.safeParse(process.env);
 if (!parsed.success) {
@@ -10,13 +8,10 @@ if (!parsed.success) {
 }
 
 const migrationsFolder = fileURLToPath(new URL("./migrations", import.meta.url));
-await verifyMigrationBaseline(parsed.data.MIGRATION_DATABASE_URL, migrationsFolder);
-
-const db = createDb(parsed.data.MIGRATION_DATABASE_URL);
-try {
-  await migrate(db, { migrationsFolder });
-} finally {
-  await db.$client.end();
-}
+const runner = new MigrationRunner({
+  databaseUrl: parsed.data.MIGRATION_DATABASE_URL,
+  migrationsDirectory: migrationsFolder,
+});
+await runner.run();
 
 console.log("Migrations complete");

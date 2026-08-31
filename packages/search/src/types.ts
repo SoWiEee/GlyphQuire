@@ -40,16 +40,25 @@ export interface SearchResult {
 }
 
 /**
- * `search()` returns raw ranked rows for the requested page — up to
- * `query.pageSize + 1` results, ordered newest-first with a stable
- * `(updatedAt, noteId)` tie-break. Callers (the API's SearchService) detect
- * "has more" from the overflow row and derive the next cursor from the last
- * kept result themselves; the port never encodes cursor envelopes.
+ * The read-side document returned by a search query. The ranking fields are
+ * selected with the match in one adapter query so API composition never has
+ * to enrich a result by reaching back into the search index.
  */
+export interface SearchDocument extends SearchResult {
+  headings: string;
+  tags: string;
+  body: string;
+}
+
+/** Retrieves already-authorized search documents for a read model. */
+export interface SearchQueryPort {
+  search(query: SearchQuery): Promise<SearchDocument[]>;
+}
+
+/** Mutation-only port used by note-derived indexing jobs. */
 export interface SearchPort {
   indexNote(note: SearchableNote): Promise<void>;
   removeNote(noteId: string): Promise<void>;
-  search(query: SearchQuery): Promise<SearchResult[]>;
 }
 
 export interface DerivedSearchMutationTarget {

@@ -5,9 +5,10 @@ import type {
   DerivedSearchMissingTarget,
   DerivedSearchMutationPort,
   DerivedSearchMutationTarget,
+  SearchDocument,
   SearchPort,
+  SearchQueryPort,
   SearchQuery,
-  SearchResult,
   SearchableNote,
 } from "./types.js";
 
@@ -61,7 +62,7 @@ async function upsertSearchDocument(
 }
 
 /**
- * PostgreSQL-backed SearchPort. Indexing is a revision-gated upsert (a
+ * PostgreSQL-backed search adapter. Indexing is a revision-gated upsert (a
  * stale-revision write is a silent no-op); removal is a plain delete
  * (idempotent — deleting an absent row is a no-op too). Search combines
  * English tsvector matching with pg_trgm similarity so CJK and fuzzy terms
@@ -69,10 +70,11 @@ async function upsertSearchDocument(
  * trigram fallback. Every query scopes both `workspaceId` and current actor
  * membership in the result-selecting SQL statement. The separate derived-job
  * mutations lock the authoritative note row and apply their compare-and-write
- * in one transaction; ordinary SearchPort callers retain the original direct
- * index/remove semantics.
+ * in one transaction; query reads use the separate SearchQueryPort seam.
  */
-export class PostgresSearchAdapter implements SearchPort, DerivedSearchMutationPort {
+export class PostgresSearchAdapter
+  implements SearchPort, SearchQueryPort, DerivedSearchMutationPort
+{
   constructor(private readonly db: Database) {}
 
   async indexNote(note: SearchableNote): Promise<void> {
@@ -168,7 +170,7 @@ export class PostgresSearchAdapter implements SearchPort, DerivedSearchMutationP
     });
   }
 
-  async search(query: SearchQuery): Promise<SearchResult[]> {
+  async search(query: SearchQuery): Promise<SearchDocument[]> {
     const normalizedQuery = normalizeSearchText(query.q);
     // Avoid `LIKE '%%'`, which would turn whitespace-only input into a
     // workspace-wide scan if a caller bypassed the HTTP schema boundary.
@@ -207,6 +209,8 @@ export class PostgresSearchAdapter implements SearchPort, DerivedSearchMutationP
         workspaceId: searchDocuments.workspaceId,
         revision: searchDocuments.revision,
         title: searchDocuments.title,
+        headings: searchDocuments.headings,
+        tags: searchDocuments.tags,
         body: searchDocuments.body,
         updatedAt: searchDocuments.updatedAt,
         tsScore: sql`ts_rank_cd(${searchDocuments.searchVector}, websearch_to_tsquery('english', ${query.q}))`,
@@ -236,7 +240,10 @@ export class PostgresSearchAdapter implements SearchPort, DerivedSearchMutationP
       workspaceId: row.workspaceId,
       revision: row.revision,
       title: row.title,
+      headings: row.headings,
+      tags: row.tags,
       snippet: toSnippet(row.body),
+      body: row.body,
       score: toScore(row.tsScore, row.trgmScore),
       updatedAt: row.updatedAt.toISOString(),
     }));

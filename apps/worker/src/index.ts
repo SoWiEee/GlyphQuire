@@ -244,16 +244,14 @@ export async function startWorker(options: StartWorkerOptions = {}): Promise<Sta
     throwIfStartupAborted(signal);
     const registry = options.registry
       ? options.registry
-      : registryModule!.createJobRegistry(
-          {
-            database,
-            storage,
-            search,
-            environment: env,
-            backupVerifier: options.backupVerifier,
-          },
-          staticRegistry,
-        );
+      : registryModule!.createJobRegistry({
+          database,
+          storage,
+          search,
+          dispatcher,
+          environment: env,
+          backupVerifier: options.backupVerifier,
+        });
     assertRegistryComplete(registry);
     const readyDatabase = database;
     const maintenanceIntervalMs =

@@ -5,7 +5,7 @@ import {
   type JobEnvelope,
 } from "@glyphquire/api-contract/jobs";
 import { shareLinks, type Database } from "@glyphquire/database";
-import { PostgresJobDispatcher, type EnqueueJobInput, type JobHandler } from "@glyphquire/queue";
+import type { EnqueueJobInput, JobHandler } from "@glyphquire/queue";
 import { and, asc, eq, gt, isNotNull, isNull, lte, or } from "drizzle-orm";
 
 const DEFAULT_GRACE_SECONDS = 3_600;
@@ -299,13 +299,14 @@ export function createShareCleanupHandler(
 
 export function createPostgresShareCleanupHandler(input: {
   database: Database;
+  dispatcher: ShareCleanupDispatcher;
   audit: ShareCleanupAudit;
   graceSeconds?: number;
   clock?: () => number;
 }): JobHandler<"share.cleanup"> {
   return createShareCleanupHandler({
     repository: new PostgresShareCleanupRepository(input.database),
-    dispatcher: new PostgresJobDispatcher(input.database),
+    dispatcher: input.dispatcher,
     graceSeconds: input.graceSeconds,
     clock: input.clock,
     audit: input.audit,

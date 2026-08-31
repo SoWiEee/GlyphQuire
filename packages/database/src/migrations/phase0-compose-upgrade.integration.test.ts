@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { MigrationRunner } from "./MigrationRunner.js";
 import postgres, { type Sql } from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "../client.js";
@@ -248,7 +248,9 @@ describeWithLegacyPostgres("Phase 0 local Compose role upgrade", () => {
     );
     const db = createDb(migrationDatabaseUrl!);
     try {
-      await migrate(db, { migrationsFolder: migrationsDirectory });
+      await new MigrationRunner({ databaseUrl: migrationDatabaseUrl!, migrationsDirectory }).execute(
+        db,
+      );
     } finally {
       await db.$client.end();
     }

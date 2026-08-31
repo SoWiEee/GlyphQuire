@@ -5,7 +5,7 @@ import {
   createDb,
   idempotencyRecords,
   notes,
-  runDatabaseMigrations,
+  MigrationRunner,
   shareLinks,
   user,
   verifyMigrationBaseline,
@@ -101,7 +101,10 @@ describeWithPostgres("ShareLinkService", () => {
     await verifyMigrationBaseline(migrationUrl.toString(), migrationsDirectory);
     const migrationDb = createDb(migrationUrl.toString());
     try {
-      await runDatabaseMigrations(migrationDb, { migrationsFolder: migrationsDirectory });
+      await new MigrationRunner({
+        databaseUrl: migrationUrl.toString(),
+        migrationsDirectory,
+      }).execute(migrationDb);
       await migrationDb.execute(sql.raw(`grant usage on schema public to "${runtimeRole}"`));
       await migrationDb.execute(
         sql.raw(

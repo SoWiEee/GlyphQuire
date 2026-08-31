@@ -120,7 +120,6 @@ function fakeSearch(): SearchPort & DerivedSearchMutationPort {
     indexNoteIfCurrent: vi.fn(),
     removeNoteIfCurrent: vi.fn(),
     removeNoteIfMissing: vi.fn(),
-    search: vi.fn(),
   };
 }
 
@@ -553,12 +552,6 @@ describe("production worker startup", () => {
     } as unknown as Database;
     const storage = fakeStorage();
     const search = fakeSearch();
-    const registry = createJobRegistry({
-      database,
-      storage,
-      search,
-      environment: workerEntrypoint.parseWorkerEnv(baseEnvironment),
-    });
     const job = {
       id: "33333333-3333-4333-8333-333333333333",
       workspaceId,
@@ -580,6 +573,13 @@ describe("production worker startup", () => {
         return { claimed: 1, succeeded: 1, retried: 0, deadLettered: 0 };
       }),
     };
+    const registry = createJobRegistry({
+      database,
+      storage,
+      search,
+      dispatcher,
+      environment: workerEntrypoint.parseWorkerEnv(baseEnvironment),
+    });
     const runtime = new WorkerRuntime(dispatcher, registry);
 
     await expect(runtime.dispatchOnce()).resolves.toMatchObject({ claimed: 1, succeeded: 1 });

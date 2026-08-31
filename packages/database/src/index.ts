@@ -1,5 +1,9 @@
 export { createDb, type Database } from "./client.js";
-export { migrate as runDatabaseMigrations } from "drizzle-orm/postgres-js/migrator";
+export {
+  MigrationRunner,
+  type MigrationCatalog,
+  type MigrationRunnerOptions,
+} from "./migrations/MigrationRunner.js";
 export { readRepositoryMigrations, verifyMigrationBaseline } from "./migrations/verify-baseline.js";
 export {
   user,

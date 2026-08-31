@@ -1,9 +1,12 @@
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import {
   MAX_SEARCH_TEXT_BYTES,
+  MigrationRunner,
   createDb,
   notes,
   user,
+  verifyMigrationBaseline,
   workspaceMembers,
   workspaces,
   type Database,
@@ -89,6 +92,9 @@ describe("extractSearchableText", () => {
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const describeWithPostgres = databaseUrl ? describe : describe.skip;
+const migrationsDirectory = fileURLToPath(
+  new URL("../../database/src/migrations", import.meta.url),
+);
 
 async function insertActor(db: Database, prefix: string): Promise<string> {
   const id = `${prefix}-${randomUUID()}`;
@@ -147,14 +153,19 @@ describeWithPostgres("PostgresSearchAdapter", () => {
   let workspaceId: string;
 
   beforeAll(async () => {
+    await verifyMigrationBaseline(databaseUrl!, migrationsDirectory);
     db = createDb(databaseUrl!);
+    await new MigrationRunner({
+      databaseUrl: databaseUrl!,
+      migrationsDirectory,
+    }).execute(db);
     adapter = new PostgresSearchAdapter(db);
     ownerId = await insertActor(db, "search-adapter");
     workspaceId = await insertWorkspace(db, ownerId);
   });
 
   afterAll(async () => {
-    await db.$client.end();
+    if (db) await db.$client.end();
   });
 
   it("indexes a note and finds it by tokenized English text", async () => {

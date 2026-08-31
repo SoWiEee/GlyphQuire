@@ -45,8 +45,17 @@ export interface WorkbenchNote {
 /** The editor's source/visual/split mode control. */
 export type WorkbenchEditorMode = "source" | "visual" | "split";
 
-/** Which navigation surface is open on compact workbench screens. */
-export type WorkbenchPanel = "explorer" | "context" | null;
+/** Which contextual tool panel is open in the workbench. */
+export type WorkbenchToolPanel =
+  | "assets"
+  | "search"
+  | "transfer"
+  | "share"
+  | "history"
+  | "shared-links";
+
+/** Which navigation or contextual tool surface is open. */
+export type WorkbenchPanel = "explorer" | "context" | WorkbenchToolPanel | null;
 
 /** Actions exposed by the context rail; outline selection is a separate event. */
 export type ContextAction = "outline" | "history" | "assets" | "search" | "transfer" | "share";

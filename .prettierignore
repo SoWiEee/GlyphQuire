@@ -1,4 +1,0 @@
-packages/document-engine/tests/fixtures/**/input.md
-packages/document-engine/tests/fixtures/**/expected.md
-.superpowers/
-packages/database/src/migrations/meta/*.json

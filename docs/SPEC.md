@@ -2365,7 +2365,7 @@ Production Readiness Contract is the sole consolidated release checklist for the
 ### 49.1 Priority Semantics
 
 - **P0** blocks the first official production release。Every P0 item requires observable acceptance evidence；unsupported claims such as "considered" or "supported" do not pass。
-- **P1** does not block the first release, but the P0 architecture MUST leave a compatible evolution path。P1 is not a delivery commitment without a later approved plan。
+- **P1** does not block the first release, but the P0 architecture MUST leave an explicit evolution path without retaining obsolete compatibility layers。P1 is not a delivery commitment without a later approved plan。
 
 ### 49.2 Workload and Non-Promises
 
@@ -2391,7 +2391,7 @@ P0 explicitly does NOT promise：
 | P0-08 | Small-workload performance | Reproducible benchmark: 4 vCPU/8 GB; UI p95 gates; 30-min burst with five users; API p95 gates                                           | §40 Performance Targets                        | Load report with environment/digest/data-volume record            |
 | P0-09 | Observability/runbooks     | Structured logs; health/readiness probes; alert rules; notification delivery within 5 min                                                | §30 Operational Monitoring                     | Runbooks (deploy, rollback, restore, queue-recovery) + alert test |
 | P0-10 | Search consistency         | 60-second freshness under P0 workload; query-time authorization; dead-letter handling; operator rebuild                                  | §20 Full-text Search                           | Integration test + dead-letter scenario + rebuild test            |
-| P0-11 | First-party API            | `/api/v1` shared schemas; cursor pagination; idempotency keys; conditional mutations; backward-compatible errors                         | §24 API Design                                 | Contract test suite                                               |
+| P0-11 | First-party API            | `/api/v1` shared schemas; cursor pagination; idempotency keys; conditional mutations; versioned error envelopes                          | §24 API Design                                 | Contract test suite                                               |
 | P0-12 | Custom Blocks              | Workspace-scoped; immutable published versions; unsupported placeholder; round-trip preservation                                         | §11.3 Custom Block API; `MARKDOWN_SPEC.md` §29 | Golden tests + integration test                                   |
 | P0-13 | Conflict recovery          | `409` never overwrites; client retains draft across reload/crash; UI supports comparison/merge                                           | §10.3 Dirty State                              | E2E test with simulated conflict + reload                         |
 | P0-14 | Browser/accessibility      | Latest 2 stable Chrome/Firefox/Safari/Edge; WCAG 2.2 AA; axe CI; keyboard flows; screen-reader smoke                                     | §41 Accessibility and Browser Support          | axe report + keyboard-only E2E + VoiceOver or NVDA smoke test     |
@@ -2469,3 +2469,36 @@ Insert p5 block
 ```
 
 完成這兩個 vertical slices 後，再擴充更多 block types 與產品功能。
+
+---
+
+## 52. Architecture Deepening Baseline
+
+The production code uses five explicit ownership seams. These seams are the
+only supported orchestration paths; obsolete aliases, fallback implementations,
+and compatibility layers are removed rather than retained.
+
+- **WorkbenchContext** owns route parsing, note/session generations, panel
+  policy, mode transitions, and disposal. `Workbench.vue` is a rendering and
+  event adapter only.
+- **Worker registries** are assembled from domain factories with one injected,
+  ready dispatcher. A handler never constructs its own dispatcher or reaches
+  across domain registries.
+- **SearchReadModule** owns cursor decoding, retrieval, ranking, hydration, and
+  public error translation. `SearchQueryPort` is the read port; mutation jobs
+  use `SearchPort`/`DerivedSearchMutationPort` and cannot perform reads.
+- **TransferCoordinator** centralizes common request/scope-shape validation,
+  bounded expiry calculation, scrubbed failure boundaries, idempotency replay,
+  unique-race replay, transaction-owned row creation, and transactional enqueue.
+  Import and export retain only membership/scope policy and artifact-specific
+  behavior.
+- **MigrationRunner** is the single executable migration path. It loads and
+  validates the repository catalog, verifies the baseline/journal, then runs
+  ordered migrations. Direct Drizzle migrator calls are not application entry
+  points.
+
+The repository toolchain is Oxc-only: `oxlint` is the linter and `oxfmt` is the
+formatter. ESLint, Prettier, and compatibility scripts/configuration are not
+supported. Vite 8.x uses Rolldown through the Oxc toolchain. Verification is
+performed with `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, `pnpm build`,
+and the relevant package/integration suites.

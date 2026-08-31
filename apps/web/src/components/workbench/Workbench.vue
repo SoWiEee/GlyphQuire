@@ -55,7 +55,7 @@
             aria-label="Open explorer"
             aria-controls="gq-explorer-pane"
             :aria-expanded="explorerOpen"
-            @click="explorerOpen = !explorerOpen"
+            @click="workbenchContext.setPanel('explorer')"
           >
             Explorer
           </button>
@@ -65,7 +65,7 @@
             aria-label="Open context tools"
             aria-controls="context-rail"
             :aria-expanded="contextRailOpen"
-            @click="contextRailOpen = true"
+            @click="workbenchContext.setPanel('context')"
           >
             Context
           </button>
@@ -73,8 +73,8 @@
         <EditorTabs
           :tabs="openTabs"
           :active-tab-id="activeNoteId"
-          @select="setActiveNote"
-          @close="closeTab"
+          @select="openNote"
+          @close="workbenchContext.closeNote"
         />
 
         <SaveStateBanner
@@ -137,7 +137,7 @@
         :outline="outline"
         :current-revision="phase5BaseRevision"
         :read-only="sessionState?.readOnly ?? true"
-        @close="contextRailOpen = false"
+        @close="workbenchContext.setPanel(null)"
         @action="onContextAction"
         @select-outline="onSelectOutline"
       />
@@ -152,7 +152,7 @@
     />
 
     <div
-      v-if="phase5Panel && phase5WorkspaceId"
+      v-if="phase5Panel && workspaceId"
       class="fixed inset-0 z-40 flex items-start justify-center bg-black/30 p-8 pt-20"
       @click.self="closePhase5Panel"
       @keydown.escape="closePhase5Panel"
@@ -174,27 +174,24 @@
         </button>
         <AssetManager
           v-if="phase5Panel === 'assets'"
-          :workspace-id="phase5WorkspaceId"
+          :workspace-id="workspaceId"
           @reference="insertAssetReference"
         />
         <SearchPalette
           v-else-if="phase5Panel === 'search'"
-          :workspace-id="phase5WorkspaceId"
+          :workspace-id="workspaceId"
           @select-note="selectSearchResult"
         />
         <TransferDialog
           v-else-if="phase5Panel === 'transfer'"
-          :workspace-id="phase5WorkspaceId"
-          :note-id="phase5NoteId ?? undefined"
-          :base-revision="phase5BaseRevision"
+          :workspace-id="workspaceId"
+          :note-id="noteId ?? undefined"
+          :base-revision="phase5BaseRevision ?? undefined"
         />
-        <ShareLinkDialog
-          v-else-if="phase5Panel === 'share' && phase5NoteId"
-          :note-id="phase5NoteId"
-        />
+        <ShareLinkDialog v-else-if="phase5Panel === 'share' && noteId" :note-id="noteId" />
         <VersionHistory
-          v-else-if="phase5Panel === 'history' && phase5NoteId"
-          :note-id="phase5NoteId"
+          v-else-if="phase5Panel === 'history' && noteId"
+          :note-id="noteId"
           :current-revision="phase5BaseRevision"
           @restored="onHistoryRestored"
         />
@@ -220,7 +217,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { canonicalUuidSchema } from "@glyphquire/api-contract";
 import CommandPalette from "./CommandPalette.vue";
 import ContextRail from "./ContextRail.vue";
@@ -243,13 +240,8 @@ import SharedLinksPanel from "../share/SharedLinksPanel.vue";
 import VersionHistory from "../history/VersionHistory.vue";
 import { useThemeStore } from "../../stores/theme.js";
 import { usePhase5Store } from "../../stores/phase5.js";
-import {
-  createBookkeepingModeAdapter,
-  createLiveModeAdapter,
-  type WorkbenchModeAdapterShim,
-} from "../../editors/WorkbenchModeAdapterShim.js";
-import type { EditorSession, EditorSessionState } from "../../editors/editor-session.types.js";
 import type { NoteResult } from "@glyphquire/api-contract";
+import type { EditorSessionState } from "../../editors/editor-session.types.js";
 import type {
   WorkbenchCommand,
   ContextAction,
@@ -257,8 +249,8 @@ import type {
   WorkbenchAccountAction,
   WorkbenchEditorMode,
   WorkbenchNote,
+  WorkbenchToolPanel,
   WorkbenchSessionFactory,
-  WorkbenchSessionHandle,
   WorkbenchConflictContext,
   WorkbenchConflictRecovery,
   WorkbenchSaveState,
@@ -266,6 +258,7 @@ import type {
   WorkbenchEditorHandle,
   SlashCommandRequest,
 } from "./types.js";
+import { createWorkbenchContext } from "./WorkbenchContext.js";
 import {
   BLOCK_COMMANDS,
   materializeBlockCommand,
@@ -278,24 +271,6 @@ import {
 
 const themeStore = useThemeStore();
 const phase5Store = usePhase5Store();
-
-const DEFAULT_NOTES: WorkbenchNote[] = [
-  {
-    id: "welcome",
-    title: "Welcome",
-    markdown: "# Welcome to GlyphQuire\n\nStart writing in **Markdown**.",
-  },
-  {
-    id: "roadmap",
-    title: "Roadmap",
-    markdown: "# Roadmap\n\n- [ ] Source mode\n- [ ] Visual mode\n- [ ] Version history",
-  },
-  {
-    id: "scratch",
-    title: "Scratch",
-    markdown: "",
-  },
-];
 
 const props = defineProps<{
   initialNotes?: readonly WorkbenchNote[];
@@ -311,43 +286,29 @@ const emit = defineEmits<{
   "request-conflict-recovery": [entry: WorkbenchConflictRecovery];
 }>();
 
-type Phase5Panel = "assets" | "search" | "transfer" | "share" | "history" | "shared-links";
+const workbenchContext = createWorkbenchContext({
+  initialNotes: props.initialNotes,
+  sessionFactory: props.sessionFactory,
+  phase5WorkspaceId: props.phase5WorkspaceId,
+  phase5NoteId: props.phase5NoteId,
+  workspaceName: props.workspaceName,
+  accountLabel: props.accountLabel,
+});
+const workbenchState = workbenchContext.snapshot();
 
-function routePhase5Context(): { workspaceId: string | null; noteId: string | null } {
-  if (typeof location === "undefined") return { workspaceId: null, noteId: null };
-  const workspaceMatch = /^\/workspace\/([^/]+)\/?$/u.exec(location.pathname);
-  const workspaceId = workspaceMatch?.[1];
-  const noteId = new URLSearchParams(location.search).get("noteId");
-  return {
-    workspaceId: canonicalUuidSchema.safeParse(workspaceId).success ? workspaceId! : null,
-    noteId: canonicalUuidSchema.safeParse(noteId).success ? noteId : null,
-  };
-}
-
-const routeContext = routePhase5Context();
-const activeSessionContext = shallowRef<WorkbenchSessionHandle["context"]>();
-function firstCanonicalUuid(...candidates: Array<string | null | undefined>): string | null {
-  for (const candidate of candidates) {
-    const parsed = canonicalUuidSchema.safeParse(candidate);
-    if (parsed.success) return parsed.data;
-  }
-  return null;
-}
-const phase5WorkspaceId = computed(() => {
-  return firstCanonicalUuid(
-    props.phase5WorkspaceId,
-    activeSessionContext.value?.workspaceId,
-    props.sessionFactory ? routeContext.workspaceId : null,
-  );
+const notes = computed(() => workbenchState.notes);
+const openTabs = computed<WorkbenchNote[]>(() =>
+  workbenchState.openTabs.map((tab) => ({ ...tab })),
+);
+const activeNote = computed(() => workbenchState.activeNote);
+const activeNoteId = computed(() => workbenchState.activeNoteId);
+const workspaceId = computed(() => workbenchState.workspaceId);
+const noteId = computed(() => workbenchState.noteId);
+const phase5BaseRevision = computed<number | null>(() => {
+  const revision = workbenchState.sessionState?.baseRevision;
+  return Number.isInteger(revision) && (revision ?? 0) > 0 ? revision! : null;
 });
-const phase5NoteId = computed(() => {
-  return firstCanonicalUuid(props.phase5NoteId, activeNoteId.value, routeContext.noteId);
-});
-const phase5BaseRevision = computed(() => {
-  const revision = sessionState.value?.baseRevision;
-  return Number.isInteger(revision) && (revision ?? 0) > 0 ? revision : null;
-});
-const phase5Panel = ref<Phase5Panel | null>(null);
+const phase5Panel = computed(() => workbenchState.phase5Panel);
 const phase5CloseRef = ref<HTMLButtonElement | null>(null);
 const phase5PanelLabel = computed(() => {
   switch (phase5Panel.value) {
@@ -368,55 +329,27 @@ const phase5PanelLabel = computed(() => {
   }
 });
 let releaseVisualAssetResolver: (() => void) | undefined;
-if (phase5WorkspaceId.value) {
+if (workspaceId.value) {
   releaseVisualAssetResolver = registerVisualAssetResolver(
-    createAssetResolver({ workspaceId: phase5WorkspaceId.value }),
+    createAssetResolver({ workspaceId: workspaceId.value }),
   );
 }
 
-const notes = ref<WorkbenchNote[]>(
-  (props.initialNotes ?? DEFAULT_NOTES).map((note) => ({ ...note })),
-);
-
-// Tab-shaped state: an ordered list of open note ids, plus which one is active.
-const initialNoteId = notes.value[0]?.id ?? null;
-const openTabIds = ref<string[]>(initialNoteId ? [initialNoteId] : []);
-const activeNoteId = ref<string | null>(initialNoteId);
 const paletteOpen = ref(false);
 const paletteInitialQuery = ref<string | undefined>();
 const paletteCategoryFilter = ref<WorkbenchCommand["category"]>();
-const explorerOpen = ref(true);
-const contextRailOpen = ref(false);
+const explorerOpen = computed(() => workbenchState.explorerOpen);
+const contextRailOpen = computed(() => workbenchState.contextRailOpen);
 const compactScreen = ref(false);
 const topBarRef = ref<InstanceType<typeof TopBar> | null>(null);
 const sourceEditorRef = ref<WorkbenchEditorHandle | null>(null);
 const visualEditorRef = ref<WorkbenchEditorHandle | null>(null);
 const splitEditorRef = ref<WorkbenchEditorHandle | null>(null);
-const activeSession = shallowRef<EditorSession>();
-const sessionState = shallowRef<EditorSessionState>();
-let unsubscribeSession: (() => void) | undefined;
-let sessionGeneration = 0;
-let historyRestoreToken = 0;
-
-// Visual's pane has no other display or edit-routing path of its own (unlike
-// Source, which stays on the EditorSessionState-driven props/session.edit()
-// composition below), so it is driven directly by a live mode-adapter shim
-// bound to attachModeAdapters().
-const visualMarkdown = ref("");
-const visualEditorReadOnly = ref(true);
-let sourceModeAdapter: WorkbenchModeAdapterShim | undefined;
-let visualModeAdapter: WorkbenchModeAdapterShim | undefined;
-let detachModeAdapters: (() => void) | undefined;
-
-const openTabs = computed<WorkbenchNote[]>(() =>
-  openTabIds.value
-    .map((id) => notes.value.find((note) => note.id === id))
-    .filter((note): note is WorkbenchNote => note !== undefined),
-);
-
-const activeNote = computed<WorkbenchNote | null>(
-  () => notes.value.find((note) => note.id === activeNoteId.value) ?? null,
-);
+const activeSession = computed(() => workbenchState.session);
+const sessionState = computed(() => workbenchState.sessionState);
+const visualMarkdown = computed(() => workbenchState.visualMarkdown);
+const sourceModeAdapter = computed(() => workbenchState.sourceModeAdapter);
+const visualModeAdapter = computed(() => workbenchState.visualModeAdapter);
 
 const activeMarkdown = computed(
   () => sessionState.value?.markdown ?? activeNote.value?.markdown ?? "",
@@ -425,17 +358,9 @@ const activeMarkdown = computed(
 // pane — in "source" mode that is always true, so this is exactly the prior
 // behavior; in "split" mode it correctly yields to whichever pane was active
 // before split was entered.
-const sourceReadOnly = computed(
-  () =>
-    !sessionState.value ||
-    sessionState.value.readOnly ||
-    sessionState.value.activePane !== "source",
-);
-const visualReadOnly = computed(() => visualEditorReadOnly.value);
-const mode = computed<WorkbenchEditorMode>(() => {
-  const sessionMode = sessionState.value?.mode;
-  return sessionMode === "visual" || sessionMode === "split" ? sessionMode : "source";
-});
+const sourceReadOnly = computed(() => workbenchState.sourceReadOnly);
+const visualReadOnly = computed(() => workbenchState.visualReadOnly);
+const mode = computed<WorkbenchEditorMode>(() => workbenchState.mode);
 
 const activeSurfaceRef = computed<WorkbenchEditorHandle | null>(() => {
   if (mode.value === "visual") return visualEditorRef.value;
@@ -449,16 +374,12 @@ const slashRequest = shallowRef<
   (SlashCommandRequest & { readonly surface: WorkbenchEditorHandle }) | null
 >(null);
 
-const workspaceAvailable = computed(() => phase5WorkspaceId.value !== null);
-const effectiveWorkspaceName = computed(
-  () => activeSessionContext.value?.workspaceName ?? props.workspaceName,
-);
-const effectiveAccountLabel = computed(
-  () => activeSessionContext.value?.accountLabel ?? props.accountLabel,
-);
+const workspaceAvailable = computed(() => workspaceId.value !== null);
+const effectiveWorkspaceName = computed(() => workbenchState.workspaceName ?? props.workspaceName);
+const effectiveAccountLabel = computed(() => workbenchState.accountLabel ?? props.accountLabel);
 
 const activeConflictContext = computed<WorkbenchConflictContext | undefined>(() => {
-  const context = activeSessionContext.value;
+  const context = workbenchState.sessionContext;
   if (!context) return undefined;
   const userId = canonicalUuidSchema.safeParse(context.userId);
   const workspaceId = canonicalUuidSchema.safeParse(context.workspaceId);
@@ -524,8 +445,11 @@ function extractOutline(markdown: string): OutlineEntry[] {
   for (const line of markdown.split("\n")) {
     const match = /^(#{1,3})\s+(.+)$/.exec(line);
     if (!match) continue;
-    const depth = match[1].length as 1 | 2 | 3;
-    const label = match[2].trim();
+    const marker = match[1];
+    const rawLabel = match[2];
+    if (!marker || rawLabel === undefined) continue;
+    const depth = marker.length as 1 | 2 | 3;
+    const label = rawLabel.trim();
     if (!label) continue;
     const base =
       label
@@ -550,22 +474,7 @@ const wordCount = computed(() => {
 });
 
 function openNote(noteId: string): void {
-  if (!openTabIds.value.includes(noteId)) {
-    openTabIds.value = [...openTabIds.value, noteId];
-  }
-  setActiveNote(noteId);
-}
-
-function setActiveNote(noteId: string): void {
-  activeNoteId.value = noteId;
-}
-
-function closeTab(noteId: string): void {
-  const remaining = openTabIds.value.filter((id) => id !== noteId);
-  openTabIds.value = remaining;
-  if (activeNoteId.value === noteId) {
-    activeNoteId.value = remaining.length > 0 ? remaining[remaining.length - 1] : null;
-  }
+  workbenchContext.openNote(noteId);
 }
 
 function onMarkdownChange(markdown: string): void {
@@ -574,17 +483,16 @@ function onMarkdownChange(markdown: string): void {
   // Bookkeeping only: this shim never routes edits on its own (see
   // WorkbenchModeAdapterShim), so session.edit() below remains the single
   // path that actually applies a Source edit.
-  sourceModeAdapter?.syncFromUi(markdown, false);
+  sourceModeAdapter.value?.syncFromUi(markdown, false);
   session.edit(markdown);
-  sessionState.value = session.snapshot();
 }
 
 function onVisualMarkdownChange(markdown: string): void {
-  if (visualEditorReadOnly.value) return;
+  if (visualReadOnly.value) return;
   // Notifying routes this through EditorSession's own onAdapterChange
   // listener, which calls session.edit() for us — Visual has no separate
   // display path, so this is the only place that edit can originate.
-  visualModeAdapter?.syncFromUi(markdown, true);
+  visualModeAdapter.value?.syncFromUi(markdown, true);
 }
 
 async function retrySave(): Promise<void> {
@@ -619,7 +527,6 @@ function onToolbarAction(action: ToolbarAction): void {
   if (!session || session.snapshot().readOnly) return;
   const surface = activeSurfaceRef.value;
   if (!surface?.applyToolbarAction(action)) return;
-  sessionState.value = session.snapshot();
 }
 
 function onSlashCommand(request: SlashCommandRequest): void {
@@ -637,11 +544,7 @@ function toggleMode(): void {
 }
 
 function onModeChange(nextMode: WorkbenchEditorMode): void {
-  const session = activeSession.value;
-  if (!session) return;
-  void session.switchMode(nextMode).then(() => {
-    if (activeSession.value === session) sessionState.value = session.snapshot();
-  });
+  void workbenchContext.setMode(nextMode);
 }
 
 function onAccountAction(action: WorkbenchAccountAction): void {
@@ -649,18 +552,13 @@ function onAccountAction(action: WorkbenchAccountAction): void {
 }
 
 function onContextAction(action: Exclude<ContextAction, "outline">): void {
-  if (action === "history") {
-    if (!phase5NoteId.value || phase5BaseRevision.value === null) return;
-    phase5Panel.value = "history";
+  workbenchContext.setPanel(action);
+  if (workbenchState.phase5Panel === action) {
     void nextTick(() => phase5CloseRef.value?.focus());
-  } else {
-    openPhase5Panel(action);
   }
-  contextRailOpen.value = false;
 }
 
 function onSharedLinks(): void {
-  if (!phase5WorkspaceId.value) return;
   openPhase5Panel("shared-links");
 }
 
@@ -699,9 +597,8 @@ function closePalette(): void {
   slashRequest.value = null;
   paletteInitialQuery.value = undefined;
   paletteCategoryFilter.value = undefined;
-  topBarRef.value?.$el
-    ?.querySelector<HTMLButtonElement>('[aria-label="Open command palette"]')
-    ?.focus();
+  const paletteButton = topBarRef.value?.$el?.querySelector('[aria-label="Open command palette"]');
+  if (paletteButton instanceof HTMLElement) paletteButton.focus();
 }
 
 function onBlockCommand(definition: BlockCommandDefinition): void {
@@ -716,22 +613,22 @@ function onBlockCommand(definition: BlockCommandDefinition): void {
       definition.cursorOffset,
     )
   ) {
-    sessionState.value = session.snapshot();
+    // The session publishes this edit through WorkbenchContext.
   }
   closePalette();
 }
 
-function openPhase5Panel(panel: Phase5Panel): void {
-  if (!phase5WorkspaceId.value) return;
-  phase5Panel.value = panel;
-  void nextTick(() => phase5CloseRef.value?.focus());
+function openPhase5Panel(panel: WorkbenchToolPanel): void {
+  workbenchContext.setPanel(panel);
+  if (workbenchState.phase5Panel === panel) {
+    void nextTick(() => phase5CloseRef.value?.focus());
+  }
 }
 
 function closePhase5Panel(): void {
-  phase5Panel.value = null;
-  topBarRef.value?.$el
-    ?.querySelector<HTMLButtonElement>('[aria-label="Open command palette"]')
-    ?.focus();
+  workbenchContext.setPanel(null);
+  const paletteButton = topBarRef.value?.$el?.querySelector('[aria-label="Open command palette"]');
+  if (paletteButton instanceof HTMLElement) paletteButton.focus();
 }
 
 function insertAssetReference(reference: string): void {
@@ -740,7 +637,6 @@ function insertAssetReference(reference: string): void {
   const markdown = session.snapshot().markdown;
   const separator = markdown.endsWith("\n") || markdown.length === 0 ? "" : "\n";
   session.edit(`${markdown}${separator}\n![Asset](${reference})\n`);
-  sessionState.value = session.snapshot();
   closePhase5Panel();
 }
 
@@ -749,242 +645,93 @@ function selectSearchResult(noteId: string): void {
   closePhase5Panel();
 }
 
-function normalizeSessionHandle(
-  value: EditorSession | WorkbenchSessionHandle,
-): WorkbenchSessionHandle {
-  return "session" in value ? value : { session: value };
-}
-
-function createStagedLiveModeAdapter(initialMarkdown: string): {
-  adapter: WorkbenchModeAdapterShim;
-  commit: () => void;
-} {
-  let markdown = initialMarkdown;
-  let readOnly = true;
-  let target:
-    | { markdown: typeof visualMarkdown; readOnly: typeof visualEditorReadOnly }
-    | undefined;
-  const listeners = new Set<(nextMarkdown: string) => void>();
-
-  const syncFromUi = (nextMarkdown: string, notify: boolean): void => {
-    markdown = nextMarkdown;
-    if (target) target.markdown.value = nextMarkdown;
-    if (notify) {
-      for (const listener of listeners) listener(nextMarkdown);
-    }
-  };
-
-  return {
-    adapter: {
-      setMarkdown(nextMarkdown: string): void {
-        syncFromUi(nextMarkdown, false);
-      },
-      getMarkdown(): string {
-        return target?.markdown.value ?? markdown;
-      },
-      setReadOnly(nextReadOnly: boolean): void {
-        readOnly = nextReadOnly;
-        if (target) target.readOnly.value = nextReadOnly;
-      },
-      onChange(listener: (nextMarkdown: string) => void): () => void {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-      },
-      syncFromUi,
-    },
-    commit(): void {
-      target = { markdown: visualMarkdown, readOnly: visualEditorReadOnly };
-      target.markdown.value = markdown;
-      target.readOnly.value = readOnly;
-    },
-  };
-}
-
-function isCurrentHistoryRestore(
-  token: number,
-  generation: number,
-  noteId: string,
-  session: EditorSession,
-): boolean {
-  return (
-    historyRestoreToken === token &&
-    sessionGeneration === generation &&
-    activeNoteId.value === noteId &&
-    activeNote.value?.id === noteId &&
-    activeSession.value === session
-  );
-}
-
 async function onHistoryRestored(result: NoteResult): Promise<void> {
   const currentNote = activeNote.value;
-  const expectedNoteId = phase5NoteId.value;
+  const expectedNoteId = noteId.value;
   if (
     !currentNote ||
     !expectedNoteId ||
     result.id !== expectedNoteId ||
     result.id !== currentNote.id ||
-    result.workspaceId !== phase5WorkspaceId.value
+    result.workspaceId !== workspaceId.value
   )
     return;
-  if (!props.sessionFactory) return;
   const expectedMarkdown = result.contentMarkdown;
   const expectedRevision = result.revision;
-  if (!isValidRevision(expectedRevision)) return;
-
-  const note: WorkbenchNote = { ...currentNote, markdown: expectedMarkdown };
-  const previous = activeSession.value;
-  if (!previous) return;
-  const expectedGeneration = sessionGeneration;
-  const expectedActiveNoteId = activeNoteId.value;
-  const restoreToken = ++historyRestoreToken;
-  const previousUnsubscribe = unsubscribeSession;
-  const previousDetach = detachModeAdapters;
-  let replacement: WorkbenchSessionHandle | undefined;
-  let nextUnsubscribe: (() => void) | undefined;
-  let nextDetach: (() => void) | undefined;
-  let committed = false;
-
-  const disposeReplacement = async (): Promise<void> => {
-    nextUnsubscribe?.();
-    nextDetach?.();
-    if (replacement && replacement.session !== activeSession.value) {
-      await replacement.session.dispose();
-    }
-  };
-
-  try {
-    replacement = normalizeSessionHandle(await props.sessionFactory(note));
-    if (
-      !isCurrentHistoryRestore(restoreToken, expectedGeneration, expectedActiveNoteId, previous)
-    ) {
-      await disposeReplacement();
-      return;
-    }
-
-    const nextSnapshot = replacement.session.snapshot();
-    if (nextSnapshot.noteId !== expectedNoteId) throw new Error("Restored note mismatch");
-    if (nextSnapshot.baseRevision !== expectedRevision)
-      throw new Error("Invalid restored revision");
-    if (nextSnapshot.markdown !== expectedMarkdown) throw new Error("Restored content mismatch");
-
-    const nextSourceModeAdapter = createBookkeepingModeAdapter(nextSnapshot.markdown);
-    const nextVisualModeAdapter = createStagedLiveModeAdapter(nextSnapshot.markdown);
-    nextUnsubscribe = replacement.session.subscribe((state) => {
-      if (historyRestoreToken === restoreToken && activeSession.value === replacement?.session) {
-        sessionState.value = state;
-      }
-    });
-
-    try {
-      nextDetach = await replacement.session.attachModeAdapters({
-        source: nextSourceModeAdapter,
-        visual: nextVisualModeAdapter.adapter,
-      });
-    } catch {
-      // Visual/Split stay unavailable when the replacement cannot attach its
-      // adapters; Source still remains authoritative through session.edit().
-      nextDetach = undefined;
-    }
-
-    if (
-      !isCurrentHistoryRestore(restoreToken, expectedGeneration, expectedActiveNoteId, previous)
-    ) {
-      await disposeReplacement();
-      return;
-    }
-
-    // Keep the old adapter pair and authority untouched until the replacement
-    // has passed every async boundary above. The commit below is synchronous,
-    // so a newer restore or note activation cannot interleave with the swap.
-    previousDetach?.();
-    nextVisualModeAdapter.commit();
-    sourceModeAdapter = nextSourceModeAdapter;
-    visualModeAdapter = nextVisualModeAdapter.adapter;
-    activeSession.value = replacement.session;
-    activeSessionContext.value = replacement.context;
-    sessionState.value = nextSnapshot;
-    unsubscribeSession = nextUnsubscribe;
-    detachModeAdapters = nextDetach;
-    committed = true;
-    const noteToUpdate = notes.value.find((existing) => existing.id === note.id);
-    if (noteToUpdate) noteToUpdate.markdown = expectedMarkdown;
-
-    previousUnsubscribe?.();
-    await previous.dispose();
-  } catch {
-    if (committed) return;
-    await disposeReplacement();
-    return;
-  }
+  if (!isValidRevision(expectedRevision) || !workspaceId.value) return;
+  workbenchContext.openNote(result.id, {
+    markdown: expectedMarkdown,
+    baseRevision: expectedRevision,
+    workspaceId: workspaceId.value,
+  });
 }
 
 function isValidRevision(value: number): boolean {
   return Number.isInteger(value) && value > 0;
 }
 
-const commands = computed<WorkbenchCommand[]>(() => [
-  {
-    id: "toggle-mode",
-    label: mode.value === "source" ? "Switch to Visual mode" : "Switch to Source mode",
-    hint: "Mode",
-    category: "format",
-    run: toggleMode,
-  },
-  ...notes.value.map((note) => ({
-    id: `open-${note.id}`,
-    label: `Open "${note.title}"`,
-    hint: "Note",
-    category: "note",
-    run: () => openNote(note.id),
-  })),
-  ...(activeNoteId.value
-    ? [
-        {
-          id: "close-active-tab",
-          label: `Close "${activeNote.value?.title ?? ""}"`,
-          hint: "Tab",
-          category: "note",
-          run: () => closeTab(activeNoteId.value as string),
-        },
-      ]
-    : []),
-  ...(phase5WorkspaceId.value
-    ? [
-        {
-          id: "phase5-assets",
-          label: "Manage assets",
-          hint: "Workspace",
-          category: "workspace",
-          run: () => openPhase5Panel("assets"),
-        },
-        {
-          id: "phase5-search",
-          label: "Search notes",
-          hint: "Workspace",
-          category: "workspace",
-          run: () => openPhase5Panel("search"),
-        },
-        {
-          id: "phase5-transfer",
-          label: "Import or export",
-          hint: "Workspace",
-          category: "workspace",
-          run: () => openPhase5Panel("transfer"),
-        },
-      ]
-    : []),
-  ...(phase5WorkspaceId.value && phase5NoteId.value
-    ? [
-        {
-          id: "phase5-share",
-          label: "Create read-only share link",
-          hint: "Note",
-          category: "note",
-          run: () => openPhase5Panel("share"),
-        },
-      ]
-    : []),
-]);
+const commands = computed<WorkbenchCommand[]>(() => {
+  const result: WorkbenchCommand[] = [
+    {
+      id: "toggle-mode",
+      label: mode.value === "source" ? "Switch to Visual mode" : "Switch to Source mode",
+      hint: "Mode",
+      category: "format",
+      run: toggleMode,
+    },
+    ...notes.value.map((note): WorkbenchCommand => ({
+      id: `open-${note.id}`,
+      label: `Open "${note.title}"`,
+      hint: "Note",
+      category: "note",
+      run: () => openNote(note.id),
+    })),
+  ];
+  if (activeNoteId.value) {
+    result.push({
+      id: "close-active-tab",
+      label: `Close "${activeNote.value?.title ?? ""}"`,
+      hint: "Tab",
+      category: "note",
+      run: () => workbenchContext.closeNote(activeNoteId.value as string),
+    });
+  }
+  if (workspaceId.value) {
+    result.push(
+      {
+        id: "phase5-assets",
+        label: "Manage assets",
+        hint: "Workspace",
+        category: "workspace",
+        run: () => openPhase5Panel("assets"),
+      },
+      {
+        id: "phase5-search",
+        label: "Search notes",
+        hint: "Workspace",
+        category: "workspace",
+        run: () => openPhase5Panel("search"),
+      },
+      {
+        id: "phase5-transfer",
+        label: "Import or export",
+        hint: "Workspace",
+        category: "workspace",
+        run: () => openPhase5Panel("transfer"),
+      },
+    );
+  }
+  if (workspaceId.value && noteId.value) {
+    result.push({
+      id: "phase5-share",
+      label: "Create read-only share link",
+      hint: "Note",
+      category: "note",
+      run: () => openPhase5Panel("share"),
+    });
+  }
+  return result;
+});
 
 const blockCommands = computed<WorkbenchCommand[]>(() =>
   paletteOpen.value && slashRequest.value
@@ -1014,72 +761,6 @@ function onCompactScreenChange(): void {
   updateCompactScreen();
 }
 
-function detachActiveModeAdapters(): void {
-  detachModeAdapters?.();
-  detachModeAdapters = undefined;
-  sourceModeAdapter = undefined;
-  visualModeAdapter = undefined;
-  visualMarkdown.value = "";
-  visualEditorReadOnly.value = true;
-}
-
-async function activateSession(note: WorkbenchNote | null): Promise<void> {
-  const generation = ++sessionGeneration;
-  const previous = activeSession.value;
-  unsubscribeSession?.();
-  unsubscribeSession = undefined;
-  detachActiveModeAdapters();
-  activeSession.value = undefined;
-  activeSessionContext.value = undefined;
-  sessionState.value = undefined;
-  if (previous) await previous.dispose();
-  if (generation !== sessionGeneration || !note || !props.sessionFactory) return;
-
-  let nextValue: EditorSession | WorkbenchSessionHandle;
-  try {
-    nextValue = await props.sessionFactory(note);
-  } catch {
-    return;
-  }
-  const next = normalizeSessionHandle(nextValue);
-  if (generation !== sessionGeneration) {
-    await next.session.dispose();
-    return;
-  }
-
-  activeSession.value = next.session;
-  activeSessionContext.value = next.context;
-  sessionState.value = next.session.snapshot();
-  unsubscribeSession = next.session.subscribe((state) => {
-    if (activeSession.value === next.session) sessionState.value = state;
-  });
-
-  const initialMarkdown = next.session.snapshot().markdown;
-  visualMarkdown.value = initialMarkdown;
-  visualEditorReadOnly.value = true;
-  sourceModeAdapter = createBookkeepingModeAdapter(initialMarkdown);
-  visualModeAdapter = createLiveModeAdapter(visualMarkdown, visualEditorReadOnly);
-  try {
-    const detach = await next.session.attachModeAdapters({
-      source: sourceModeAdapter,
-      visual: visualModeAdapter,
-    });
-    if (generation !== sessionGeneration || activeSession.value !== next.session) {
-      detach();
-      return;
-    }
-    detachModeAdapters = detach;
-  } catch {
-    // Visual/Split stay unavailable for this session (switchMode reports
-    // "unsupported"); Source keeps working through its existing
-    // session.edit()-based path above.
-    sourceModeAdapter = undefined;
-    visualModeAdapter = undefined;
-  }
-}
-
-watch(activeNote, (note) => void activateSession(note), { immediate: true });
-
 onMounted(() => {
   window.addEventListener("keydown", onGlobalKeydown, true);
   if (typeof window.matchMedia === "function") {
@@ -1102,15 +783,7 @@ onBeforeUnmount(() => {
     }
     compactMediaQuery = undefined;
   }
-  sessionGeneration += 1;
-  unsubscribeSession?.();
-  unsubscribeSession = undefined;
-  detachActiveModeAdapters();
-  const session = activeSession.value;
-  activeSession.value = undefined;
-  activeSessionContext.value = undefined;
-  sessionState.value = undefined;
-  if (session) void session.dispose();
+  void workbenchContext.dispose();
   releaseVisualAssetResolver?.();
   releaseVisualAssetResolver = undefined;
 });

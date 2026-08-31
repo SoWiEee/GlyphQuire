@@ -14,29 +14,25 @@ import {
   type ImportJobResult,
   type TransferProgress,
 } from "@glyphquire/api-contract";
-import { idempotencyKeySchema, opaqueAuthIdSchema } from "@glyphquire/api-contract/jobs";
-import type { JobDispatcher, TransactionalJobDispatcher } from "@glyphquire/queue";
+import { opaqueAuthIdSchema } from "@glyphquire/api-contract/jobs";
+import type { JobDispatcher } from "@glyphquire/queue";
 import type { ObjectStoragePort } from "@glyphquire/storage";
 import { and, eq, isNull } from "drizzle-orm";
 import { PublicApiError } from "../../middleware/error-handler.js";
 import { MAX_ARCHIVE_BYTES } from "./ArchiveLimits.js";
 import { ArchiveReader } from "./ArchiveReader.js";
+import { TransferCoordinator } from "./TransferCoordinator.js";
 
 const DEFAULT_IMPORT_EXPIRY_SECONDS = 24 * 60 * 60;
 const DEFAULT_IMPORT_STAGING_GRACE_SECONDS = 3_600;
 const MAX_MARKDOWN_BYTES = 2 * 1024 * 1024;
 const MAX_IMPORT_BASE_REVISION = 2_147_483_646;
-const MILLISECONDS_PER_SECOND = 1_000;
 const EMPTY_PROGRESS: TransferProgress = Object.freeze({
   completedItems: 0,
   totalItems: 0,
   processedBytes: 0,
   totalBytes: 0,
 });
-
-type DbTransaction = Parameters<Database["transaction"]>[0] extends (tx: infer Tx) => unknown
-  ? Tx
-  : never;
 
 interface SourceManifest extends Record<string, unknown> {
   version: 1;
@@ -82,20 +78,6 @@ export interface ImportServiceHooks {
 
 function invalidImport(status: 400 | 404 = 400): never {
   throw new PublicApiError("IMPORT_INVALID", status);
-}
-
-function isTransactionalDispatcher(
-  dispatcher: JobDispatcher,
-): dispatcher is TransactionalJobDispatcher {
-  return (
-    "withDatabaseExecutor" in dispatcher && typeof dispatcher.withDatabaseExecutor === "function"
-  );
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const candidate = error as { code?: string; cause?: { code?: string } };
-  return candidate.code === "23505" || candidate.cause?.code === "23505";
 }
 
 function isZip(bytes: Buffer): boolean {
@@ -148,18 +130,12 @@ function toResult(row: Import): ImportJobResult {
   return importJobResultSchema.parse(result);
 }
 
-function positiveBoundedSeconds(value: number, label: string): number {
-  if (!Number.isInteger(value) || value < 1 || value > 31_536_000) {
-    throw new Error(`Invalid ${label}`);
-  }
-  return value;
-}
-
 export class ImportServiceImpl implements ImportService {
   private readonly expirySeconds: number;
   private readonly stagingGraceSeconds: number;
   private readonly clock: () => number;
   private readonly archiveReader: Pick<ArchiveReader, "readZip">;
+  private readonly coordinator: TransferCoordinator;
 
   constructor(
     private readonly db: Database,
@@ -168,23 +144,17 @@ export class ImportServiceImpl implements ImportService {
     options: ImportServiceOptions = {},
     private readonly hooks: ImportServiceHooks = {},
   ) {
-    this.expirySeconds = positiveBoundedSeconds(
+    this.coordinator = new TransferCoordinator(this.db, this.dispatcher);
+    this.expirySeconds = this.coordinator.validateSeconds(
       options.expirySeconds ?? DEFAULT_IMPORT_EXPIRY_SECONDS,
       "import expiry",
     );
-    this.stagingGraceSeconds = positiveBoundedSeconds(
+    this.stagingGraceSeconds = this.coordinator.validateSeconds(
       options.stagingGraceSeconds ?? DEFAULT_IMPORT_STAGING_GRACE_SECONDS,
       "import staging grace",
     );
     this.clock = options.clock ?? Date.now;
     this.archiveReader = options.archiveReader ?? new ArchiveReader();
-  }
-
-  private transactionDispatcher(tx: DbTransaction): JobDispatcher {
-    if (!isTransactionalDispatcher(this.dispatcher)) {
-      throw new Error("JOB_FAILED: transactional enqueue unavailable");
-    }
-    return this.dispatcher.withDatabaseExecutor(tx);
   }
 
   private async requireMutableMembership(actorId: string, workspaceId: string): Promise<void> {
@@ -252,10 +222,12 @@ export class ImportServiceImpl implements ImportService {
         .where(and(eq(imports.id, importId), eq(imports.workspaceId, workspaceId)))
         .returning({ createdAt: imports.createdAt });
       if (!row) return;
-      const graceAt = new Date(
-        row.createdAt.getTime() + this.stagingGraceSeconds * MILLISECONDS_PER_SECOND,
+      const graceAt = this.coordinator.expiryAt(
+        row.createdAt,
+        this.stagingGraceSeconds,
+        "import staging grace",
       );
-      await this.transactionDispatcher(tx).enqueue({
+      await this.coordinator.transactionalDispatcher(tx).enqueue({
         workspaceId,
         type: "import.cleanup",
         payload: { workspaceId, scope: "one", importId },
@@ -271,8 +243,8 @@ export class ImportServiceImpl implements ImportService {
     input: ImportStartInput,
     idempotencyKey: string,
   ): Promise<ImportJobResult> {
+    this.coordinator.validateIdentity(actorId, idempotencyKey, invalidImport);
     if (
-      !opaqueAuthIdSchema.safeParse(actorId).success ||
       !canonicalUuidSchema.safeParse(workspaceId).success ||
       !(input.upload instanceof Blob) ||
       !Number.isSafeInteger(input.upload.size) ||
@@ -287,7 +259,6 @@ export class ImportServiceImpl implements ImportService {
     ) {
       invalidImport();
     }
-    if (!idempotencyKeySchema.safeParse(idempotencyKey).success) invalidImport();
     await this.requireMutableMembership(actorId, workspaceId);
 
     let bytes: Buffer;
@@ -326,7 +297,7 @@ export class ImportServiceImpl implements ImportService {
     const sourceObjectKey = `workspace/${workspaceId}/imports/${importId}/source`;
     const now = new Date(this.clock());
     if (!Number.isFinite(now.getTime())) throw new Error("Invalid import clock");
-    const expiresAt = new Date(now.getTime() + this.expirySeconds * MILLISECONDS_PER_SECOND);
+    const expiresAt = this.coordinator.expiryAt(now, this.expirySeconds, "import expiry");
     const sourceManifest: SourceManifest = {
       version: 1,
       source: {
@@ -339,79 +310,80 @@ export class ImportServiceImpl implements ImportService {
       resources: [],
     };
 
-    try {
-      await this.db.insert(imports).values({
-        id: importId,
-        workspaceId,
-        actorId,
-        targetNoteId: input.noteId,
-        baseRevision: input.baseRevision,
-        sourceObjectKey,
-        status: "staging",
-        compensationStatus: "required",
-        expiresAt,
-        idempotencyKey,
-        requestHash: hash,
-        manifest: sourceManifest,
-        createdAt: now,
-        updatedAt: now,
-      });
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        const raced = await this.existingReplay(actorId, workspaceId, idempotencyKey, hash);
-        if (raced) return raced;
-      }
-      throw error;
-    }
-
-    try {
-      await this.hooks.afterStagingInsert?.();
-      await this.storage.put({
-        key: sourceObjectKey,
-        body: bytes,
-        contentType: sourceManifest.source.contentType,
-        contentLength: bytes.byteLength,
-        sha256,
-      });
-      await this.hooks.afterSourcePut?.();
-
-      const row = await this.db.transaction(async (tx) => {
-        const [updated] = await tx
-          .update(imports)
-          .set({
-            status: "pending",
-            compensationStatus: "none",
-            lastError: null,
-            updatedAt: new Date(this.clock()),
-          })
-          .where(
-            and(
-              eq(imports.id, importId),
-              eq(imports.workspaceId, workspaceId),
-              eq(imports.status, "staging"),
-            ),
-          )
-          .returning();
-        if (!updated) throw new Error("JOB_FAILED: import staging transition lost ownership");
-        await this.transactionDispatcher(tx).enqueue({
+    const stagedReplay = await this.coordinator.stage({
+      replay: () => this.existingReplay(actorId, workspaceId, idempotencyKey, hash),
+      insert: async () => {
+        await this.db.insert(imports).values({
+          id: importId,
           workspaceId,
-          type: "import",
-          payload: {
-            workspaceId,
-            importId,
-            actorId,
-            ...(input.noteId ? { noteId: input.noteId, baseRevision: input.baseRevision } : {}),
-          },
-          idempotencyKey: `import-${importId}`,
+          actorId,
+          targetNoteId: input.noteId,
+          baseRevision: input.baseRevision,
+          sourceObjectKey,
+          status: "staging",
+          compensationStatus: "required",
+          expiresAt,
+          idempotencyKey,
+          requestHash: hash,
+          manifest: sourceManifest,
+          createdAt: now,
+          updatedAt: now,
         });
-        await this.hooks.afterPendingJobInsert?.();
-        return updated;
-      });
-      return toResult(row);
-    } catch {
-      await this.markFailedAndScheduleCleanup(importId, workspaceId).catch(() => undefined);
-      throw new PublicApiError("SERVICE_UNAVAILABLE", 503);
-    }
+      },
+    });
+    if (stagedReplay) return stagedReplay;
+
+    return this.coordinator.withFailureBoundary(
+      async () => {
+        await this.hooks.afterStagingInsert?.();
+        await this.storage.put({
+          key: sourceObjectKey,
+          body: bytes,
+          contentType: sourceManifest.source.contentType,
+          contentLength: bytes.byteLength,
+          sha256,
+        });
+        await this.hooks.afterSourcePut?.();
+
+        const row = await this.coordinator.run({
+          replay: () => this.existingReplay(actorId, workspaceId, idempotencyKey, hash),
+          transaction: async (tx, dispatcher) => {
+            const [updated] = await tx
+              .update(imports)
+              .set({
+                status: "pending",
+                compensationStatus: "none",
+                lastError: null,
+                updatedAt: new Date(this.clock()),
+              })
+              .where(
+                and(
+                  eq(imports.id, importId),
+                  eq(imports.workspaceId, workspaceId),
+                  eq(imports.status, "staging"),
+                ),
+              )
+              .returning();
+            if (!updated) throw new Error("JOB_FAILED: import staging transition lost ownership");
+            await dispatcher.enqueue({
+              workspaceId,
+              type: "import",
+              payload: {
+                workspaceId,
+                importId,
+                actorId,
+                ...(input.noteId ? { noteId: input.noteId, baseRevision: input.baseRevision } : {}),
+              },
+              idempotencyKey: `import-${importId}`,
+            });
+            await this.hooks.afterPendingJobInsert?.();
+            return toResult(updated);
+          },
+        });
+        return row;
+      },
+      () => this.markFailedAndScheduleCleanup(importId, workspaceId),
+    );
   }
 
   async getStatus(actorId: string, importId: string): Promise<ImportJobResult> {

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { MigrationRunner } from "./MigrationRunner.js";
 import postgres, { type Sql } from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "../client.js";
@@ -36,7 +36,7 @@ async function migrateDatabase(databaseUrl: string): Promise<void> {
   await verifyMigrationBaseline(databaseUrl, migrationsDirectory);
   const db = createDb(databaseUrl);
   try {
-    await migrate(db, { migrationsFolder: migrationsDirectory });
+    await new MigrationRunner({ databaseUrl, migrationsDirectory }).execute(db);
   } finally {
     await db.$client.end();
   }

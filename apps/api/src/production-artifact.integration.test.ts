@@ -6,7 +6,7 @@ import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createDb, runDatabaseMigrations, type Database } from "@glyphquire/database";
+import { createDb, MigrationRunner, type Database } from "@glyphquire/database";
 
 const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const migrationsDirectory = fileURLToPath(
@@ -153,7 +153,10 @@ describe.runIf(artifactSmokeEnabled)("built production API artifact", () => {
     artifactUrl.pathname = `/${artifactDatabaseName}`;
     artifactDatabaseUrl = artifactUrl.toString();
     artifactDb = createDb(artifactDatabaseUrl);
-    await runDatabaseMigrations(artifactDb, { migrationsFolder: migrationsDirectory });
+    await new MigrationRunner({
+      databaseUrl: artifactDatabaseUrl,
+      migrationsDirectory,
+    }).execute(artifactDb);
   });
 
   afterAll(async () => {
