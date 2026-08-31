@@ -280,6 +280,41 @@ describe("Phase 6 evidence and worker alert wiring", () => {
     }
   });
 
+  it("does not pair recovery from an unrelated alert incident", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "glyphquire-phase6-alert-mismatch-"));
+    const capturePath = join(directory, "alert-evidence.json");
+    try {
+      await receiveAlertEvent(
+        {
+          phase: "firing",
+          alert: "backup_failure",
+          severity: "critical",
+          detectedAt: baseTime,
+          emittedAt: baseTime,
+          requestId,
+          correlationId: requestId,
+        },
+        { capturePath, clock: () => baseTime },
+      );
+      const unrelated = "33333333-3333-4333-8333-333333333333";
+      const receipt = await receiveAlertEvent(
+        {
+          phase: "resolved",
+          alert: "disk_capacity",
+          severity: "critical",
+          detectedAt: baseTime,
+          emittedAt: baseTime,
+          requestId: unrelated,
+          correlationId: unrelated,
+        },
+        { capturePath, clock: () => baseTime },
+      );
+      expect(receipt.evidence?.status).toBe("failed");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("keeps the evidence schema strict and the checked-in instance sanitized", async () => {
     const schema = JSON.parse(
       await readFile("docs/evidence/phase6/alert-evidence.schema.json", "utf8"),
@@ -288,9 +323,9 @@ describe("Phase 6 evidence and worker alert wiring", () => {
     expect(schema.required).toEqual(
       expect.arrayContaining(["schemaVersion", "status", "producer", "capturedAt", "events"]),
     );
-    const evidence = JSON.parse(
-      await readFile("docs/evidence/phase6/alert-evidence.json", "utf8"),
-    ) as {
+    const evidencePath =
+      process.env.PHASE6_ALERT_EVIDENCE_FILE ?? "docs/evidence/phase6/alert-evidence.json";
+    const evidence = JSON.parse(await readFile(evidencePath, "utf8")) as {
       status: string;
       events: unknown[];
     };
@@ -303,7 +338,10 @@ describe("Phase 6 evidence and worker alert wiring", () => {
 
   it("requires the built immutable alert-runtime image instead of mounting source", async () => {
     const compose = await readFile("infra/observability/docker-compose.phase6.yml", "utf8");
-    expect(compose).toContain("PHASE6_ALERT_RUNTIME_IMAGE");
+    expect(compose).toContain("PHASE6_ALERT_RUNTIME_REPOSITORY");
+    expect(compose).toContain("PHASE6_ALERT_RUNTIME_DIGEST");
+    expect(compose).not.toContain("PHASE6_ALERT_RUNTIME_IMAGE");
+    expect(compose).not.toMatch(/command:[\s\S]{0,160}- node\s+- --experimental-strip-types/u);
     expect(compose).not.toContain("node:22.12.0-bookworm-slim@");
     expect(compose).not.toContain("./:/app:ro");
   });

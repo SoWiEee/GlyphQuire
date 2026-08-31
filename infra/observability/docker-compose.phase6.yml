@@ -1,10 +1,8 @@
 services:
   evaluator:
-    image: ${PHASE6_ALERT_RUNTIME_IMAGE:?PHASE6_ALERT_RUNTIME_IMAGE must be an immutable runtime image digest}
+    image: ${PHASE6_ALERT_RUNTIME_REPOSITORY:?PHASE6_ALERT_RUNTIME_REPOSITORY is required}@sha256:${PHASE6_ALERT_RUNTIME_DIGEST:?PHASE6_ALERT_RUNTIME_DIGEST must be a 64-character lowercase SHA-256 digest}
     working_dir: /app
     command:
-      - node
-      - --experimental-strip-types
       - /app/phase6-alert-runtime.ts
       - --mode=evaluator
     environment:
@@ -25,11 +23,9 @@ services:
       start_period: 5s
 
   router:
-    image: ${PHASE6_ALERT_RUNTIME_IMAGE:?PHASE6_ALERT_RUNTIME_IMAGE must be an immutable runtime image digest}
+    image: ${PHASE6_ALERT_RUNTIME_REPOSITORY:?PHASE6_ALERT_RUNTIME_REPOSITORY is required}@sha256:${PHASE6_ALERT_RUNTIME_DIGEST:?PHASE6_ALERT_RUNTIME_DIGEST must be a 64-character lowercase SHA-256 digest}
     working_dir: /app
     command:
-      - node
-      - --experimental-strip-types
       - /app/phase6-alert-runtime.ts
       - --mode=router
     environment:
@@ -49,11 +45,9 @@ services:
       start_period: 5s
 
   receiver:
-    image: ${PHASE6_ALERT_RUNTIME_IMAGE:?PHASE6_ALERT_RUNTIME_IMAGE must be an immutable runtime image digest}
+    image: ${PHASE6_ALERT_RUNTIME_REPOSITORY:?PHASE6_ALERT_RUNTIME_REPOSITORY is required}@sha256:${PHASE6_ALERT_RUNTIME_DIGEST:?PHASE6_ALERT_RUNTIME_DIGEST must be a 64-character lowercase SHA-256 digest}
     working_dir: /app
     command:
-      - node
-      - --experimental-strip-types
       - /app/phase6-alert-receiver.ts
     environment:
       PHASE6_ALERT_RECEIVER_PORT: "8080"

@@ -159,9 +159,15 @@ async function writeEvidence(path: string, evidence: Phase6AlertEvidence): Promi
 }
 
 function eventStatus(events: readonly DeliveredAlertEvent[]): Phase6AlertEvidence["status"] {
-  const firing = events.some((event) => event.phase === "firing");
-  const resolved = events.some((event) => event.phase === "resolved");
-  return firing && resolved ? "passed" : "failed";
+  const firingEvents = events.filter((event) => event.phase === "firing");
+  const resolved = events.some(
+    (event) =>
+      event.phase === "resolved" &&
+      firingEvents.some(
+        (firing) => firing.alert === event.alert && firing.correlationId === event.correlationId,
+      ),
+  );
+  return firingEvents.length > 0 && resolved ? "passed" : "failed";
 }
 
 /** Persists one sanitized event and returns only a bounded delivery result. */

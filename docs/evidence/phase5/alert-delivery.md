@@ -38,11 +38,14 @@ capture is absent:
 PHASE5_ALERT_EVIDENCE_FILE=/secure/path/phase5-alert.json \
 PHASE6_ALERT_EVIDENCE_HOST_PATH=/secure/path/phase6-alert.json \
 PHASE6_ALERT_EVIDENCE_FILE=/secure/path/phase6-alert.json \
-PHASE6_ALERT_RUNTIME_IMAGE=registry.example/phase6-alert@sha256:<64-hex> \
+PHASE6_ALERT_RUNTIME_REPOSITORY=registry.example/phase6-alert \
+PHASE6_ALERT_RUNTIME_DIGEST=<64-hex> \
   pnpm test:integration:phase6-observability
 ```
 
-`PHASE6_ALERT_RUNTIME_IMAGE` must be the immutable digest produced from
+`PHASE6_ALERT_RUNTIME_REPOSITORY` must contain only the image repository (no
+tag), and `PHASE6_ALERT_RUNTIME_DIGEST` must be the lowercase immutable digest
+produced from
 `infra/observability/phase6-alert-runtime.Dockerfile`; the rehearsal does not
 mount source files into the evaluator, router, or receiver containers.
 

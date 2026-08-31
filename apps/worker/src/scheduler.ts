@@ -53,6 +53,26 @@ export interface MaintenanceSchedulerRepository {
   }): Promise<DueAccountDeletion[]>;
 }
 
+/**
+ * Optional operational probe supplied by the worker composition root. The
+ * scheduler owns the cadence and alert correlation, while providers own how
+ * backup health and queue age are measured.
+ */
+export interface WorkerOperationalConditions {
+  backupHealthy: boolean;
+  deadLetterCount: number;
+  oldestQueueAgeSeconds: number;
+  oldestJobId?: string;
+}
+
+export interface MaintenanceSchedulerMetrics {
+  increment(
+    name: "glyphquire_backup_failures_total" | "glyphquire_jobs_dead_lettered_total",
+    value?: number,
+  ): void;
+  set(name: "glyphquire_queue_oldest_job_age_seconds", value: number): void;
+}
+
 export interface MaintenanceSchedulerDispatcher {
   enqueue<TType extends JobType>(
     input: EnqueueJobInput<TType>,
@@ -139,6 +159,8 @@ export interface MaintenanceSchedulerDependencies {
   repository: MaintenanceSchedulerRepository;
   dispatcher: MaintenanceSchedulerDispatcher;
   alert: MaintenanceSchedulerAlert;
+  operationalConditions?: (input: { now: Date }) => Promise<WorkerOperationalConditions>;
+  metrics?: MaintenanceSchedulerMetrics;
   batchSizes: MaintenanceBatchSizes;
   deletionDeadlineDays: number;
 }
@@ -426,9 +448,45 @@ export function createMaintenanceScheduler(
       const runFifteen = fifteenMinuteWindow !== nextFifteenMinuteWindow;
       const runHourly = hourlyWindow !== nextHourlyWindow;
       const runDaily = dailyWindow !== nextDailyWindow;
-      if (!runFifteen && !runHourly && !runDaily) return;
-
       await scrubbed(async () => {
+        if (dependencies.operationalConditions) {
+          const conditions = await dependencies.operationalConditions({
+            now: new Date(scheduledAt),
+          });
+          dependencies.metrics?.set(
+            "glyphquire_queue_oldest_job_age_seconds",
+            Number.isFinite(conditions.oldestQueueAgeSeconds)
+              ? Math.max(0, Math.min(Math.floor(conditions.oldestQueueAgeSeconds), 31_536_000))
+              : 0,
+          );
+          if (conditions.backupHealthy === false) {
+            dependencies.metrics?.increment("glyphquire_backup_failures_total");
+            await recordWorkerAlert(dependencies.alert, {
+              event: "backup_failure",
+            });
+          }
+          if (Number.isInteger(conditions.deadLetterCount) && conditions.deadLetterCount > 0) {
+            dependencies.metrics?.increment(
+              "glyphquire_jobs_dead_lettered_total",
+              Math.min(conditions.deadLetterCount, MAX_DUE_DELETIONS),
+            );
+            await recordWorkerAlert(dependencies.alert, {
+              event: "dead_letter",
+              jobId: conditions.oldestJobId,
+            });
+          }
+          if (
+            Number.isFinite(conditions.oldestQueueAgeSeconds) &&
+            conditions.oldestQueueAgeSeconds >= 300
+          ) {
+            await recordWorkerAlert(dependencies.alert, {
+              event: "oldest_queue_age",
+              jobId: conditions.oldestJobId,
+              ageSeconds: conditions.oldestQueueAgeSeconds,
+            });
+          }
+        }
+        if (!runFifteen && !runHourly && !runDaily) return;
         const workspaceIds = await dependencies.repository.listWorkspaceIds(MAX_WORKSPACES);
         if (workspaceIds.length > MAX_WORKSPACES) throw new Error("JOB_FAILED");
         if (runFifteen) {

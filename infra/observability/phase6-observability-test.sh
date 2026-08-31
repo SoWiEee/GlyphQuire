@@ -6,9 +6,9 @@ readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly REPOSITORY_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd -P)"
 readonly COMPOSE_FILE="$SCRIPT_DIR/docker-compose.phase6.yml"
 readonly CAPTURE_PATH="${PHASE6_ALERT_EVIDENCE_HOST_PATH:-}"
-readonly RUNTIME_IMAGE="${PHASE6_ALERT_RUNTIME_IMAGE:-}"
+readonly RUNTIME_REPOSITORY="${PHASE6_ALERT_RUNTIME_REPOSITORY:-}"
+readonly RUNTIME_DIGEST="${PHASE6_ALERT_RUNTIME_DIGEST:-}"
 readonly PHASE5_EVIDENCE="${PHASE5_ALERT_EVIDENCE_FILE:-}"
-readonly PHASE6_EVIDENCE="${PHASE6_ALERT_EVIDENCE_FILE:-$REPOSITORY_ROOT/docs/evidence/phase6/alert-evidence.json}"
 compose_started=0
 
 fail() {
@@ -24,7 +24,8 @@ cleanup() {
 trap cleanup EXIT
 
 [[ -n "$CAPTURE_PATH" ]] || fail "PHASE6_ALERT_EVIDENCE_HOST_PATH_MISSING"
-[[ "$RUNTIME_IMAGE" =~ ^[a-z0-9._/-]+@sha256:[a-f0-9]{64}$ ]] || fail "PHASE6_ALERT_RUNTIME_IMAGE_MUST_USE_IMMUTABLE_DIGEST"
+[[ "$RUNTIME_REPOSITORY" =~ ^[a-z0-9._-]+(:[0-9]+)?(/[a-z0-9._-]+)*$ ]] || fail "PHASE6_ALERT_RUNTIME_REPOSITORY_INVALID"
+[[ "$RUNTIME_DIGEST" =~ ^[a-f0-9]{64}$ ]] || fail "PHASE6_ALERT_RUNTIME_DIGEST_MUST_BE_SHA256"
 [[ -n "$PHASE5_EVIDENCE" && -f "$PHASE5_EVIDENCE" ]] || fail "PHASE5_ALERT_EVIDENCE_FILE_MISSING"
 [[ -f "$COMPOSE_FILE" ]] || fail "COMPOSE_FILE_MISSING"
 command -v docker >/dev/null 2>&1 || fail "DOCKER_MISSING"
@@ -58,20 +59,34 @@ send_probe false
 send_probe false
 send_probe false
 send_probe true
-send_probe false
 send_probe true
-send_probe false
+send_probe true
+
+capture_has_pair() {
+  CAPTURE_PATH="$CAPTURE_PATH" node --input-type=module -e '
+    import { readFileSync } from "node:fs";
+    try {
+      const value = JSON.parse(readFileSync(process.env.CAPTURE_PATH, "utf8"));
+      const events = Array.isArray(value?.events) ? value.events : [];
+      const firing = events.filter((event) => event?.phase === "firing");
+      const resolved = events.some((event) => event?.phase === "resolved" && firing.some((item) => item.alert === event.alert && item.correlationId === event.correlationId));
+      const serialized = JSON.stringify(value);
+      if (!resolved || /password|token|cookie|https?:|markdown|body|provider|secret/i.test(serialized)) process.exit(1);
+    } catch { process.exit(1); }
+  '
+}
 
 for _attempt in $(seq 1 30); do
-  if [[ -s "$CAPTURE_PATH" ]]; then
+  if [[ -s "$CAPTURE_PATH" ]] && capture_has_pair; then
     break
   fi
   sleep 1
 done
 [[ -s "$CAPTURE_PATH" ]] || fail "RECEIVER_CAPTURE_MISSING"
+capture_has_pair || fail "RECEIVER_CAPTURE_MISSING_MATCHED_RECOVERY"
 
 PHASE5_ALERT_EVIDENCE_FILE="$PHASE5_EVIDENCE" \
-PHASE6_ALERT_EVIDENCE_FILE="$PHASE6_EVIDENCE" \
+PHASE6_ALERT_EVIDENCE_FILE="$CAPTURE_PATH" \
   pnpm exec vitest run --config /dev/null tests/integration/phase5-alerting.test.ts tests/integration/phase6-observability.test.ts
 
 printf 'PHASE6_OBSERVABILITY_PASSED:receiver_capture_validated\n'

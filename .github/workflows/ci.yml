@@ -117,15 +117,17 @@ jobs:
         env:
           PHASE6_BASE_URL: ${{ secrets.PHASE6_BASE_URL }}
           PHASE6_HOSTED_ENV_FILE: ${{ secrets.PHASE6_HOSTED_ENV_FILE }}
-          PHASE6_ALERT_RUNTIME_IMAGE: ${{ secrets.PHASE6_ALERT_RUNTIME_IMAGE }}
-        run: test -n "$PHASE6_BASE_URL" && test -n "$PHASE6_HOSTED_ENV_FILE" && test -n "$PHASE6_ALERT_RUNTIME_IMAGE"
+          PHASE6_ALERT_RUNTIME_REPOSITORY: ${{ secrets.PHASE6_ALERT_RUNTIME_REPOSITORY }}
+          PHASE6_ALERT_RUNTIME_DIGEST: ${{ secrets.PHASE6_ALERT_RUNTIME_DIGEST }}
+        run: test -n "$PHASE6_BASE_URL" && test -n "$PHASE6_HOSTED_ENV_FILE" && test -n "$PHASE6_ALERT_RUNTIME_REPOSITORY" && test -n "$PHASE6_ALERT_RUNTIME_DIGEST"
       - name: Phase 6 observability evidence
         run: pnpm test:integration:phase6-observability
         env:
           PHASE6_ALERT_EVIDENCE_HOST_PATH: ${{ secrets.PHASE6_ALERT_EVIDENCE_HOST_PATH }}
           PHASE5_ALERT_EVIDENCE_FILE: ${{ secrets.PHASE5_ALERT_EVIDENCE_FILE }}
           PHASE6_ALERT_EVIDENCE_FILE: ${{ secrets.PHASE6_ALERT_EVIDENCE_FILE }}
-          PHASE6_ALERT_RUNTIME_IMAGE: ${{ secrets.PHASE6_ALERT_RUNTIME_IMAGE }}
+          PHASE6_ALERT_RUNTIME_REPOSITORY: ${{ secrets.PHASE6_ALERT_RUNTIME_REPOSITORY }}
+          PHASE6_ALERT_RUNTIME_DIGEST: ${{ secrets.PHASE6_ALERT_RUNTIME_DIGEST }}
       - name: Phase 6 release gate
         run: pnpm test:release:phase6
         env:

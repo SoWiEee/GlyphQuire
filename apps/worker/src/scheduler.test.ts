@@ -227,4 +227,44 @@ describe("maintenance scheduler", () => {
       }),
     ]);
   });
+
+  it("emits bounded operational alerts from the maintenance probe", async () => {
+    const records: unknown[] = [];
+    const metricUpdates: unknown[] = [];
+    const jobId = randomUUID();
+    const scheduler = createMaintenanceScheduler({
+      repository: fakeRepository(),
+      dispatcher: fakeDispatcher(),
+      alert: {
+        record: async (event) => {
+          records.push(event);
+        },
+      },
+      operationalConditions: async () => ({
+        backupHealthy: false,
+        deadLetterCount: 1,
+        oldestQueueAgeSeconds: 301,
+        oldestJobId: jobId,
+      }),
+      metrics: {
+        increment: (name, value) => metricUpdates.push(["increment", name, value]),
+        set: (name, value) => metricUpdates.push(["set", name, value]),
+      },
+      batchSizes,
+      deletionDeadlineDays: 30,
+    });
+
+    await scheduler.run(now, new AbortController().signal);
+
+    expect(records).toEqual([
+      expect.objectContaining({ event: "backup_failure" }),
+      expect.objectContaining({ event: "dead_letter", jobId }),
+      expect.objectContaining({ event: "oldest_queue_age", jobId, ageSeconds: 301 }),
+    ]);
+    expect(metricUpdates).toEqual([
+      ["set", "glyphquire_queue_oldest_job_age_seconds", 301],
+      ["increment", "glyphquire_backup_failures_total", undefined],
+      ["increment", "glyphquire_jobs_dead_lettered_total", 1],
+    ]);
+  });
 });
