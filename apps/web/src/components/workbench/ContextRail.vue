@@ -22,7 +22,9 @@
     >
       <header class="gq-context-rail__header">
         <div>
-          <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Context</h2>
+          <h2 class="gq-context-rail__heading text-xs font-semibold uppercase tracking-wide">
+            Context
+          </h2>
           <p v-if="noteTitle" class="gq-context-rail__note text-sm text-gray-700">
             {{ noteTitle }}
           </p>
@@ -31,7 +33,7 @@
           ref="closeRef"
           type="button"
           aria-label="Close context tools"
-          class="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+          class="gq-context-rail__close rounded p-1 hover:bg-gray-100 hover:text-gray-900"
           @click="emit('close')"
         >
           ×
@@ -216,6 +218,11 @@ onBeforeUnmount(releaseTrap);
   border-bottom: 1px solid var(--gq-color-border);
 }
 
+.gq-context-rail__heading,
+.gq-context-rail__close {
+  color: var(--gq-color-muted);
+}
+
 .gq-context-rail__outline,
 .gq-context-rail__actions {
   display: grid;
@@ -238,7 +245,6 @@ onBeforeUnmount(releaseTrap);
 
 .gq-context-rail__actions button:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
 }
 
 @media (min-width: 48rem) {

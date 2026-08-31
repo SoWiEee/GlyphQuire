@@ -73,7 +73,7 @@ test.describe("hostile content cannot execute in the reachable workbench UI", ()
     test(`the command palette filter input neutralizes: ${payload.slice(0, 40)}`, async ({
       page,
     }) => {
-      await page.getByRole("button", { name: "Open command palette" }).click();
+      await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
       const input = page.getByRole("textbox", { name: "Filter commands" });
 
       const requests: string[] = [];
@@ -99,7 +99,7 @@ test.describe("hostile content cannot execute in the reachable workbench UI", ()
   test("no dialog (alert/confirm/prompt) ever fires while hostile payloads are typed", async ({
     page,
   }) => {
-    await page.getByRole("button", { name: "Open command palette" }).click();
+    await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
     const input = page.getByRole("textbox", { name: "Filter commands" });
     for (const payload of HOSTILE_PAYLOADS) {
       await input.fill(payload);

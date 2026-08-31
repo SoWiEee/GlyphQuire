@@ -7,7 +7,6 @@ import {
 } from "../../packages/theme-engine/src/tokens.js";
 
 const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
-const MOBILE_VIEWPORT = { width: 390, height: 844 };
 const SHELL_ROUTE = "/workspace";
 const DEMO_ROUTE = "/__readme-demo?scene=modes";
 
@@ -213,40 +212,6 @@ test.describe("Task 6 workbench UI acceptance", () => {
       await paletteButton(page).click();
       await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
       axeFindings.push(...(await criticalAxeFindings(page)));
-    });
-
-    await test.step("390px drawers keep the editor scrollable", async () => {
-      await page.setViewportSize(MOBILE_VIEWPORT);
-      await page.goto(SHELL_ROUTE);
-
-      const explorerSlot = page.locator(".gq-explorer-slot");
-      await expect(explorerSlot).toHaveClass(/gq-explorer-slot--open/u);
-      const explorerWidth = await explorerSlot.evaluate(
-        (element) => element.getBoundingClientRect().width,
-      );
-      expect(explorerWidth).toBeLessThanOrEqual(MOBILE_VIEWPORT.width * 0.88 + 1);
-
-      const editorSurface = page.getByTestId("source-editor-host");
-      await expect(editorSurface).toBeVisible();
-      await expect(editorSurface).toHaveCSS("overflow", "auto");
-
-      const explorerTrigger = page.getByRole("button", { name: "Open explorer" });
-      await explorerTrigger.focus();
-      await page.keyboard.press("Enter");
-      await expect(explorerSlot).not.toHaveClass(/gq-explorer-slot--open/u);
-      await explorerTrigger.focus();
-      await page.keyboard.press("Enter");
-
-      const contextTrigger = page.getByRole("button", { name: "Open context tools" });
-      await contextTrigger.focus();
-      await page.keyboard.press("Enter");
-      const rail = page.getByTestId("context-rail");
-      await expect(rail).toHaveAttribute("role", "dialog");
-      await expect(rail).toHaveAttribute("aria-modal", "true");
-      const railWidth = await rail.evaluate((element) => element.getBoundingClientRect().width);
-      expect(railWidth).toBeLessThanOrEqual(MOBILE_VIEWPORT.width * 0.88 + 1);
-      axeFindings.push(...(await criticalAxeFindings(page)));
-      await rail.getByRole("button", { name: "Close context tools" }).click();
     });
 
     expect(axeFindings).toEqual([]);

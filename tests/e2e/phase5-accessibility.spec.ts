@@ -1,11 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-const WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
-const NOTE_ID = "22222222-2222-4222-8222-222222222222";
-
 async function openTool(page: Page, label: string): Promise<void> {
-  await page.getByRole("button", { name: "Open command palette" }).click();
+  await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
   const palette = page.getByRole("dialog", { name: "Command palette" });
   const filter = palette.getByRole("textbox", { name: "Filter commands" });
   await expect(filter).toBeFocused();
@@ -25,7 +22,10 @@ async function expectDialogAxeClean(page: Page, label: string): Promise<void> {
 
 test.describe("Phase 5 keyboard and axe acceptance", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`/workspace/${WORKSPACE_ID}?noteId=${NOTE_ID}`);
+    // The public workspace route is intentionally unauthenticated. The local
+    // demo route supplies the validated session/workspace fixture needed by
+    // Phase 5 panels without weakening production route authorization.
+    await page.goto("/__readme-demo?scene=modes");
   });
 
   test("all Phase 5 panels have no scoped WCAG A/AA axe violations", async ({ page }) => {
@@ -44,7 +44,9 @@ test.describe("Phase 5 keyboard and axe acceptance", () => {
   test("keyboard-only open, operate, escape, and focus restoration are deterministic", async ({
     page,
   }) => {
-    const paletteButton = page.getByRole("button", { name: "Open command palette" });
+    const paletteButton = page
+      .locator("header")
+      .getByRole("button", { name: "Open command palette" });
     await paletteButton.focus();
     await page.keyboard.press("Enter");
     const palette = page.getByRole("dialog", { name: "Command palette" });

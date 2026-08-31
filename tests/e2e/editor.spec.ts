@@ -176,7 +176,7 @@ test.describe("command palette", () => {
   });
 
   test("opens via the toolbar button and closes on Escape, restoring focus", async ({ page }) => {
-    const openButton = page.getByRole("button", { name: "Open command palette" });
+    const openButton = page.locator("header").getByRole("button", { name: "Open command palette" });
     await openButton.click();
 
     const dialog = page.getByRole("dialog", { name: "Command palette" });
@@ -201,7 +201,10 @@ test.describe("command palette", () => {
     // `onMounted` runs a tick after its template is first painted, so
     // dispatching immediately after `goto()` can race the listener
     // registration and silently no-op.
-    await page.getByRole("button", { name: "Open command palette" }).waitFor({ state: "visible" });
+    await page
+      .locator("header")
+      .getByRole("button", { name: "Open command palette" })
+      .waitFor({ state: "visible" });
     await dispatchShortcut(page, "Control");
 
     const dialog = page.getByRole("dialog", { name: "Command palette" });
@@ -213,7 +216,7 @@ test.describe("command palette", () => {
   });
 
   test("filters commands by label as the query changes", async ({ page }) => {
-    await page.getByRole("button", { name: "Open command palette" }).click();
+    await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
     const dialog = page.getByRole("dialog", { name: "Command palette" });
     const listbox = dialog.getByRole("listbox", { name: "Commands" });
 
@@ -224,7 +227,7 @@ test.describe("command palette", () => {
   });
 
   test("running a command from the list closes the palette", async ({ page }) => {
-    await page.getByRole("button", { name: "Open command palette" }).click();
+    await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
     const dialog = page.getByRole("dialog", { name: "Command palette" });
     await dialog.getByRole("textbox", { name: "Filter commands" }).fill("Scratch");
     await dialog.getByRole("option", { name: /Open "Scratch"/ }).click();
@@ -236,7 +239,7 @@ test.describe("command palette", () => {
   });
 
   test("closes when clicking the backdrop", async ({ page }) => {
-    await page.getByRole("button", { name: "Open command palette" }).click();
+    await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
     const dialog = page.getByRole("dialog", { name: "Command palette" });
     await expect(dialog).toBeVisible();
     // Click outside the dialog panel but inside the fixed overlay.

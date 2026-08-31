@@ -593,10 +593,17 @@ function openPalette(): void {
 }
 
 function closePalette(): void {
+  const phase5PanelWasOpened = workbenchState.phase5Panel !== null;
   paletteOpen.value = false;
   slashRequest.value = null;
   paletteInitialQuery.value = undefined;
   paletteCategoryFilter.value = undefined;
+  if (phase5PanelWasOpened) {
+    void nextTick(() => {
+      void nextTick(() => phase5CloseRef.value?.focus());
+    });
+    return;
+  }
   const paletteButton = topBarRef.value?.$el?.querySelector('[aria-label="Open command palette"]');
   if (paletteButton instanceof HTMLElement) paletteButton.focus();
 }

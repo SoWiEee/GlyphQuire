@@ -20,7 +20,7 @@ function json(route: Route, status: number, body: unknown): Promise<void> {
 }
 
 async function openTool(page: Page, label: string): Promise<void> {
-  await page.getByRole("button", { name: "Open command palette" }).click();
+  await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
   const palette = page.getByRole("dialog", { name: "Command palette" });
   await palette.getByRole("textbox", { name: "Filter commands" }).fill(label);
   await page.keyboard.press("Enter");
@@ -82,6 +82,7 @@ test.describe("Phase 5 browser acceptance adapter", () => {
         return json(route, 202, {
           id: IMPORT_ID,
           workspaceId: WORKSPACE_ID,
+          noteId: NOTE_ID,
           status: "completed",
           progress: {
             completedItems: 1,
@@ -146,7 +147,10 @@ test.describe("Phase 5 browser acceptance adapter", () => {
       });
     });
 
-    await page.goto(`/workspace/${WORKSPACE_ID}?noteId=${NOTE_ID}`);
+    // The public workspace route is intentionally unauthenticated. The local
+    // demo route supplies the validated session/workspace fixture needed by
+    // Phase 5 panels without weakening production route authorization.
+    await page.goto("/__readme-demo?scene=modes");
 
     await openTool(page, "Manage assets");
     const assets = page.getByRole("dialog", { name: "Asset manager" });
@@ -156,8 +160,10 @@ test.describe("Phase 5 browser acceptance adapter", () => {
       buffer: Buffer.from("89504e470d0a1a0a", "hex"),
     });
     await assets.getByRole("button", { name: "Upload asset" }).click();
-    await expect(assets.getByTestId("asset-reference")).toHaveText(`asset://${ASSET_ID}`);
-    await assets.getByRole("button", { name: "Close Phase 5 tools" }).click();
+    await expect(page.getByTestId("source-editor-host").locator(".cm-content")).toContainText(
+      `asset://${ASSET_ID}`,
+    );
+    await expect(assets).toHaveCount(0);
 
     await openTool(page, "Search notes");
     const search = page.getByRole("dialog", { name: "Search notes" });
@@ -221,7 +227,9 @@ test.describe("Phase 5 browser acceptance adapter", () => {
         },
       }),
     );
-    await page.goto(`/workspace/${WORKSPACE_ID}?noteId=${NOTE_ID}`);
+    // Keep the permission-denial flow on the same authenticated fixture while
+    // replacing only its API responses with the denied projection.
+    await page.goto("/__readme-demo?scene=modes");
     await openTool(page, "Search notes");
     const search = page.getByRole("dialog", { name: "Search notes" });
     await search.getByRole("searchbox", { name: "Search notes" }).fill("denied");

@@ -22,7 +22,14 @@ export default defineConfig({
       // matrix has explicit projects below so a local diagnostic run never
       // changes the semantics of the ordinary Chrome suite.
       testMatch: "e2e/**/*.spec.ts",
-      testIgnore: "e2e/phase6-browser-matrix.spec.ts",
+      // README screenshots are maintained manually and are not release-gate
+      // checks; the demo route remains available as a deterministic fixture
+      // for product-flow tests.
+      testIgnore: [
+        "e2e/phase6-browser-matrix.spec.ts",
+        "e2e/readme-demo.spec.ts",
+        "e2e/readme-gallery-render.spec.ts",
+      ],
     },
     {
       name: "chromium",

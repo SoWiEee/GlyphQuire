@@ -60,7 +60,7 @@ test.describe("axe accessibility scan", () => {
 
   test("the open command palette has no automatically detectable violations", async ({ page }) => {
     await page.goto("/workspace");
-    await page.getByRole("button", { name: "Open command palette" }).click();
+    await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
     await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
 
     const violations = await scanForAxeViolations(page);
@@ -77,7 +77,7 @@ test.describe("axe accessibility scan", () => {
     // nested-interactive hits, the allowance above is stale and should be
     // deleted along with this test.
     await page.goto("/workspace");
-    await page.getByRole("button", { name: "Open command palette" }).click();
+    await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
     await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
 
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
@@ -107,7 +107,7 @@ test.describe("keyboard-only navigation", () => {
   });
 
   test("the command palette is fully operable from the keyboard", async ({ page }) => {
-    await page.getByRole("button", { name: "Open command palette" }).focus();
+    await page.locator("header").getByRole("button", { name: "Open command palette" }).focus();
     await page.keyboard.press("Enter");
 
     const dialog = page.getByRole("dialog", { name: "Command palette" });
@@ -165,13 +165,15 @@ test.describe("visible focus", () => {
     expect(await hasVisibleFocusIndicator(explorerWelcome)).toBe(true);
     expect(await hasVisibleFocusIndicator(page.getByRole("radio", { name: "Source" }))).toBe(true);
     expect(
-      await hasVisibleFocusIndicator(page.getByRole("button", { name: "Open command palette" })),
+      await hasVisibleFocusIndicator(
+        page.locator("header").getByRole("button", { name: "Open command palette" }),
+      ),
     ).toBe(true);
     expect(await hasVisibleFocusIndicator(page.getByRole("tab", { name: "Welcome" }))).toBe(true);
   });
 
   test("the command palette filter input shows a visible focus ring", async ({ page }) => {
-    await page.getByRole("button", { name: "Open command palette" }).click();
+    await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
     const input = page.getByRole("textbox", { name: "Filter commands" });
     await expect(input).toBeFocused();
     expect(await hasVisibleFocusIndicator(input)).toBe(true);
@@ -186,7 +188,7 @@ test.describe("reduced motion", () => {
 
     // The command palette has no transition classes of its own, so it must
     // still open instantly and correctly under reduced motion.
-    await page.getByRole("button", { name: "Open command palette" }).click();
+    await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
     await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
   });
 
@@ -216,9 +218,9 @@ test.describe("screen reader smoke", () => {
     await expect(page.getByRole("tablist", { name: "Open notes" })).toBeVisible();
     await expect(page.getByRole("tabpanel", { name: "Welcome editor" })).toBeVisible();
     await expect(page.getByRole("radiogroup", { name: "Editor mode" })).toBeVisible();
-    await expect(page.getByRole("status")).toHaveAttribute("aria-live", "polite");
+    await expect(page.locator('footer[role="status"]')).toHaveAttribute("aria-live", "polite");
 
-    await page.getByRole("button", { name: "Open command palette" }).click();
+    await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
     const dialog = page.getByRole("dialog", { name: "Command palette" });
     await expect(dialog).toHaveAttribute("aria-modal", "true");
     await expect(dialog.getByRole("listbox", { name: "Commands" })).toBeVisible();
