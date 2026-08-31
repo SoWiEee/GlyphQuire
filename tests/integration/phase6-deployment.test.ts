@@ -89,10 +89,7 @@ describe("Phase 6 deployment and recovery contracts", () => {
       const dockerPath = resolve(temporaryRoot, "docker");
       const curlPath = resolve(temporaryRoot, "curl");
       await writeFile(composePath, "services: {}\n");
-      await writeFile(
-        dockerPath,
-        '#!/bin/sh\nprintf "docker\\n" >> "$PHASE6_COMMAND_LOG"\n',
-      );
+      await writeFile(dockerPath, '#!/bin/sh\nprintf "docker\\n" >> "$PHASE6_COMMAND_LOG"\n');
       await writeFile(curlPath, '#!/bin/sh\nprintf "curl\\n" >> "$PHASE6_COMMAND_LOG"\n');
       await Promise.all([chmod(dockerPath, 0o700), chmod(curlPath, 0o700)]);
 
@@ -124,8 +121,7 @@ describe("Phase 6 deployment and recovery contracts", () => {
       const productionTarget = await runScript(rollbackScript, {
         ...baseEnvironment,
         PHASE6_ISOLATED_CONFIRMATION: "isolated",
-        PHASE6_DATABASE_URL:
-          "postgresql://glyphquire_app:runtime@prod-db.example/glyphquire_prod",
+        PHASE6_DATABASE_URL: "postgresql://glyphquire_app:runtime@prod-db.example/glyphquire_prod",
         PHASE6_EXPECTED_DATABASE_HOST: "prod-db.example",
         PHASE6_EXPECTED_DATABASE_NAME: "glyphquire_prod",
       });
@@ -218,8 +214,7 @@ describe("Phase 6 deployment and recovery contracts", () => {
       const productionTarget = await runScript(queueRecoveryScript, {
         ...baseEnvironment,
         PHASE6_ISOLATED_CONFIRMATION: "isolated",
-        PHASE6_DATABASE_URL:
-          "postgresql://glyphquire_app:runtime@prod-db.example/glyphquire_prod",
+        PHASE6_DATABASE_URL: "postgresql://glyphquire_app:runtime@prod-db.example/glyphquire_prod",
         PHASE6_EXPECTED_DATABASE_HOST: "prod-db.example",
         PHASE6_EXPECTED_DATABASE_NAME: "glyphquire_prod",
       });
