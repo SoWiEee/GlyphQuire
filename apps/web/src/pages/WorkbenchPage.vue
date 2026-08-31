@@ -18,12 +18,14 @@
     :workspace-name="hostContext.workspaceName"
     :account-label="hostContext.accountLabel"
     @account-action="forwardAccountAction"
+    @request-conflict-recovery="onConflictRecovery"
   />
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
+import { canonicalUuidSchema } from "@glyphquire/api-contract";
 import Workbench from "../components/workbench/Workbench.vue";
 import ConflictWorkspace from "../components/conflict/ConflictWorkspace.vue";
 import { NoteClient } from "../api/NoteClient.js";
@@ -34,6 +36,7 @@ import {
   type WorkbenchAccountAction,
 } from "../components/workbench/WorkbenchContext.js";
 import type { WorkbenchSessionFactory } from "../components/workbench/types.js";
+import type { ActiveConflict } from "../stores/conflict.js";
 
 const props = defineProps<{
   sessionFactory?: WorkbenchSessionFactory;
@@ -61,6 +64,15 @@ function onConflictResolved(): void {
 
 function onConflictDismissed(): void {
   conflictStore.clear();
+}
+
+function onConflictRecovery(
+  entry: Omit<ActiveConflict, "localBaseRevision"> & { localBaseRevision: number | null },
+): void {
+  if (!canonicalUuidSchema.safeParse(entry.userId).success) return;
+  if (!canonicalUuidSchema.safeParse(entry.workspaceId).success) return;
+  if (!canonicalUuidSchema.safeParse(entry.noteId).success) return;
+  conflictStore.report(entry);
 }
 
 function forwardAccountAction(action: WorkbenchAccountAction): void {

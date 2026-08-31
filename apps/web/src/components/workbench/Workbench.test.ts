@@ -4,6 +4,7 @@ import { StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { defineComponent, h, nextTick } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { NoteConflict } from "@glyphquire/api-contract";
 import Workbench from "./Workbench.vue";
 import type {
   EditorModeAdapters,
@@ -15,6 +16,8 @@ import type { NoteResult } from "@glyphquire/api-contract";
 
 const NOTE_ID = "44444444-4444-4444-8444-444444444444";
 const OTHER_NOTE_ID = "55555555-5555-4555-8555-555555555555";
+const USER_ID = "11111111-1111-4111-8111-111111111111";
+const WORKSPACE_ID = "22222222-2222-4222-8222-222222222222";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -97,6 +100,18 @@ function noteResult(overrides: Partial<NoteResult> = {}): NoteResult {
   };
 }
 
+function conflictFixture(): NoteConflict {
+  return {
+    code: "REVISION_CONFLICT",
+    noteId: NOTE_ID,
+    serverRevision: 2,
+    serverMarkdown: "# Server version",
+    serverUpdatedAt: "2026-08-01T00:00:00.000Z",
+    lastEditedBy: null,
+    requestId: "task4-conflict",
+  };
+}
+
 const SourceEditorStub = defineComponent({
   name: "SourceEditor",
   props: {
@@ -148,6 +163,58 @@ describe("Workbench EditorSession composition", () => {
     const pinia = createPinia();
     setActivePinia(pinia);
     config.global.plugins = [pinia];
+  });
+
+  it("surfaces save failures, retries the active session, and leaves conflicts read-only without identity", async () => {
+    const authority = fakeSession();
+    const sessionFactory = vi.fn(async () => authority.session);
+    const wrapper = mount(Workbench, {
+      props: { initialNotes: notes, sessionFactory },
+      global: { stubs: { SourceEditor: SourceEditorStub } },
+    });
+    await flushPromises();
+
+    authority.emit(state({ dirty: true, saveStatus: "error" }));
+    await nextTick();
+
+    const errorBanner = wrapper.get('[data-save-state="error"]');
+    expect(errorBanner.attributes("role")).toBe("alert");
+    expect(errorBanner.text()).toContain("couldn't save");
+    await errorBanner.get('button[aria-label="Retry save"]').trigger("click");
+    expect(authority.session.saveNow).toHaveBeenCalledOnce();
+
+    authority.emit(state({ saveStatus: "conflict", conflict: conflictFixture() }));
+    await nextTick();
+
+    const conflictBanner = wrapper.get('[data-save-state="conflict"]');
+    expect(conflictBanner.text()).toContain("Another version was saved");
+    expect(conflictBanner.find('button[aria-label="Open conflict recovery"]').exists()).toBe(false);
+    expect(conflictBanner.find('button[aria-label="Retry save"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("emits conflict recovery with identity from a validated session handle", async () => {
+    const authority = fakeSession(state({ saveStatus: "conflict", conflict: conflictFixture() }));
+    const sessionFactory = vi.fn(async () => ({
+      session: authority.session,
+      context: { userId: USER_ID, workspaceId: WORKSPACE_ID },
+    }));
+    const wrapper = mount(Workbench, {
+      props: { initialNotes: notes, sessionFactory },
+      global: { stubs: { SourceEditor: SourceEditorStub } },
+    });
+    await flushPromises();
+
+    await wrapper.get('button[aria-label="Open conflict recovery"]').trigger("click");
+
+    expect(wrapper.emitted("request-conflict-recovery")?.[0]?.[0]).toMatchObject({
+      userId: USER_ID,
+      workspaceId: WORKSPACE_ID,
+      noteId: NOTE_ID,
+      localMarkdown: "# server markdown",
+      localBaseRevision: 1,
+    });
+    wrapper.unmount();
   });
   it("keeps reachable source content non-editable when no live session factory grants authority", async () => {
     const wrapper = mount(Workbench, {

@@ -1,4 +1,30 @@
+import type { NoteConflict } from "@glyphquire/api-contract";
 import type { EditorSession } from "../../editors/editor-session.types.js";
+
+/** The user-visible persistence states for the active workbench session. */
+export type WorkbenchSaveState =
+  | "saved"
+  | "saving"
+  | "dirty"
+  | "offline"
+  | "error"
+  | "conflict"
+  | "read-only"
+  | "unavailable";
+
+/** Identity permitted to open page-level conflict recovery. */
+export interface WorkbenchConflictContext {
+  readonly userId: string;
+  readonly workspaceId: string;
+}
+
+/** Payload sent to the page when a validated session exposes a conflict. */
+export interface WorkbenchConflictRecovery extends WorkbenchConflictContext {
+  readonly noteId: string;
+  readonly conflict: NoteConflict;
+  readonly localMarkdown: string;
+  readonly localBaseRevision: number | null;
+}
 
 /** The small set of actions kept visible in the balanced editor toolbar. */
 export type ToolbarAction = "bold" | "italic" | "heading" | "bulletList" | "link";
@@ -51,9 +77,7 @@ export interface SlashCommandRequest {
 /** Opens the one authoritative browser session for a selected note. */
 export interface WorkbenchSessionHandle {
   readonly session: EditorSession;
-  readonly context?: {
-    readonly userId: string;
-    readonly workspaceId: string;
+  readonly context?: WorkbenchConflictContext & {
     readonly accountLabel?: string;
     readonly workspaceName?: string;
   };

@@ -1,17 +1,26 @@
 <template>
   <div class="gq-workbench-shell flex h-screen flex-col">
-    <TopBar
-      ref="topBarRef"
-      :note-title="activeNote?.title ?? null"
-      :mode="mode"
-      :workspace-name="effectiveWorkspaceName"
-      :account-label="effectiveAccountLabel"
-      @update:mode="onModeChange"
-      @open-palette="openPalette"
-      @open-theme-editor="themeStore.openEditor()"
-      @account-action="onAccountAction"
-      @toolbar-action="onToolbarAction"
-    />
+    <div class="flex items-center border-b border-gray-200 bg-white">
+      <TopBar
+        ref="topBarRef"
+        class="min-w-0 flex-1 border-b-0"
+        :note-title="activeNote?.title ?? null"
+        :mode="mode"
+        :workspace-name="effectiveWorkspaceName"
+        :account-label="effectiveAccountLabel"
+        @update:mode="onModeChange"
+        @open-palette="openPalette"
+        @open-theme-editor="themeStore.openEditor()"
+        @account-action="onAccountAction"
+        @toolbar-action="onToolbarAction"
+      />
+      <StatusIndicator
+        class="mr-4 text-gray-600"
+        :state="saveState"
+        :detail="saveStateDetail"
+        compact
+      />
+    </div>
 
     <EditorToolbar
       :disabled="toolbarDisabled"
@@ -66,6 +75,16 @@
           :active-tab-id="activeNoteId"
           @select="setActiveNote"
           @close="closeTab"
+        />
+
+        <SaveStateBanner
+          v-if="showSaveStateBanner"
+          :state="saveState"
+          :message="saveStateMessage"
+          :can-retry="canRetrySave"
+          :can-open-conflict="canOpenConflict"
+          @retry="retrySave"
+          @open-conflict="openConflict"
         />
 
         <div
@@ -124,7 +143,13 @@
       />
     </div>
 
-    <StatusBar :note-title="activeNote?.title ?? null" :mode="mode" :word-count="wordCount" />
+    <StatusBar
+      :note-title="activeNote?.title ?? null"
+      :mode="mode"
+      :word-count="wordCount"
+      :save-state="saveState"
+      :save-detail="saveStateDetail"
+    />
 
     <div
       v-if="phase5Panel && phase5WorkspaceId"
@@ -202,7 +227,9 @@ import ContextRail from "./ContextRail.vue";
 import EditorToolbar from "./EditorToolbar.vue";
 import EditorTabs from "./EditorTabs.vue";
 import ExplorerPane from "./ExplorerPane.vue";
+import SaveStateBanner from "./SaveStateBanner.vue";
 import StatusBar from "./StatusBar.vue";
+import StatusIndicator from "./StatusIndicator.vue";
 import TopBar from "./TopBar.vue";
 import SourceEditor from "../source/SourceEditor.vue";
 import VisualEditor from "../visual/VisualEditor.vue";
@@ -232,6 +259,9 @@ import type {
   WorkbenchNote,
   WorkbenchSessionFactory,
   WorkbenchSessionHandle,
+  WorkbenchConflictContext,
+  WorkbenchConflictRecovery,
+  WorkbenchSaveState,
   ToolbarAction,
   WorkbenchEditorHandle,
   SlashCommandRequest,
@@ -278,6 +308,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "account-action": [action: WorkbenchAccountAction];
+  "request-conflict-recovery": [entry: WorkbenchConflictRecovery];
 }>();
 
 type Phase5Panel = "assets" | "search" | "transfer" | "share" | "history" | "shared-links";
@@ -426,6 +457,67 @@ const effectiveAccountLabel = computed(
   () => activeSessionContext.value?.accountLabel ?? props.accountLabel,
 );
 
+const activeConflictContext = computed<WorkbenchConflictContext | undefined>(() => {
+  const context = activeSessionContext.value;
+  if (!context) return undefined;
+  const userId = canonicalUuidSchema.safeParse(context.userId);
+  const workspaceId = canonicalUuidSchema.safeParse(context.workspaceId);
+  if (!userId.success || !workspaceId.success) return undefined;
+  return { userId: userId.data, workspaceId: workspaceId.data };
+});
+
+function saveStateFromSession(state: EditorSessionState | undefined): WorkbenchSaveState {
+  if (!state) return "unavailable";
+  if (state.readOnly || state.isReadOnly) return "read-only";
+  if (state.conflict || state.saveStatus === "conflict") return "conflict";
+  if (state.saveStatus === "offline") return "offline";
+  if (state.saveStatus === "error") return "error";
+  if (state.saveStatus === "saving") return "saving";
+  if (state.saveStatus === "dirty") return "dirty";
+  return "saved";
+}
+
+const saveState = computed<WorkbenchSaveState>(() => saveStateFromSession(sessionState.value));
+const saveStateDetail = computed<string | undefined>(() => {
+  switch (saveState.value) {
+    case "saving":
+      return "Syncing now";
+    case "dirty":
+      return "Waiting to save";
+    case "read-only":
+      return "Editing disabled";
+    default:
+      return undefined;
+  }
+});
+const saveStateMessage = computed(() => {
+  switch (saveState.value) {
+    case "offline":
+      return "Changes are queued locally. We'll retry when the connection returns.";
+    case "error":
+      return "We couldn't save your changes. Try again.";
+    case "conflict":
+      return "Another version was saved. Review the conflicting edits to continue.";
+    case "unavailable":
+      return "This note is unavailable for editing right now.";
+    default:
+      return "";
+  }
+});
+const showSaveStateBanner = computed(() =>
+  ["offline", "error", "conflict", "unavailable"].includes(saveState.value),
+);
+const canRetrySave = computed(
+  () =>
+    Boolean(activeSession.value) && (saveState.value === "offline" || saveState.value === "error"),
+);
+const canOpenConflict = computed(
+  () =>
+    saveState.value === "conflict" &&
+    Boolean(activeConflictContext.value) &&
+    Boolean(sessionState.value?.conflict),
+);
+
 function extractOutline(markdown: string): OutlineEntry[] {
   const seen = new Map<string, number>();
   const entries: OutlineEntry[] = [];
@@ -493,6 +585,33 @@ function onVisualMarkdownChange(markdown: string): void {
   // listener, which calls session.edit() for us — Visual has no separate
   // display path, so this is the only place that edit can originate.
   visualModeAdapter?.syncFromUi(markdown, true);
+}
+
+async function retrySave(): Promise<void> {
+  const session = activeSession.value;
+  if (!session || !canRetrySave.value) return;
+  try {
+    await session.saveNow();
+  } catch {
+    // EditorSession publishes the resulting state; provider errors stay out of
+    // the plain-language workbench status copy.
+  }
+}
+
+function openConflict(): void {
+  const state = sessionState.value;
+  const context = activeConflictContext.value;
+  const note = activeNote.value;
+  if (!context || !state?.conflict || !note || !canOpenConflict.value) return;
+
+  emit("request-conflict-recovery", {
+    userId: context.userId,
+    workspaceId: context.workspaceId,
+    noteId: state.noteId,
+    conflict: state.conflict,
+    localMarkdown: state.markdown,
+    localBaseRevision: isValidRevision(state.baseRevision) ? state.baseRevision : null,
+  });
 }
 
 function onToolbarAction(action: ToolbarAction): void {
