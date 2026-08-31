@@ -75,7 +75,8 @@
           aria-label="Open account menu"
           :aria-expanded="accountMenuOpen"
           aria-haspopup="menu"
-          @click="accountMenuOpen = !accountMenuOpen"
+          ref="accountButtonRef"
+          @click="toggleAccountMenu"
         >
           {{ accountLabel }}
         </button>
@@ -84,9 +85,10 @@
           role="menu"
           aria-label="Account menu"
           class="gq-topbar__menu absolute right-0 z-20 mt-2 grid min-w-36 gap-1 rounded-md border p-1 shadow-lg"
-          @keydown.esc="accountMenuOpen = false"
+          @keydown.esc="closeAccountMenu"
         >
           <button
+            ref="firstAccountMenuItemRef"
             type="button"
             role="menuitem"
             aria-label="Theme"
@@ -109,7 +111,7 @@
             role="menuitem"
             aria-label="Close menu"
             class="gq-topbar__menu-item rounded px-2 py-1.5 text-left text-sm"
-            @click="accountMenuOpen = false"
+            @click="closeAccountMenu"
           >
             Close menu
           </button>
@@ -120,7 +122,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { nextTick, ref } from "vue";
 import type { ToolbarAction, WorkbenchAccountAction, WorkbenchEditorMode } from "./types.js";
 
 defineProps<{
@@ -139,9 +141,28 @@ const emit = defineEmits<{
 }>();
 
 const accountMenuOpen = ref(false);
+const accountButtonRef = ref<HTMLButtonElement | null>(null);
+const firstAccountMenuItemRef = ref<HTMLButtonElement | null>(null);
+
+function toggleAccountMenu(): void {
+  accountMenuOpen.value = !accountMenuOpen.value;
+  void nextTick(() => {
+    if (accountMenuOpen.value) {
+      firstAccountMenuItemRef.value?.focus();
+    } else {
+      accountButtonRef.value?.focus();
+    }
+  });
+}
+
+function closeAccountMenu(): void {
+  accountMenuOpen.value = false;
+  void nextTick(() => accountButtonRef.value?.focus());
+}
 
 function onAccountAction(action: WorkbenchAccountAction): void {
   accountMenuOpen.value = false;
   emit("account-action", action);
+  void nextTick(() => accountButtonRef.value?.focus());
 }
 </script>
