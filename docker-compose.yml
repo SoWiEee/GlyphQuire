@@ -77,12 +77,12 @@ services:
       timeout: 3s
       retries: 5
 
-  # Optional Phase 5 worker profile. The image is supplied by the deployment
+  # Optional workspace-services worker profile. The image is supplied by the deployment
   # pipeline and must include a real BackupVerifier; the worker intentionally
   # fails closed when that verifier is not injected.
   worker:
-    profiles: ["phase5"]
-    image: "${GLYPHQUIRE_WORKER_IMAGE:-glyphquire-worker:phase5}"
+    profiles: ["workspace-services"]
+    image: "${GLYPHQUIRE_WORKER_IMAGE:-glyphquire-worker:workspace-services}"
     init: true
     restart: on-failure
     depends_on:

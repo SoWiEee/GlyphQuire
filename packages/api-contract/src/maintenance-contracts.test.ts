@@ -18,7 +18,7 @@ import {
 
 const workspaceId = randomUUID();
 
-describe("Phase 5 maintenance contracts", () => {
+describe("Maintenance contracts", () => {
   it("accepts only the exact destructive confirmation", () => {
     expect(deletionConfirmationSchema.parse({ confirm: "DELETE_WORKSPACE" })).toEqual({
       confirm: "DELETE_WORKSPACE",

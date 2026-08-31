@@ -41,7 +41,7 @@ must never be reused in production.
    owner:
 
    ```bash
-   pnpm db:upgrade:phase0-compose
+   pnpm db:upgrade:compose
    pnpm db:preflight:roles-compose
    ```
 

@@ -4,7 +4,7 @@ import type { JobEnvelope, JobType } from "@glyphquire/api-contract";
 import {
   P0_JOB_TYPES,
   P1_JOB_TYPES,
-  assertPhase5Complete,
+  assertRequiredJobsComplete,
   assertRegistryComplete,
   dispatchValidatedJob,
   PostgresJobDispatcher,
@@ -72,12 +72,12 @@ describe("static job dispatch", () => {
 
     const p0 = Object.fromEntries(P0_JOB_TYPES.map((type) => [type, vi.fn()])) as JobRegistry;
     expect(() => assertRegistryComplete(p0)).not.toThrow();
-    expect(assertPhase5Complete(p0)).toEqual({ complete: false, missing: [...P1_JOB_TYPES] });
+    expect(assertRequiredJobsComplete(p0)).toEqual({ complete: false, missing: [...P1_JOB_TYPES] });
 
     const complete = Object.fromEntries(
       [...P0_JOB_TYPES, ...P1_JOB_TYPES].map((type) => [type, vi.fn()]),
     ) as JobRegistry;
-    expect(assertPhase5Complete(complete)).toEqual({ complete: true, missing: [] });
+    expect(assertRequiredJobsComplete(complete)).toEqual({ complete: true, missing: [] });
   });
 
   it("rejects extra unrecognized registry keys", () => {

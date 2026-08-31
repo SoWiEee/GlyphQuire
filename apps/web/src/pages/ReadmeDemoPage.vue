@@ -23,12 +23,6 @@
               control.
             </p>
           </div>
-          <span
-            aria-label="Save status"
-            class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800"
-          >
-            Saved · Revision 2
-          </span>
         </div>
         <div
           class="h-[650px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
@@ -36,8 +30,8 @@
           <Workbench
             :initial-notes="demoNotes"
             :session-factory="demoSessionFactory"
-            :phase5-workspace-id="WORKSPACE_ID"
-            :phase5-note-id="NOTE_ID"
+            :workspace-id="WORKSPACE_ID"
+            :note-id="NOTE_ID"
           />
         </div>
       </section>
@@ -98,12 +92,6 @@
             Create share link
           </button>
         </section>
-        <Phase5MaintenancePanel
-          :workspace-id="WORKSPACE_ID"
-          :client="maintenanceClient"
-          :poll-interval-ms="1000"
-          :max-poll-attempts="1"
-        />
       </section>
     </main>
   </div>
@@ -111,11 +99,9 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import Phase5MaintenancePanel from "../components/admin/Phase5MaintenancePanel.vue";
 import SearchPalette from "../components/search/SearchPalette.vue";
 import TransferDialog from "../components/transfer/TransferDialog.vue";
 import VisualEditor from "../components/visual/VisualEditor.vue";
-import type { Phase5MaintenanceClient } from "../api/Phase5Client.js";
 import Workbench from "../components/workbench/Workbench.vue";
 import type { EditorSession, EditorSessionState } from "../editors/editor-session.types.js";
 import type { WorkbenchNote } from "../components/workbench/types.js";
@@ -130,7 +116,7 @@ const title = computed(() =>
       ? "Semantic blocks"
       : scene.value === "tools"
         ? "Search and transfer"
-        : "Sharing and maintenance",
+        : "Sharing",
 );
 const semanticMarkdown = `---
 glyphquire-spec: 1
@@ -233,29 +219,6 @@ const demoSessionFactory = async (): Promise<EditorSession> => {
       listeners.clear();
     },
   };
-};
-const maintenanceClient: Phase5MaintenanceClient = {
-  async getMaintenanceCapabilities() {
-    return {
-      operator: true,
-      capabilities: ["search.rebuild", "asset.cleanup", "jobs.dead_letters", "backup.verify"],
-    };
-  },
-  async listDeadLetters() {
-    return { items: [], nextCursor: null };
-  },
-  async getBackupVerification() {
-    return { items: [], nextCursor: null };
-  },
-  async startSearchRebuild() {
-    return { jobId: "77777777-7777-4777-8777-777777777777", duplicate: false };
-  },
-  async runAssetCleanup() {
-    return { jobId: "88888888-8888-4888-8888-888888888888", duplicate: false };
-  },
-  async replayDeadLetter() {
-    return { jobId: "99999999-9999-4999-8999-999999999999", duplicate: false };
-  },
 };
 </script>
 

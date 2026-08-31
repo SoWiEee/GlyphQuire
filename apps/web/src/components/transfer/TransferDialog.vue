@@ -84,13 +84,13 @@
 
     <div aria-live="polite" class="space-y-1 text-sm text-gray-700">
       <p v-for="entry in importEntries" :key="entry.id">
-        Import: {{ entry.status }}
+        {{ importStatusLabel(entry.status) }}
         <span v-if="entry.progress.totalItems > 0">
           ({{ entry.progress.completedItems }}/{{ entry.progress.totalItems }})
         </span>
       </p>
       <p v-for="entry in exportEntries" :key="entry.id">
-        Export {{ entry.format }}: {{ entry.status }}
+        {{ exportStatusLabel(entry.format, entry.status) }}
         <button
           v-if="entry.status === 'completed' && !entry.downloadUrl"
           type="button"
@@ -122,8 +122,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import type { ExportFormat } from "@glyphquire/api-contract";
-import { usePhase5Store } from "../../stores/phase5.js";
+import type { ExportFormat, ExportResult, ImportJobResult } from "@glyphquire/api-contract";
+import { useWorkspaceToolsStore } from "../../stores/workspace-tools.js";
 
 const MAX_IMPORT_BYTES = 25 * 1024 * 1024;
 const ACCEPTED_IMPORT_TYPES = new Set(["text/markdown", "application/zip"]);
@@ -139,11 +139,57 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{ close: [] }>();
-const store = usePhase5Store();
+const store = useWorkspaceToolsStore();
 const importFile = ref<File | null>(null);
 const format = ref<ExportFormat>("markdown");
 const importEntries = computed(() => Object.values(store.imports));
 const exportEntries = computed(() => Object.values(store.exports));
+
+function formatLabel(value: ExportFormat): string {
+  switch (value) {
+    case "markdown":
+      return "Markdown";
+    case "zip":
+      return "ZIP";
+    case "html":
+      return "HTML";
+    case "plain-text":
+      return "plain text";
+    case "ast-json":
+      return "AST JSON";
+  }
+}
+
+function importStatusLabel(statusValue: ImportJobResult["status"]): string {
+  switch (statusValue) {
+    case "pending":
+      return "Import queued";
+    case "processing":
+      return "Import in progress";
+    case "completed":
+      return "Import complete";
+    case "failed":
+      return "Import failed";
+    case "expired":
+      return "Import expired";
+  }
+}
+
+function exportStatusLabel(formatValue: ExportFormat, statusValue: ExportResult["status"]): string {
+  const formatText = formatLabel(formatValue);
+  switch (statusValue) {
+    case "pending":
+      return `${formatText} export queued`;
+    case "processing":
+      return `${formatText} export in progress`;
+    case "completed":
+      return `${formatText} export ready`;
+    case "failed":
+      return `${formatText} export failed`;
+    case "expired":
+      return `${formatText} export expired`;
+  }
+}
 
 function selectImport(event: Event): void {
   const selected = (event.target as HTMLInputElement).files?.[0] ?? null;

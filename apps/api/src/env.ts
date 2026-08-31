@@ -4,14 +4,14 @@ import {
   authEnvSchema,
   appEnvSchema,
   operatorAllowlistSchema,
-  phase5EnvSchema,
+  workspaceServicesEnvSchema,
   s3EnvSchema,
 } from "@glyphquire/shared";
 
 const baseEnvSchema = databaseEnvSchema
   .merge(authEnvSchema)
   .merge(appEnvSchema)
-  .extend({ PHASE5_OPERATOR_IDS: operatorAllowlistSchema });
+  .extend({ OPERATIONS_OPERATOR_IDS: operatorAllowlistSchema });
 
 const booleanEnvironmentSchema = z.preprocess((value) => {
   if (value === true || value === "true") return true;
@@ -43,30 +43,31 @@ const alertWebhookSchema = z
     return parsed;
   });
 
-const phase5ApiEnvSchema = s3EnvSchema.extend({
+const workspaceServicesApiEnvSchema = s3EnvSchema.extend({
   S3_FORCE_PATH_STYLE: booleanEnvironmentSchema,
-  PHASE5_ALERT_WEBHOOK_URL: alertWebhookSchema,
-  PHASE5_ALERT_DELIVERY_SECONDS: z.coerce.number().int().min(1).max(300).default(300),
+  OPERATIONS_ALERT_WEBHOOK_URL: alertWebhookSchema,
+  OPERATIONS_ALERT_DELIVERY_SECONDS: z.coerce.number().int().min(1).max(300).default(300),
 });
 
-const PHASE5_ENABLE_FIELDS = [
+const WORKSPACE_SERVICES_ENABLE_FIELDS = [
   "S3_ENDPOINT",
   "S3_ACCESS_KEY",
   "S3_SECRET_KEY",
   "S3_BUCKET",
   "IDEMPOTENCY_ENCRYPTION_KEY",
   "BACKUP_ENCRYPTION_KEY",
-  "PHASE5_ALERT_WEBHOOK_URL",
+  "OPERATIONS_ALERT_WEBHOOK_URL",
 ] as const;
 
 export type EnvInput = z.input<typeof baseEnvSchema> &
-  Partial<z.input<typeof phase5ApiEnvSchema>> &
-  Partial<z.input<typeof phase5EnvSchema>>;
+  Partial<z.input<typeof workspaceServicesApiEnvSchema>> &
+  Partial<z.input<typeof workspaceServicesEnvSchema>>;
 type ParsedBaseEnv = z.output<typeof baseEnvSchema>;
-type ParsedPhase5Env = z.output<typeof phase5ApiEnvSchema> & z.output<typeof phase5EnvSchema>;
+type ParsedWorkspaceServicesEnv = z.output<typeof workspaceServicesApiEnvSchema> &
+  z.output<typeof workspaceServicesEnvSchema>;
 export type Env = ParsedBaseEnv & { PRODUCTION: boolean } & (
-    | { PHASE5_ENABLED: false }
-    | ({ PHASE5_ENABLED: true } & ParsedPhase5Env)
+    | { WORKSPACE_SERVICES_ENABLED: false }
+    | ({ WORKSPACE_SERVICES_ENABLED: true } & ParsedWorkspaceServicesEnv)
   );
 
 function invalidEnvironment(issues: readonly z.ZodIssue[]): never {
@@ -91,35 +92,35 @@ export function parseEnv(source: unknown): Env {
     throw new Error("BETTER_AUTH_URL and WEB_ORIGIN must be same-origin in production");
   }
 
-  const phase5Requested =
+  const workspaceServicesRequested =
     candidate !== null &&
     typeof candidate === "object" &&
-    PHASE5_ENABLE_FIELDS.some((field) => field in candidate);
-  if (!phase5Requested) {
-    return { ...base.data, PRODUCTION: production, PHASE5_ENABLED: false };
+    WORKSPACE_SERVICES_ENABLE_FIELDS.some((field) => field in candidate);
+  if (!workspaceServicesRequested) {
+    return { ...base.data, PRODUCTION: production, WORKSPACE_SERVICES_ENABLED: false };
   }
 
-  const apiPhase5 = phase5ApiEnvSchema.safeParse(candidate);
-  const phase5 = phase5EnvSchema.safeParse(candidate);
-  if (!apiPhase5.success || !phase5.success) {
+  const apiWorkspaceServices = workspaceServicesApiEnvSchema.safeParse(candidate);
+  const workspaceServices = workspaceServicesEnvSchema.safeParse(candidate);
+  if (!apiWorkspaceServices.success || !workspaceServices.success) {
     invalidEnvironment([
-      ...(apiPhase5.success ? [] : apiPhase5.error.issues),
-      ...(phase5.success ? [] : phase5.error.issues),
+      ...(apiWorkspaceServices.success ? [] : apiWorkspaceServices.error.issues),
+      ...(workspaceServices.success ? [] : workspaceServices.error.issues),
     ]);
   }
   return {
     ...base.data,
-    ...apiPhase5.data,
-    ...phase5.data,
+    ...apiWorkspaceServices.data,
+    ...workspaceServices.data,
     PRODUCTION: production,
-    PHASE5_ENABLED: true,
+    WORKSPACE_SERVICES_ENABLED: true,
   };
 }
 
 export function loadEnv(): Env {
   const env = parseEnv(process.env);
-  if (!env.PHASE5_ENABLED) {
-    throw new Error("Invalid environment variables: Phase 5 configuration is required");
+  if (!env.WORKSPACE_SERVICES_ENABLED) {
+    throw new Error("Invalid environment variables: workspace services configuration is required");
   }
   return env;
 }

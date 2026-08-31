@@ -19,11 +19,11 @@
  * Requires a running API (`apps/api`) backed by a migrated PostgreSQL —
  * neither exists in this Playwright/Vite-only dev setup yet (see the scope
  * note in tests/e2e/editor.spec.ts). Run standalone with `tsx` (also
- * wired as `pnpm test:load:phase2`) once that stack is available:
+ * wired as `pnpm test:load:autosave`) once that stack is available:
  *
  *   LOAD_TEST_API_BASE_URL=http://localhost:3000 \
  *   LOAD_TEST_WORKSPACE_IDS=<uuid1>,<uuid2>,<uuid3>,<uuid4>,<uuid5> \
- *     pnpm test:load:phase2
+ *     pnpm test:load:autosave
  *
  * `LOAD_TEST_WORKSPACE_IDS` is required, one workspace id per user, in the
  * same order the script registers users. The API does not yet expose an

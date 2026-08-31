@@ -71,7 +71,7 @@ describe("WorkbenchContext", () => {
     const context = createWorkbenchContext({
       initialNotes: [firstNote, secondNote],
       sessionFactory,
-      phase5WorkspaceId: "22222222-2222-4222-8222-222222222222",
+      workspaceId: "22222222-2222-4222-8222-222222222222",
     });
 
     await flushPromises();
@@ -86,13 +86,13 @@ describe("WorkbenchContext", () => {
     expect(firstSession.dispose).toHaveBeenCalledOnce();
 
     context.setPanel("search");
-    expect(context.snapshot().phase5Panel).toBe("search");
+    expect(context.snapshot().toolPanel).toBe("search");
     context.setPanel("history");
-    expect(context.snapshot().phase5Panel).toBe("search");
+    expect(context.snapshot().toolPanel).toBe("search");
     context.setPanel("context");
     expect(context.snapshot().contextRailOpen).toBe(true);
     context.setPanel("assets");
-    expect(context.snapshot().phase5Panel).toBe("assets");
+    expect(context.snapshot().toolPanel).toBe("assets");
     expect(context.snapshot().contextRailOpen).toBe(false);
 
     await context.setMode("visual");

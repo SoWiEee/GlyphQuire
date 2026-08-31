@@ -1,13 +1,13 @@
 import { PublicApiError } from "../../middleware/error-handler.js";
 
 /**
- * Gates operator-only Phase 5 actions (currently: the bounded one-note
- * search rebuild) behind the exact, opaque `PHASE5_OPERATOR_IDS` allowlist.
+ * Gates operator-only workspace-services actions (currently: the bounded one-note
+ * search rebuild) behind the exact, opaque `OPERATIONS_OPERATOR_IDS` allowlist.
  * This is not a workspace membership role — an owner or editor is never
  * implicitly an operator, and there is no way to grant operator access
- * through workspace membership at all. `PHASE5_OPERATOR_IDS` itself is
+ * through workspace membership at all. `OPERATIONS_OPERATOR_IDS` itself is
  * already validated (bounded, deduplicated, non-empty entries) at env-parse
- * time by `phase5EnvSchema`; this authorizer also validates injected values
+ * time by `workspaceServicesEnvSchema`; this authorizer also validates injected values
  * defensively and fails closed when configuration is empty or malformed.
  *
  * A denial is indistinguishable from any other operator-route failure to
@@ -40,7 +40,7 @@ export function createOperatorAuthorizer(operatorIds: unknown): OperatorAuthoriz
       seen.add(operatorId);
       return true;
     });
-  // `phase5EnvSchema` is the primary parser. This second boundary prevents a
+  // `workspaceServicesEnvSchema` is the primary parser. This second boundary prevents a
   // malformed programmatic/injected dependency from preserving only its
   // apparently-valid entries and accidentally widening operator access.
   const allowlist = validConfiguration ? seen : new Set<string>();

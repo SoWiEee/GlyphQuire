@@ -2,8 +2,11 @@ import { createPinia, setActivePinia } from "pinia";
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShareLinkResponse } from "@glyphquire/api-contract";
-import { Phase5ApiError } from "../../api/Phase5Client.js";
-import { usePhase5Store, type Phase5ClientPort } from "../../stores/phase5.js";
+import { WorkspaceToolsApiError } from "../../api/WorkspaceToolsClient.js";
+import {
+  useWorkspaceToolsStore,
+  type WorkspaceToolsClientPort,
+} from "../../stores/workspace-tools.js";
 import ShareLinkDialog from "./ShareLinkDialog.vue";
 
 const WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
@@ -23,7 +26,7 @@ function link(): ShareLinkResponse {
   };
 }
 
-function client(overrides: Partial<Phase5ClientPort> = {}): Phase5ClientPort {
+function client(overrides: Partial<WorkspaceToolsClientPort> = {}): WorkspaceToolsClientPort {
   return {
     uploadAsset: vi.fn(),
     search: vi.fn(),
@@ -34,7 +37,7 @@ function client(overrides: Partial<Phase5ClientPort> = {}): Phase5ClientPort {
     createShareLink: vi.fn(async () => link()),
     revokeShareLink: vi.fn(async () => undefined),
     ...overrides,
-  } as Phase5ClientPort;
+  } as WorkspaceToolsClientPort;
 }
 
 describe("ShareLinkDialog", () => {
@@ -45,7 +48,7 @@ describe("ShareLinkDialog", () => {
 
   it("renders an authorized read-only link and removes its token immediately after revoke", async () => {
     const api = client();
-    const store = usePhase5Store();
+    const store = useWorkspaceToolsStore();
     store.configure(api);
     const wrapper = mount(ShareLinkDialog, { props: { noteId: NOTE_ID } });
 
@@ -54,7 +57,9 @@ describe("ShareLinkDialog", () => {
     const anchor = wrapper.get('a[aria-label="Read-only share link"]');
     expect(anchor.attributes("href")).toBe(link().url);
     expect(anchor.attributes("rel")).toBe("noopener noreferrer");
-    expect(localStorage.getItem("glyphquire.phase5.pending.v1") ?? "").not.toContain(TOKEN);
+    expect(localStorage.getItem("glyphquire.workspace-tools.pending.v1") ?? "").not.toContain(
+      TOKEN,
+    );
 
     await wrapper.get('button[aria-label="Revoke share link"]').trigger("click");
     await flushPromises();
@@ -67,13 +72,17 @@ describe("ShareLinkDialog", () => {
       createShareLink: vi.fn(async () =>
         Promise.reject(
           Object.assign(
-            new Phase5ApiError("SHARE_NOT_FOUND", 404, "44444444-4444-4444-8444-444444444444"),
+            new WorkspaceToolsApiError(
+              "SHARE_NOT_FOUND",
+              404,
+              "44444444-4444-4444-8444-444444444444",
+            ),
             { detail: "plaintext-token=SECRET note=# private" },
           ),
         ),
       ),
     });
-    const store = usePhase5Store();
+    const store = useWorkspaceToolsStore();
     store.configure(api);
     const wrapper = mount(ShareLinkDialog, { props: { noteId: NOTE_ID } });
     await wrapper.get('button[aria-label="Create share link"]').trigger("click");

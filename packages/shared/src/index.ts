@@ -1,14 +1,14 @@
 export { type Result, type AppError, ok, err } from "./result.js";
 export {
-  phase6Gates,
-  phase6ChecklistStatus,
-  phase6ChecklistSchema,
-  phase6ArtifactManifestSchema,
-  phase6ReleaseDecisionSchema,
-  type Phase6Checklist,
-  type Phase6ArtifactManifest,
-  type Phase6ReleaseDecision,
-} from "./phase6-checklist.js";
+  releaseGates,
+  releaseChecklistStatus,
+  releaseChecklistSchema,
+  releaseArtifactManifestSchema,
+  releaseDecisionSchema,
+  type ReleaseChecklist,
+  type ReleaseArtifactManifest,
+  type ReleaseDecision,
+} from "./release-checklist.js";
 export {
   databaseEnvSchema,
   migrationEnvSchema,
@@ -16,7 +16,7 @@ export {
   authEnvSchema,
   appEnvSchema,
   operatorAllowlistSchema,
-  phase5EnvSchema,
+  workspaceServicesEnvSchema,
   webOriginSchema,
-  type Phase5Env,
+  type WorkspaceServicesEnv,
 } from "./env.js";

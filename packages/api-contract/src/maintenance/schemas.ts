@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { JOB_TYPES, jobTypeSchema, phase5CursorSchema } from "../jobs/schemas.js";
+import { JOB_TYPES, cursorSchema, jobTypeSchema } from "../jobs/schemas.js";
 import {
   canonicalUuidSchema,
   cursorPaginationQuerySchema,
@@ -60,7 +60,7 @@ export const maintenanceSearchRebuildRequestSchema = z
   .object({
     workspaceId: canonicalUuidSchema,
     batchSize: maintenanceBatchSizeSchema,
-    cursor: phase5CursorSchema.optional(),
+    cursor: cursorSchema.optional(),
   })
   .strict();
 
@@ -68,7 +68,7 @@ export const assetCleanupRequestSchema = z
   .object({
     workspaceId: canonicalUuidSchema,
     batchSize: maintenanceBatchSizeSchema,
-    cursor: phase5CursorSchema.optional(),
+    cursor: cursorSchema.optional(),
   })
   .strict();
 
@@ -81,7 +81,7 @@ export const maintenanceJobMutationResponseSchema = z
 
 export const deadLetterQuerySchema = cursorPaginationQuerySchema.extend({
   pageSize: pageSizeSchema,
-  cursor: phase5CursorSchema.optional(),
+  cursor: cursorSchema.optional(),
 });
 
 export const deadLetterReplayParamsSchema = z.object({ id: canonicalUuidSchema }).strict();
@@ -102,7 +102,7 @@ export const deadLetterItemSchema = z
 export const deadLetterResponseSchema = z
   .object({
     items: z.array(deadLetterItemSchema).max(100),
-    nextCursor: phase5CursorSchema.nullable(),
+    nextCursor: cursorSchema.nullable(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -119,7 +119,7 @@ export const deadLetterResponseSchema = z
 
 export const backupVerificationQuerySchema = cursorPaginationQuerySchema.extend({
   pageSize: pageSizeSchema,
-  cursor: phase5CursorSchema.optional(),
+  cursor: cursorSchema.optional(),
 });
 
 export const backupVerificationItemSchema = z
@@ -136,7 +136,7 @@ export const backupVerificationItemSchema = z
 export const backupVerificationResponseSchema = z
   .object({
     items: z.array(backupVerificationItemSchema).max(100),
-    nextCursor: phase5CursorSchema.nullable(),
+    nextCursor: cursorSchema.nullable(),
   })
   .strict();
 

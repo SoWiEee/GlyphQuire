@@ -5,7 +5,7 @@ import {
   pageSizeSchema,
   timestampSchema,
 } from "../notes/schemas.js";
-import { phase5CursorSchema } from "../jobs/schemas.js";
+import { cursorSchema } from "../jobs/schemas.js";
 
 export const MAX_SEARCH_QUERY_BYTES = 512;
 
@@ -27,7 +27,7 @@ export const searchQuerySchema = z
   .object({
     workspaceId: canonicalUuidSchema,
     q: searchQueryTextSchema,
-    cursor: phase5CursorSchema.optional(),
+    cursor: cursorSchema.optional(),
     pageSize: pageSizeSchema,
     ranking: searchRankingSchema.default("relevance"),
   })
@@ -49,6 +49,6 @@ export const searchResultSchema = z
 export const searchResponseSchema = z
   .object({
     items: z.array(searchResultSchema).max(100),
-    nextCursor: phase5CursorSchema.nullable(),
+    nextCursor: cursorSchema.nullable(),
   })
   .strict();

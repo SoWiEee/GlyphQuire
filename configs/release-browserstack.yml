@@ -1,0 +1,50 @@
+framework: playwright
+projectName: GlyphQuire
+buildName: ${RELEASE_BROWSERSTACK_BUILD}
+buildIdentifier: ${RELEASE_BROWSERSTACK_BUILD}
+platforms:
+  - browserName: Chrome
+    browserVersion: latest
+    os: Windows
+    osVersion: "11"
+    sessionName: release-chrome-latest
+  - browserName: Chrome
+    browserVersion: latest-1
+    os: Windows
+    osVersion: "11"
+    sessionName: release-chrome-latest-1
+  - browserName: Firefox
+    browserVersion: latest
+    os: Windows
+    osVersion: "11"
+    sessionName: release-firefox-latest
+  - browserName: Firefox
+    browserVersion: latest-1
+    os: Windows
+    osVersion: "11"
+    sessionName: release-firefox-latest-1
+  - browserName: Edge
+    browserVersion: latest
+    os: Windows
+    osVersion: "11"
+    sessionName: release-edge-latest
+  - browserName: Edge
+    browserVersion: latest-1
+    os: Windows
+    osVersion: "11"
+    sessionName: release-edge-latest-1
+  - browserName: Safari
+    browserVersion: latest
+    os: OS X
+    osVersion: Sequoia
+    sessionName: release-safari-latest
+  - browserName: Safari
+    browserVersion: latest-1
+    os: OS X
+    osVersion: Sonoma
+    sessionName: release-safari-latest-1
+browserstackLocal: false
+debug: false
+networkLogs: false
+consoleLogs: errors
+testObservability: false

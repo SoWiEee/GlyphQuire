@@ -41,11 +41,11 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { usePhase5Store } from "../../stores/phase5.js";
+import { useWorkspaceToolsStore } from "../../stores/workspace-tools.js";
 
 const props = defineProps<{ workspaceId: string }>();
 const emit = defineEmits<{ "select-note": [noteId: string] }>();
-const store = usePhase5Store();
+const store = useWorkspaceToolsStore();
 const query = ref("");
 const searched = ref(false);
 const canSearch = computed(() => {

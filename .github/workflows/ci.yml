@@ -62,8 +62,8 @@ jobs:
       - name: Integration tests
         run: pnpm test:integration
 
-      - name: Phase 6 deterministic integration tests
-        run: pnpm test:integration:phase6
+      - name: Release deterministic integration tests
+        run: pnpm test:integration:release
 
       - name: Cross-package scaffold
         run: pnpm test:cross-package
@@ -88,15 +88,15 @@ jobs:
       # exits 0 rather than failing the gate on infrastructure this job
       # does not stand up. See docs/evidence/phase2/README.md — this is not
       # the deferred P0-08 thirty-minute workload.
-      - name: Phase 2 autosave/conflict load profile
-        run: pnpm test:load:phase2
+      - name: Autosave/conflict load profile
+        run: pnpm test:load:autosave
 
-  phase6-release-candidate:
-    name: Phase 6 release candidate
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PHASE6_RELEASE_ENABLED == 'true' }}
+  release-candidate:
+    name: Release candidate
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.RELEASE_ENABLED == 'true' }}
     needs: check
     runs-on: ubuntu-latest
-    environment: phase6-release
+    environment: release
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -106,30 +106,30 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Build immutable Phase 6 service images
+      - name: Build immutable release service images
         env:
-          IMAGE_TAG: phase6-${{ github.sha }}
+          IMAGE_TAG: release-${{ github.sha }}
         run: |
-          docker build --file infra/phase6/images/api.Dockerfile --tag glyphquire-api:"$IMAGE_TAG" .
-          docker build --file infra/phase6/images/web.Dockerfile --tag glyphquire-web:"$IMAGE_TAG" .
-          docker build --file infra/phase6/images/worker.Dockerfile --tag glyphquire-worker:"$IMAGE_TAG" .
+          docker build --file infra/release/images/api.Dockerfile --tag glyphquire-api:"$IMAGE_TAG" .
+          docker build --file infra/release/images/web.Dockerfile --tag glyphquire-web:"$IMAGE_TAG" .
+          docker build --file infra/release/images/worker.Dockerfile --tag glyphquire-worker:"$IMAGE_TAG" .
       - name: Verify release target configuration
         env:
-          PHASE6_BASE_URL: ${{ secrets.PHASE6_BASE_URL }}
-          PHASE6_HOSTED_ENV_FILE: ${{ secrets.PHASE6_HOSTED_ENV_FILE }}
-          PHASE6_ALERT_RUNTIME_REPOSITORY: ${{ secrets.PHASE6_ALERT_RUNTIME_REPOSITORY }}
-          PHASE6_ALERT_RUNTIME_DIGEST: ${{ secrets.PHASE6_ALERT_RUNTIME_DIGEST }}
-        run: test -n "$PHASE6_BASE_URL" && test -n "$PHASE6_HOSTED_ENV_FILE" && test -n "$PHASE6_ALERT_RUNTIME_REPOSITORY" && test -n "$PHASE6_ALERT_RUNTIME_DIGEST"
-      - name: Phase 6 observability evidence
-        run: pnpm test:integration:phase6-observability
+          RELEASE_HOSTED_BASE_URL: ${{ secrets.RELEASE_HOSTED_BASE_URL }}
+          RELEASE_HOSTED_ENV_FILE: ${{ secrets.RELEASE_HOSTED_ENV_FILE }}
+          RELEASE_ALERT_RUNTIME_REPOSITORY: ${{ secrets.RELEASE_ALERT_RUNTIME_REPOSITORY }}
+          RELEASE_ALERT_RUNTIME_DIGEST: ${{ secrets.RELEASE_ALERT_RUNTIME_DIGEST }}
+        run: test -n "$RELEASE_HOSTED_BASE_URL" && test -n "$RELEASE_HOSTED_ENV_FILE" && test -n "$RELEASE_ALERT_RUNTIME_REPOSITORY" && test -n "$RELEASE_ALERT_RUNTIME_DIGEST"
+      - name: Release observability evidence
+        run: pnpm test:integration:release-observability
         env:
-          PHASE6_ALERT_EVIDENCE_HOST_PATH: ${{ secrets.PHASE6_ALERT_EVIDENCE_HOST_PATH }}
-          PHASE5_ALERT_EVIDENCE_FILE: ${{ secrets.PHASE5_ALERT_EVIDENCE_FILE }}
-          PHASE6_ALERT_EVIDENCE_FILE: ${{ secrets.PHASE6_ALERT_EVIDENCE_FILE }}
-          PHASE6_ALERT_RUNTIME_REPOSITORY: ${{ secrets.PHASE6_ALERT_RUNTIME_REPOSITORY }}
-          PHASE6_ALERT_RUNTIME_DIGEST: ${{ secrets.PHASE6_ALERT_RUNTIME_DIGEST }}
-      - name: Phase 6 release gate
-        run: pnpm test:release:phase6
+          RELEASE_ALERT_EVIDENCE_HOST_PATH: ${{ secrets.RELEASE_ALERT_EVIDENCE_HOST_PATH }}
+          OPERATIONS_ALERT_EVIDENCE_FILE: ${{ secrets.OPERATIONS_ALERT_EVIDENCE_FILE }}
+          RELEASE_ALERT_EVIDENCE_FILE: ${{ secrets.RELEASE_ALERT_EVIDENCE_FILE }}
+          RELEASE_ALERT_RUNTIME_REPOSITORY: ${{ secrets.RELEASE_ALERT_RUNTIME_REPOSITORY }}
+          RELEASE_ALERT_RUNTIME_DIGEST: ${{ secrets.RELEASE_ALERT_RUNTIME_DIGEST }}
+      - name: Release gate
+        run: pnpm test:release
         env:
-          PHASE6_BASE_URL: ${{ secrets.PHASE6_BASE_URL }}
-          PHASE6_HOSTED_ENV_FILE: ${{ secrets.PHASE6_HOSTED_ENV_FILE }}
+          RELEASE_HOSTED_BASE_URL: ${{ secrets.RELEASE_HOSTED_BASE_URL }}
+          RELEASE_HOSTED_ENV_FILE: ${{ secrets.RELEASE_HOSTED_ENV_FILE }}

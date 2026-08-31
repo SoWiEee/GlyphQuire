@@ -16,9 +16,9 @@ import {
 import type { DerivedSearchMutationPort, SearchPort } from "@glyphquire/search";
 import {
   databaseEnvSchema,
-  phase5EnvSchema,
+  workspaceServicesEnvSchema,
   s3EnvSchema,
-  type Phase5Env,
+  type WorkspaceServicesEnv,
 } from "@glyphquire/shared";
 import type { ObjectStoragePort, S3EnvLike } from "@glyphquire/storage";
 import { asc, sql } from "drizzle-orm";
@@ -37,7 +37,7 @@ import {
 
 export { WorkerRuntime, type WorkerRuntimeOptions } from "./runtime.js";
 
-export type WorkerEnv = Phase5Env & S3EnvLike & { DATABASE_URL: string };
+export type WorkerEnv = WorkspaceServicesEnv & S3EnvLike & { DATABASE_URL: string };
 
 type MaybePromise<T> = T | Promise<T>;
 type WorkerSearchPort = SearchPort & DerivedSearchMutationPort;
@@ -112,17 +112,17 @@ const defaultFactories: WorkerFactories = {
 export function parseWorkerEnv(source: unknown): WorkerEnv {
   const database = databaseEnvSchema.safeParse(source);
   const storage = s3EnvSchema.safeParse(source);
-  const phase5 = phase5EnvSchema.safeParse(source);
-  if (!database.success || !storage.success || !phase5.success) {
+  const workspaceServices = workspaceServicesEnvSchema.safeParse(source);
+  if (!database.success || !storage.success || !workspaceServices.success) {
     const issues = [
       ...(database.success ? [] : database.error.issues),
       ...(storage.success ? [] : storage.error.issues),
-      ...(phase5.success ? [] : phase5.error.issues),
+      ...(workspaceServices.success ? [] : workspaceServices.error.issues),
     ];
     const fields = [...new Set(issues.map((issue) => issue.path.join(".")))].sort();
     throw new Error(`Invalid environment variables: ${fields.join(", ")}`);
   }
-  return { ...phase5.data, ...storage.data, ...database.data };
+  return { ...workspaceServices.data, ...storage.data, ...database.data };
 }
 
 function throwIfStartupAborted(signal: AbortSignal | undefined): void {

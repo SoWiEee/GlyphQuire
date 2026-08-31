@@ -49,10 +49,10 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { usePhase5Store } from "../../stores/phase5.js";
+import { useWorkspaceToolsStore } from "../../stores/workspace-tools.js";
 
 const props = defineProps<{ noteId: string }>();
-const store = usePhase5Store();
+const store = useWorkspaceToolsStore();
 const expiresAtLocal = ref("");
 const inputError = ref<string | null>(null);
 const status = ref("");

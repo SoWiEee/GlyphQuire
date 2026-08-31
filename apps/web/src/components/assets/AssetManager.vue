@@ -24,7 +24,6 @@
     <ul v-if="workspaceAssets.length" aria-label="Uploaded assets" class="space-y-2 text-sm">
       <li v-for="asset in workspaceAssets" :key="asset.id" class="rounded bg-gray-50 p-2">
         <span>{{ asset.originalName }}</span>
-        <code data-testid="asset-reference" class="ml-2 select-all">asset://{{ asset.id }}</code>
         <button
           type="button"
           class="ml-2 underline"
@@ -43,14 +42,14 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { usePhase5Store } from "../../stores/phase5.js";
+import { useWorkspaceToolsStore } from "../../stores/workspace-tools.js";
 
 const MAX_ASSET_BYTES = 5 * 1024 * 1024;
 const PASSIVE_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
 const props = defineProps<{ workspaceId: string }>();
 const emit = defineEmits<{ reference: [reference: string] }>();
-const store = usePhase5Store();
+const store = useWorkspaceToolsStore();
 const file = ref<File | null>(null);
 const selectionError = ref<string | null>(null);
 const status = ref("");

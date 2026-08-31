@@ -87,7 +87,7 @@ describe("WorkbenchPage", () => {
     const WorkbenchStub = defineComponent({
       props: {
         sessionFactory: { type: Function, required: false },
-        phase5WorkspaceId: { type: String, required: false },
+        workspaceId: { type: String, required: false },
         workspaceName: { type: String, required: false },
         accountLabel: { type: String, required: false },
       },
@@ -96,7 +96,7 @@ describe("WorkbenchPage", () => {
         return () =>
           h("button", {
             "data-testid": "emit-account-action",
-            "data-workspace-id": props.phase5WorkspaceId,
+            "data-workspace-id": props.workspaceId,
             "data-account-label": props.accountLabel,
             "data-workspace-name": props.workspaceName,
             onClick: () => emit("account-action", "sign-out"),

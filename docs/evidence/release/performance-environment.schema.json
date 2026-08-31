@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GlyphQuire Release performance environment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "scrubbed",
+    "producer",
+    "measuredAt",
+    "host",
+    "topology",
+    "candidateSourceSha",
+    "lockfileSha256",
+    "nodeVersion",
+    "pnpmVersion",
+    "imageDigests",
+    "manifestSha256"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["blocked", "failed", "passed"] },
+    "scrubbed": { "const": true },
+    "producer": { "const": "release-performance-environment" },
+    "measuredAt": { "type": "string", "format": "date-time" },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "architecture",
+        "cpuCount",
+        "cpuQuotaVcpus",
+        "effectiveVcpus",
+        "memoryLimitBytes",
+        "cgroupCpuMax",
+        "cgroupMemoryMax"
+      ],
+      "properties": {
+        "platform": { "const": "linux" },
+        "architecture": { "const": "x86-64" },
+        "cpuCount": { "type": "integer", "minimum": 1 },
+        "cpuQuotaVcpus": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "effectiveVcpus": { "type": "number", "exclusiveMinimum": 0 },
+        "memoryLimitBytes": { "type": "integer", "minimum": 1 },
+        "cgroupCpuMax": { "type": "string", "minLength": 1 },
+        "cgroupMemoryMax": { "type": "string", "minLength": 1 }
+      }
+    },
+    "topology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sameHost", "compose", "network", "services"],
+      "properties": {
+        "sameHost": { "const": true },
+        "compose": { "const": true },
+        "network": { "const": "release-test-network" },
+        "services": {
+          "type": "array",
+          "const": ["api", "worker", "postgres", "object-storage"]
+        }
+      }
+    },
+    "candidateSourceSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "lockfileSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "nodeVersion": { "type": "string", "minLength": 1 },
+    "pnpmVersion": { "type": "string", "minLength": 1 },
+    "imageDigests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["api", "web", "worker"],
+      "properties": {
+        "api": { "$ref": "#/$defs/imageDigest" },
+        "web": { "$ref": "#/$defs/imageDigest" },
+        "worker": { "$ref": "#/$defs/imageDigest" }
+      }
+    },
+    "blockingReason": { "type": "string", "minLength": 1 },
+    "manifestSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  },
+  "$defs": {
+    "imageDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

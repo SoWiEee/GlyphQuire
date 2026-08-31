@@ -25,6 +25,10 @@ export * from "./share-links/types.js";
 export * from "./maintenance/schemas.js";
 export * from "./maintenance/types.js";
 
+// The public cursor contract is the canonical encoded job cursor. Note pages
+// continue to expose their transport cursor schema from `notes/schemas.js`.
+export { cursorSchema } from "./jobs/schemas.js";
+
 export function createApiClient(transport: ApiClientTransport): ApiClient {
   return {
     contract: noteApiContract,

@@ -1,11 +1,11 @@
 import { z } from "zod";
 import {
   canonicalUuidSchema,
-  cursorSchema,
+  cursorSchema as paginationCursorSchema,
   revisionSchema,
   timestampSchema,
 } from "../notes/schemas.js";
-import type { JobPayloadMap, JobType, Phase5Cursor } from "./types.js";
+import type { Cursor, JobPayloadMap, JobType } from "./types.js";
 
 export const MAX_JOB_PAYLOAD_BYTES = 64 * 1024;
 export const MAX_IDEMPOTENCY_KEY_BYTES = 200;
@@ -100,7 +100,7 @@ const searchRebuildPayloadSchema = z.discriminatedUnion("scope", [
       scope: z.literal("note"),
       noteId: canonicalUuidSchema,
       batchSize: z.literal(1),
-      cursor: cursorSchema.optional(),
+      cursor: paginationCursorSchema.optional(),
     })
     .strict(),
   z
@@ -108,7 +108,7 @@ const searchRebuildPayloadSchema = z.discriminatedUnion("scope", [
       workspaceId: canonicalUuidSchema,
       scope: z.literal("workspace"),
       batchSize: scanBatchSizeSchema,
-      cursor: cursorSchema.optional(),
+      cursor: paginationCursorSchema.optional(),
     })
     .strict(),
 ]);
@@ -121,7 +121,7 @@ const scanPayloadSchema = z
   .object({
     workspaceId: canonicalUuidSchema,
     batchSize: scanBatchSizeSchema,
-    cursor: cursorSchema.optional(),
+    cursor: paginationCursorSchema.optional(),
   })
   .strict();
 
@@ -148,7 +148,7 @@ const importCleanupPayloadSchema = z.discriminatedUnion("scope", [
       workspaceId: canonicalUuidSchema,
       scope: z.literal("staging"),
       batchSize: scanBatchSizeSchema,
-      cursor: cursorSchema.optional(),
+      cursor: paginationCursorSchema.optional(),
     })
     .strict(),
 ]);
@@ -170,7 +170,7 @@ const shareCleanupPayloadSchema = z.discriminatedUnion("scope", [
       workspaceId: canonicalUuidSchema,
       scope: z.literal("expired"),
       batchSize: scanBatchSizeSchema,
-      cursor: cursorSchema.optional(),
+      cursor: paginationCursorSchema.optional(),
     })
     .strict(),
 ]);
@@ -189,7 +189,7 @@ const versionRetentionPayloadSchema = z.discriminatedUnion("scope", [
       workspaceId: canonicalUuidSchema,
       scope: z.literal("workspace"),
       batchSize: scanBatchSizeSchema,
-      cursor: cursorSchema.optional(),
+      cursor: paginationCursorSchema.optional(),
     })
     .strict(),
 ]);
@@ -306,12 +306,12 @@ export const jobEnvelopeSchema = z.preprocess((value, context) => {
   return value;
 }, envelopeShapeSchema);
 
-const phase5CursorValueSchema = z
+const cursorValueSchema = z
   .object({ createdAt: timestampSchema, id: canonicalUuidSchema })
   .strict();
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
 
-export const phase5CursorSchema = cursorSchema.pipe(
+export const cursorSchema = paginationCursorSchema.pipe(
   z.string().regex(BASE64URL_PATTERN, "Cursor must use unpadded base64url encoding"),
 );
 
@@ -328,16 +328,16 @@ function fromBase64Url(value: string): Uint8Array {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
-export function encodeCursor(value: Phase5Cursor): string {
-  const parsed = phase5CursorValueSchema.parse(value);
+export function encodeCursor(value: Cursor): string {
+  const parsed = cursorValueSchema.parse(value);
   return toBase64Url(new TextEncoder().encode(JSON.stringify(parsed)));
 }
 
-export function decodeCursor(value: string): Phase5Cursor {
+export function decodeCursor(value: string): Cursor {
   try {
-    const parsedCursor = phase5CursorSchema.parse(value);
+    const parsedCursor = cursorSchema.parse(value);
     const decoded = new TextDecoder("utf-8", { fatal: true }).decode(fromBase64Url(parsedCursor));
-    const parsed = phase5CursorValueSchema.parse(JSON.parse(decoded));
+    const parsed = cursorValueSchema.parse(JSON.parse(decoded));
     if (encodeCursor(parsed) !== parsedCursor) throw new Error("non-canonical cursor");
     return parsed;
   } catch {

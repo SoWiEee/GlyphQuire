@@ -2,8 +2,11 @@ import { createPinia, setActivePinia } from "pinia";
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AssetResponse } from "@glyphquire/api-contract";
-import { Phase5ApiError } from "../../api/Phase5Client.js";
-import { usePhase5Store, type Phase5ClientPort } from "../../stores/phase5.js";
+import { WorkspaceToolsApiError } from "../../api/WorkspaceToolsClient.js";
+import {
+  useWorkspaceToolsStore,
+  type WorkspaceToolsClientPort,
+} from "../../stores/workspace-tools.js";
 import AssetManager from "./AssetManager.vue";
 
 const WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
@@ -23,7 +26,7 @@ function asset(): AssetResponse {
   };
 }
 
-function client(uploadAsset: Phase5ClientPort["uploadAsset"]): Phase5ClientPort {
+function client(uploadAsset: WorkspaceToolsClientPort["uploadAsset"]): WorkspaceToolsClientPort {
   return {
     uploadAsset,
     search: vi.fn(),
@@ -33,15 +36,15 @@ function client(uploadAsset: Phase5ClientPort["uploadAsset"]): Phase5ClientPort 
     getExport: vi.fn(),
     createShareLink: vi.fn(),
     revokeShareLink: vi.fn(),
-  } as Phase5ClientPort;
+  } as WorkspaceToolsClientPort;
 }
 
 describe("AssetManager", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
-  it("keeps the persisted note reference logical and never renders provider URLs", async () => {
+  it("shows the filename and copy action without rendering logical references", async () => {
     const uploadAsset = vi.fn(async () => asset());
-    const store = usePhase5Store();
+    const store = useWorkspaceToolsStore();
     store.configure(client(uploadAsset));
     const wrapper = mount(AssetManager, { props: { workspaceId: WORKSPACE_ID } });
     const input = wrapper.get<HTMLInputElement>('input[aria-label="Asset file"]');
@@ -54,17 +57,20 @@ describe("AssetManager", () => {
     await flushPromises();
 
     expect(uploadAsset).toHaveBeenCalledWith({ workspaceId: WORKSPACE_ID, file });
-    expect(wrapper.get('[data-testid="asset-reference"]').text()).toBe(`asset://${ASSET_ID}`);
+    expect(wrapper.text()).toContain("diagram.png");
+    expect(wrapper.text()).toContain("Copy reference");
+    expect(wrapper.html()).not.toContain(`asset://${ASSET_ID}`);
+    expect(wrapper.find('[data-testid="asset-reference"]').exists()).toBe(false);
     expect(wrapper.find("img").exists()).toBe(false);
     expect(wrapper.html()).not.toMatch(/s3:|signature=|objectKey/iu);
   });
 
   it("shows one stable denial without raw storage details", async () => {
     const failure = Object.assign(
-      new Phase5ApiError("ASSET_INVALID", 403, "33333333-3333-4333-8333-333333333333"),
+      new WorkspaceToolsApiError("ASSET_INVALID", 403, "33333333-3333-4333-8333-333333333333"),
       { detail: "minio://private token=SECRET" },
     );
-    const store = usePhase5Store();
+    const store = useWorkspaceToolsStore();
     store.configure(client(vi.fn(async () => Promise.reject(failure))));
     const wrapper = mount(AssetManager, { props: { workspaceId: WORKSPACE_ID } });
     const input = wrapper.get<HTMLInputElement>('input[aria-label="Asset file"]');

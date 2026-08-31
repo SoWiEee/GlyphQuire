@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "status": "blocked",
+  "producer": "release-observability",
+  "capturedAt": "2026-08-31T00:00:00.000Z",
+  "deliveryDeadlineSeconds": 300,
+  "blockingReason": "external channel capture is required",
+  "events": []
+}

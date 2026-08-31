@@ -133,7 +133,7 @@ class WorkspaceJobStore implements JobStore {
   }
 }
 
-describeWithPostgres("Phase 5 five-actor search freshness", () => {
+describeWithPostgres("Workspace services five-actor search freshness", () => {
   let db: Database;
 
   beforeAll(() => {

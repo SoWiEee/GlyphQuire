@@ -2,8 +2,11 @@ import { createPinia, setActivePinia } from "pinia";
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExportResult, ImportJobResult } from "@glyphquire/api-contract";
-import { Phase5ApiError } from "../../api/Phase5Client.js";
-import { usePhase5Store, type Phase5ClientPort } from "../../stores/phase5.js";
+import { WorkspaceToolsApiError } from "../../api/WorkspaceToolsClient.js";
+import {
+  useWorkspaceToolsStore,
+  type WorkspaceToolsClientPort,
+} from "../../stores/workspace-tools.js";
 import TransferDialog from "./TransferDialog.vue";
 
 const WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
@@ -33,7 +36,7 @@ function exportResult(): ExportResult {
   };
 }
 
-function client(overrides: Partial<Phase5ClientPort> = {}): Phase5ClientPort {
+function client(overrides: Partial<WorkspaceToolsClientPort> = {}): WorkspaceToolsClientPort {
   return {
     uploadAsset: vi.fn(),
     search: vi.fn(),
@@ -44,7 +47,7 @@ function client(overrides: Partial<Phase5ClientPort> = {}): Phase5ClientPort {
     createShareLink: vi.fn(),
     revokeShareLink: vi.fn(),
     ...overrides,
-  } as Phase5ClientPort;
+  } as WorkspaceToolsClientPort;
 }
 
 describe("TransferDialog", () => {
@@ -53,9 +56,9 @@ describe("TransferDialog", () => {
     setActivePinia(createPinia());
   });
 
-  it("starts bounded import/export jobs and exposes only the Task 8 P0 formats", async () => {
+  it("starts bounded import/export jobs and exposes only the supported formats", async () => {
     const api = client();
-    const store = usePhase5Store();
+    const store = useWorkspaceToolsStore();
     store.configure(api, { pollIntervalMs: 60_000, maxPollAttempts: 2 });
     const wrapper = mount(TransferDialog, {
       props: { workspaceId: WORKSPACE_ID, noteId: NOTE_ID, baseRevision: 3 },
@@ -87,19 +90,21 @@ describe("TransferDialog", () => {
       noteId: NOTE_ID,
       baseRevision: 3,
     });
-    expect(wrapper.text()).toContain("Export zip: pending");
-    expect(wrapper.text()).toContain("Import: pending");
-    expect(localStorage.getItem("glyphquire.phase5.pending.v1")).not.toContain("private note");
+    expect(wrapper.text()).toContain("ZIP export queued");
+    expect(wrapper.text()).toContain("Import queued");
+    expect(localStorage.getItem("glyphquire.workspace-tools.pending.v1")).not.toContain(
+      "private note",
+    );
     store.stopPolling();
   });
 
   it("renders a stable import denial without raw provider details", async () => {
     const failure = Object.assign(
-      new Phase5ApiError("IMPORT_INVALID", 400, "55555555-5555-4555-8555-555555555555"),
+      new WorkspaceToolsApiError("IMPORT_INVALID", 400, "55555555-5555-4555-8555-555555555555"),
       { detail: "zip entry ../secret.md provider=minio token=SECRET" },
     );
     const api = client({ startImport: vi.fn(async () => Promise.reject(failure)) });
-    const store = usePhase5Store();
+    const store = useWorkspaceToolsStore();
     store.configure(api);
     const wrapper = mount(TransferDialog, {
       props: { workspaceId: WORKSPACE_ID },

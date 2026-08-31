@@ -18,7 +18,7 @@ export default defineConfig({
   projects: [
     {
       name: "e2e",
-      // Keep the existing Task 8 E2E project stable. The Phase 6 browser
+      // Keep the existing Task 8 E2E project stable. The release browser
       // matrix has explicit projects below so a local diagnostic run never
       // changes the semantics of the ordinary Chrome suite.
       testMatch: "e2e/**/*.spec.ts",
@@ -26,32 +26,32 @@ export default defineConfig({
       // checks; the demo route remains available as a deterministic fixture
       // for product-flow tests.
       testIgnore: [
-        "e2e/phase6-browser-matrix.spec.ts",
+        "e2e/release-browser-matrix.spec.ts",
         "e2e/readme-demo.spec.ts",
         "e2e/readme-gallery-render.spec.ts",
       ],
     },
     {
       name: "chromium",
-      testMatch: "e2e/phase6-browser-matrix.spec.ts",
+      testMatch: "e2e/release-browser-matrix.spec.ts",
       use: { ...devices["Desktop Chrome"], browserName: "chromium" },
     },
     {
       name: "msedge",
-      testMatch: "e2e/phase6-browser-matrix.spec.ts",
+      testMatch: "e2e/release-browser-matrix.spec.ts",
       use: { ...devices["Desktop Edge"], browserName: "chromium", channel: "msedge" },
     },
     {
       name: "firefox",
-      testMatch: "e2e/phase6-browser-matrix.spec.ts",
+      testMatch: "e2e/release-browser-matrix.spec.ts",
       use: { ...devices["Desktop Firefox"], browserName: "firefox" },
     },
     {
       name: "webkit",
-      testMatch: "e2e/phase6-browser-matrix.spec.ts",
+      testMatch: "e2e/release-browser-matrix.spec.ts",
       // WebKit diagnostic only; it is never substituted for Safari
       // BrowserStack evidence and never counts as the Safari P0 result.
-      metadata: { phase6Role: "diagnostic-only", providerEvidence: "never" },
+      metadata: { releaseRole: "diagnostic-only", providerEvidence: "never" },
       use: { ...devices["Desktop Safari"], browserName: "webkit" },
     },
     {

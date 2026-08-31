@@ -62,9 +62,9 @@ import { createAuthRoutes } from "./routes/auth.js";
 import {
   createHealthRoutes,
   createReadinessState,
-  type Phase6ReadinessState,
+  type ReleaseReadinessState,
 } from "./routes/health.js";
-import { createPhase6PreflightRoutes } from "./routes/internal-phase6-preflight.js";
+import { createReleasePreflightRoutes } from "./routes/internal-release-preflight.js";
 import { createNoteRoutes } from "./routes/v1/notes.js";
 import { createVersionRoutes } from "./routes/v1/versions.js";
 import { ThemeServiceImpl, type ThemeService } from "./modules/themes/ThemeService.js";
@@ -114,7 +114,7 @@ export interface AppDependencies {
   rateLimit?: RateLimitPort;
   clock?: Clock;
   logger?: AppSecurityLogger;
-  readiness?: Phase6ReadinessState;
+  readiness?: ReleaseReadinessState;
   getDirectPeer?: (context: Context) => string | undefined;
 }
 
@@ -152,19 +152,19 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
   const noteService = dependencies.noteService ?? new NoteServiceImpl(db);
   const themeService = dependencies.themeService ?? new ThemeServiceImpl(db);
   const operatorAuthorizer =
-    dependencies.operatorAuthorizer ?? createOperatorAuthorizer(env.PHASE5_OPERATOR_IDS);
+    dependencies.operatorAuthorizer ?? createOperatorAuthorizer(env.OPERATIONS_OPERATOR_IDS);
   const jobDispatcher = dependencies.jobDispatcher ?? new PostgresJobDispatcher(db);
   let ownedStorage: (ObjectStoragePort & { destroy?(): void }) | undefined;
   const storage =
     dependencies.storage ??
-    (env.PHASE5_ENABLED
+    (env.WORKSPACE_SERVICES_ENABLED
       ? (ownedStorage = env.S3_FORCE_PATH_STYLE
           ? createMinioObjectStorage(env)
           : createS3ObjectStorage(env))
       : undefined);
   const idempotencyStore =
     dependencies.idempotencyStore ??
-    (env.PHASE5_ENABLED
+    (env.WORKSPACE_SERVICES_ENABLED
       ? new IdempotencyStore(db, {
           encryptionKey: env.IDEMPOTENCY_ENCRYPTION_KEY,
           leaseSeconds: env.IDEMPOTENCY_LEASE_SECONDS,
@@ -173,7 +173,7 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
       : undefined);
   const assetService =
     dependencies.assetService ??
-    (env.PHASE5_ENABLED && storage && idempotencyStore
+    (env.WORKSPACE_SERVICES_ENABLED && storage && idempotencyStore
       ? new AssetServiceImpl(db, storage, jobDispatcher, idempotencyStore, {
           maxBytes: env.ASSET_MAX_BYTES,
           workspaceQuotaBytes: env.ASSET_WORKSPACE_QUOTA_BYTES,
@@ -183,14 +183,14 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
       : undefined);
   const importService =
     dependencies.importService ??
-    (env.PHASE5_ENABLED && storage
+    (env.WORKSPACE_SERVICES_ENABLED && storage
       ? new ImportServiceImpl(db, storage, jobDispatcher, {
           stagingGraceSeconds: env.IMPORT_STAGING_GRACE_SECONDS,
         })
       : undefined);
   const exportService =
     dependencies.exportService ??
-    (env.PHASE5_ENABLED && storage
+    (env.WORKSPACE_SERVICES_ENABLED && storage
       ? new ExportServiceImpl(db, storage, jobDispatcher, {
           expirySeconds: env.EXPORT_RETENTION_DAYS * 24 * 60 * 60,
           downloadUrlExpirySeconds: 300,
@@ -198,7 +198,7 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
       : undefined);
   const shareLinkService =
     dependencies.shareLinkService ??
-    (env.PHASE5_ENABLED && idempotencyStore
+    (env.WORKSPACE_SERVICES_ENABLED && idempotencyStore
       ? new ShareLinkServiceImpl(db, idempotencyStore, jobDispatcher, {
           tokenHashKey: env.IDEMPOTENCY_ENCRYPTION_KEY,
           publicBaseUrl: env.WEB_ORIGIN,
@@ -336,20 +336,20 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
   );
   app.use("/api/v1/*", ensurePersonalWorkspace);
 
-  const expectedRuntimeRole = process.env.PHASE6_EXPECTED_RUNTIME_ROLE ?? "unavailable";
-  const expectedMigrationRole = process.env.PHASE6_EXPECTED_MIGRATION_ROLE ?? "unavailable";
-  const expectedWorkerId = process.env.PHASE6_EXPECTED_WORKER_ID ?? "unavailable";
-  const expectedBucket = env.PHASE5_ENABLED
-    ? (process.env.PHASE6_EXPECTED_BUCKET ?? env.S3_BUCKET)
+  const expectedRuntimeRole = process.env.RELEASE_EXPECTED_RUNTIME_ROLE ?? "unavailable";
+  const expectedMigrationRole = process.env.RELEASE_EXPECTED_MIGRATION_ROLE ?? "unavailable";
+  const expectedWorkerId = process.env.RELEASE_EXPECTED_WORKER_ID ?? "unavailable";
+  const expectedBucket = env.WORKSPACE_SERVICES_ENABLED
+    ? (process.env.RELEASE_EXPECTED_BUCKET ?? env.S3_BUCKET)
     : "unavailable";
-  const expectedImageDigest = process.env.PHASE6_EXPECTED_IMAGE_DIGEST ?? "unavailable";
+  const expectedImageDigest = process.env.RELEASE_EXPECTED_IMAGE_DIGEST ?? "unavailable";
   const expectedMigrationJournalSha =
-    process.env.PHASE6_EXPECTED_MIGRATION_JOURNAL_SHA ?? "unavailable";
-  const preflightProbeToken = process.env.PHASE6_PREFLIGHT_PROBE_TOKEN;
+    process.env.RELEASE_EXPECTED_MIGRATION_JOURNAL_SHA ?? "unavailable";
+  const preflightProbeToken = process.env.RELEASE_PREFLIGHT_PROBE_TOKEN;
   const preflightOperatorId =
-    process.env.PHASE6_PREFLIGHT_OPERATOR_ID ??
-    (env.PHASE5_ENABLED ? env.PHASE5_OPERATOR_IDS[0] : undefined);
-  const preflightRoutes = createPhase6PreflightRoutes({
+    process.env.RELEASE_PREFLIGHT_OPERATOR_ID ??
+    (env.WORKSPACE_SERVICES_ENABLED ? env.OPERATIONS_OPERATOR_IDS[0] : undefined);
+  const preflightRoutes = createReleasePreflightRoutes({
     operatorAuthorizer,
     expected: {
       runtimeRole: expectedRuntimeRole,
@@ -379,7 +379,7 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
         health: readiness.healthy,
         readiness: readiness.ready,
         database,
-        objectStorage: env.PHASE5_ENABLED && storage !== undefined,
+        objectStorage: env.WORKSPACE_SERVICES_ENABLED && storage !== undefined,
         roles: identitiesConfigured,
         worker: expectedWorkerId !== "unavailable",
         image: expectedImageDigest !== "unavailable",
@@ -387,7 +387,7 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
       };
     },
   });
-  app.use("/api/internal/phase6/*", async (context, next) => {
+  app.use("/api/internal/release/*", async (context, next) => {
     if (
       preflightProbeToken !== undefined &&
       context.req.header("authorization") === `Bearer ${preflightProbeToken}`

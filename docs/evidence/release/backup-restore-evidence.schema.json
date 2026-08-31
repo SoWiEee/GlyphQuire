@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glyphquire.example/schemas/release/backup-restore-evidence.schema.json",
+  "title": "GlyphQuire Release encrypted backup and isolated restore evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "scrubbed",
+    "target",
+    "producer",
+    "capturedAt",
+    "encryption",
+    "retentionDays",
+    "artifacts",
+    "aggregateSha256",
+    "invariants",
+    "checks",
+    "recordedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["blocked", "failed", "passed"] },
+    "scrubbed": { "const": true },
+    "target": { "const": "isolated" },
+    "producer": { "const": "release-backup-restore" },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "blockingReason": {
+      "type": "string",
+      "maxLength": 240,
+      "pattern": "^[A-Za-z0-9 .,;:_()/-]+$"
+    },
+    "encryption": { "$ref": "#/$defs/encryption" },
+    "retentionDays": { "const": 30 },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["database", "objectStorage"],
+      "properties": {
+        "database": { "$ref": "#/$defs/artifact" },
+        "objectStorage": {
+          "allOf": [
+            { "$ref": "#/$defs/artifact" },
+            {
+              "type": "object",
+              "required": ["fileCount", "totalBytes", "aggregateSha256"],
+              "properties": {
+                "fileCount": { "type": "integer", "minimum": 0, "maximum": 100000 },
+                "totalBytes": { "type": "integer", "minimum": 0, "maximum": 1073741824 },
+                "aggregateSha256": { "$ref": "#/$defs/sha256" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "aggregateSha256": { "$ref": "#/$defs/sha256" },
+    "invariants": { "$ref": "#/$defs/invariants" },
+    "checks": { "$ref": "#/$defs/checks" },
+    "recordedAt": { "type": "string", "format": "date-time" },
+    "history": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": { "$ref": "#/$defs/historyEntry" }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "encryption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "authenticated", "keyVersion"],
+      "properties": {
+        "algorithm": { "const": "AES-256-GCM" },
+        "authenticated": { "const": true },
+        "keyVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authenticated",
+        "plaintextBytes",
+        "ciphertextBytes",
+        "plaintextSha256",
+        "ciphertextSha256"
+      ],
+      "properties": {
+        "authenticated": { "const": true },
+        "plaintextBytes": { "type": "integer", "minimum": 0, "maximum": 1073741824 },
+        "ciphertextBytes": { "type": "integer", "minimum": 0, "maximum": 1073741824 },
+        "plaintextSha256": { "$ref": "#/$defs/sha256" },
+        "ciphertextSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "migrationJournalSha256",
+        "forwardOnly",
+        "schemaVersion",
+        "migrationCount",
+        "notesRows",
+        "noteVersionsRows",
+        "assetsRows",
+        "relationships",
+        "rowHashes",
+        "canonicalMarkdownPreserved"
+      ],
+      "properties": {
+        "migrationJournalSha256": { "$ref": "#/$defs/sha256" },
+        "forwardOnly": { "type": "boolean" },
+        "schemaVersion": { "type": "integer", "minimum": 1 },
+        "migrationCount": { "type": "integer", "minimum": 0, "maximum": 12 },
+        "notesRows": { "type": "integer", "minimum": 0 },
+        "noteVersionsRows": { "type": "integer", "minimum": 0 },
+        "assetsRows": { "type": "integer", "minimum": 0 },
+        "relationships": { "type": "boolean" },
+        "rowHashes": { "type": "boolean" },
+        "canonicalMarkdownPreserved": { "type": "boolean" }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "encryption",
+        "keyVersion",
+        "checksums",
+        "aggregateHash",
+        "isolation",
+        "retention",
+        "bounds",
+        "migration",
+        "relationships",
+        "rollbackCanonicalMarkdown",
+        "idempotent",
+        "temporaryKeyCleanup"
+      ],
+      "properties": {
+        "encryption": { "type": "boolean" },
+        "keyVersion": { "type": "boolean" },
+        "checksums": { "type": "boolean" },
+        "aggregateHash": { "type": "boolean" },
+        "isolation": { "type": "boolean" },
+        "retention": { "type": "boolean" },
+        "bounds": { "type": "boolean" },
+        "migration": { "type": "boolean" },
+        "relationships": { "type": "boolean" },
+        "rollbackCanonicalMarkdown": { "type": "boolean" },
+        "idempotent": { "type": "boolean" },
+        "temporaryKeyCleanup": { "type": "boolean" }
+      }
+    },
+    "historyEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "status",
+        "scrubbed",
+        "target",
+        "producer",
+        "capturedAt",
+        "recordedAt",
+        "aggregateSha256"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "status": { "enum": ["blocked", "failed", "passed"] },
+        "scrubbed": { "const": true },
+        "target": { "const": "isolated" },
+        "producer": { "const": "release-backup-restore" },
+        "capturedAt": { "type": "string", "format": "date-time" },
+        "recordedAt": { "type": "string", "format": "date-time" },
+        "aggregateSha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "passed" } } },
+      "then": {
+        "properties": {
+          "invariants": {
+            "properties": {
+              "forwardOnly": { "const": true },
+              "migrationCount": { "const": 12 },
+              "relationships": { "const": true },
+              "rowHashes": { "const": true },
+              "canonicalMarkdownPreserved": { "const": true }
+            }
+          },
+          "checks": {
+            "required": [
+              "encryption",
+              "keyVersion",
+              "checksums",
+              "aggregateHash",
+              "isolation",
+              "retention",
+              "bounds",
+              "migration",
+              "relationships",
+              "rollbackCanonicalMarkdown",
+              "idempotent",
+              "temporaryKeyCleanup"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

@@ -14,7 +14,7 @@
   <Workbench
     v-else
     :session-factory="sessionFactory"
-    :phase5-workspace-id="hostContext.workspaceId"
+    :workspace-id="hostContext.workspaceId"
     :workspace-name="hostContext.workspaceName"
     :account-label="hostContext.accountLabel"
     @account-action="forwardAccountAction"

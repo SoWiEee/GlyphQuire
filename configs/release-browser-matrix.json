@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "provider": "browserstack",
+  "targets": [
+    {
+      "id": "chrome-latest",
+      "browser": "Chrome",
+      "browserVersion": "latest",
+      "os": "Windows",
+      "osVersion": "11",
+      "capabilities": {
+        "browserName": "Chrome",
+        "browserVersion": "latest",
+        "bstack:options": {
+          "os": "Windows",
+          "osVersion": "11",
+          "projectName": "GlyphQuire",
+          "sessionName": "release-chrome-latest",
+          "buildName": "${RELEASE_BROWSERSTACK_BUILD}",
+          "buildIdentifier": "${RELEASE_BROWSERSTACK_BUILD}"
+        }
+      }
+    },
+    {
+      "id": "chrome-latest-1",
+      "browser": "Chrome",
+      "browserVersion": "latest-1",
+      "os": "Windows",
+      "osVersion": "11",
+      "capabilities": {
+        "browserName": "Chrome",
+        "browserVersion": "latest-1",
+        "bstack:options": {
+          "os": "Windows",
+          "osVersion": "11",
+          "projectName": "GlyphQuire",
+          "sessionName": "release-chrome-latest-1",
+          "buildName": "${RELEASE_BROWSERSTACK_BUILD}",
+          "buildIdentifier": "${RELEASE_BROWSERSTACK_BUILD}"
+        }
+      }
+    },
+    {
+      "id": "firefox-latest",
+      "browser": "Firefox",
+      "browserVersion": "latest",
+      "os": "Windows",
+      "osVersion": "11",
+      "capabilities": {
+        "browserName": "Firefox",
+        "browserVersion": "latest",
+        "bstack:options": {
+          "os": "Windows",
+          "osVersion": "11",
+          "projectName": "GlyphQuire",
+          "sessionName": "release-firefox-latest",
+          "buildName": "${RELEASE_BROWSERSTACK_BUILD}",
+          "buildIdentifier": "${RELEASE_BROWSERSTACK_BUILD}"
+        }
+      }
+    },
+    {
+      "id": "firefox-latest-1",
+      "browser": "Firefox",
+      "browserVersion": "latest-1",
+      "os": "Windows",
+      "osVersion": "11",
+      "capabilities": {
+        "browserName": "Firefox",
+        "browserVersion": "latest-1",
+        "bstack:options": {
+          "os": "Windows",
+          "osVersion": "11",
+          "projectName": "GlyphQuire",
+          "sessionName": "release-firefox-latest-1",
+          "buildName": "${RELEASE_BROWSERSTACK_BUILD}",
+          "buildIdentifier": "${RELEASE_BROWSERSTACK_BUILD}"
+        }
+      }
+    },
+    {
+      "id": "edge-latest",
+      "browser": "Edge",
+      "browserVersion": "latest",
+      "os": "Windows",
+      "osVersion": "11",
+      "capabilities": {
+        "browserName": "Edge",
+        "browserVersion": "latest",
+        "bstack:options": {
+          "os": "Windows",
+          "osVersion": "11",
+          "projectName": "GlyphQuire",
+          "sessionName": "release-edge-latest",
+          "buildName": "${RELEASE_BROWSERSTACK_BUILD}",
+          "buildIdentifier": "${RELEASE_BROWSERSTACK_BUILD}"
+        }
+      }
+    },
+    {
+      "id": "edge-latest-1",
+      "browser": "Edge",
+      "browserVersion": "latest-1",
+      "os": "Windows",
+      "osVersion": "11",
+      "capabilities": {
+        "browserName": "Edge",
+        "browserVersion": "latest-1",
+        "bstack:options": {
+          "os": "Windows",
+          "osVersion": "11",
+          "projectName": "GlyphQuire",
+          "sessionName": "release-edge-latest-1",
+          "buildName": "${RELEASE_BROWSERSTACK_BUILD}",
+          "buildIdentifier": "${RELEASE_BROWSERSTACK_BUILD}"
+        }
+      }
+    },
+    {
+      "id": "safari-latest",
+      "browser": "Safari",
+      "browserVersion": "latest",
+      "os": "OS X",
+      "osVersion": "Sequoia",
+      "capabilities": {
+        "browserName": "Safari",
+        "browserVersion": "latest",
+        "bstack:options": {
+          "os": "OS X",
+          "osVersion": "Sequoia",
+          "projectName": "GlyphQuire",
+          "sessionName": "release-safari-latest",
+          "buildName": "${RELEASE_BROWSERSTACK_BUILD}",
+          "buildIdentifier": "${RELEASE_BROWSERSTACK_BUILD}"
+        }
+      }
+    },
+    {
+      "id": "safari-latest-1",
+      "browser": "Safari",
+      "browserVersion": "latest-1",
+      "os": "OS X",
+      "osVersion": "Sonoma",
+      "capabilities": {
+        "browserName": "Safari",
+        "browserVersion": "latest-1",
+        "bstack:options": {
+          "os": "OS X",
+          "osVersion": "Sonoma",
+          "projectName": "GlyphQuire",
+          "sessionName": "release-safari-latest-1",
+          "buildName": "${RELEASE_BROWSERSTACK_BUILD}",
+          "buildIdentifier": "${RELEASE_BROWSERSTACK_BUILD}"
+        }
+      }
+    }
+  ],
+  "preflight": {
+    "allowWebKitSubstitution": false,
+    "requireProviderResolution": true,
+    "requireSessionMetadata": true
+  }
+}

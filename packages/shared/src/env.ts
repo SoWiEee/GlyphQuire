@@ -117,16 +117,16 @@ export const operatorAllowlistSchema = z
   });
 
 /**
- * Shared Phase 5 operational bounds. Security-sensitive byte and batch caps
+ * Shared workspace-services operational bounds. Security-sensitive byte and batch caps
  * may be lowered by deployment configuration but can never be widened beyond
  * the reviewed limits here.
  */
-export const phase5EnvSchema = z
+export const workspaceServicesEnvSchema = z
   .object({
     IDEMPOTENCY_ENCRYPTION_KEY: base64UrlKeySchema,
     BACKUP_ENCRYPTION_KEY: base64UrlKeySchema,
     IDEMPOTENCY_LEASE_SECONDS: integerEnv(60, 1, 300),
-    PHASE5_OPERATOR_IDS: operatorAllowlistSchema,
+    OPERATIONS_OPERATOR_IDS: operatorAllowlistSchema,
 
     JOB_LOCK_TIMEOUT_SECONDS: integerEnv(300, 1, 3_600),
     JOB_MAX_ATTEMPTS: integerEnv(5, 1, 20),
@@ -166,4 +166,4 @@ export const phase5EnvSchema = z
     }
   });
 
-export type Phase5Env = z.output<typeof phase5EnvSchema>;
+export type WorkspaceServicesEnv = z.output<typeof workspaceServicesEnvSchema>;

@@ -14,12 +14,6 @@
         @account-action="onAccountAction"
         @toolbar-action="onToolbarAction"
       />
-      <StatusIndicator
-        class="mr-4 text-gray-600"
-        :state="saveState"
-        :detail="saveStateDetail"
-        compact
-      />
     </div>
 
     <EditorToolbar
@@ -40,7 +34,7 @@
           :active-note-id="activeNoteId"
           :workspace-available="workspaceAvailable"
           @select="openNote"
-          @search="() => openPhase5Panel('search')"
+          @search="() => openToolPanel('search')"
           @shared-links="onSharedLinks"
         />
       </div>
@@ -135,7 +129,7 @@
         :workspace-available="workspaceAvailable"
         :note-available="Boolean(activeNote)"
         :outline="outline"
-        :current-revision="phase5BaseRevision"
+        :current-revision="baseRevision"
         :read-only="sessionState?.readOnly ?? true"
         @close="workbenchContext.setPanel(null)"
         @action="onContextAction"
@@ -152,52 +146,55 @@
     />
 
     <div
-      v-if="phase5Panel && workspaceId"
+      v-if="toolPanel && currentWorkspaceId"
       class="fixed inset-0 z-40 flex items-start justify-center bg-black/30 p-8 pt-20"
-      @click.self="closePhase5Panel"
-      @keydown.escape="closePhase5Panel"
+      @click.self="closeToolPanel"
+      @keydown.escape="closeToolPanel"
     >
       <div
         role="dialog"
         aria-modal="true"
-        :aria-label="phase5PanelLabel"
+        :aria-label="toolPanelLabel"
         class="max-h-[80vh] w-full max-w-2xl overflow-auto rounded-lg bg-white p-4 shadow-xl"
       >
         <button
-          ref="phase5CloseRef"
+          ref="toolPanelCloseRef"
           type="button"
           class="mb-3 rounded border border-gray-300 px-2 py-1 text-sm"
-          aria-label="Close Phase 5 tools"
-          @click="closePhase5Panel"
+          aria-label="Close tools"
+          @click="closeToolPanel"
         >
-          Close
+          Close tools
         </button>
         <AssetManager
-          v-if="phase5Panel === 'assets'"
-          :workspace-id="workspaceId"
+          v-if="toolPanel === 'assets'"
+          :workspace-id="currentWorkspaceId"
           @reference="insertAssetReference"
         />
         <SearchPalette
-          v-else-if="phase5Panel === 'search'"
-          :workspace-id="workspaceId"
+          v-else-if="toolPanel === 'search'"
+          :workspace-id="currentWorkspaceId"
           @select-note="selectSearchResult"
         />
         <TransferDialog
-          v-else-if="phase5Panel === 'transfer'"
-          :workspace-id="workspaceId"
-          :note-id="noteId ?? undefined"
-          :base-revision="phase5BaseRevision ?? undefined"
+          v-else-if="toolPanel === 'transfer'"
+          :workspace-id="currentWorkspaceId"
+          :note-id="currentNoteId ?? undefined"
+          :base-revision="baseRevision ?? undefined"
         />
-        <ShareLinkDialog v-else-if="phase5Panel === 'share' && noteId" :note-id="noteId" />
+        <ShareLinkDialog
+          v-else-if="toolPanel === 'share' && currentNoteId"
+          :note-id="currentNoteId"
+        />
         <VersionHistory
-          v-else-if="phase5Panel === 'history' && noteId"
-          :note-id="noteId"
-          :current-revision="phase5BaseRevision"
+          v-else-if="toolPanel === 'history' && currentNoteId"
+          :note-id="currentNoteId"
+          :current-revision="baseRevision"
           @restored="onHistoryRestored"
         />
         <SharedLinksPanel
-          v-else-if="phase5Panel === 'shared-links'"
-          :links="phase5Store.shareLinks"
+          v-else-if="toolPanel === 'shared-links'"
+          :links="workspaceToolsStore.shareLinks"
           @open="onSharedLinkOpen"
           @revoke="onSharedLinkRevoke"
         />
@@ -226,7 +223,6 @@ import EditorTabs from "./EditorTabs.vue";
 import ExplorerPane from "./ExplorerPane.vue";
 import SaveStateBanner from "./SaveStateBanner.vue";
 import StatusBar from "./StatusBar.vue";
-import StatusIndicator from "./StatusIndicator.vue";
 import TopBar from "./TopBar.vue";
 import SourceEditor from "../source/SourceEditor.vue";
 import VisualEditor from "../visual/VisualEditor.vue";
@@ -239,7 +235,7 @@ import ShareLinkDialog from "../share/ShareLinkDialog.vue";
 import SharedLinksPanel from "../share/SharedLinksPanel.vue";
 import VersionHistory from "../history/VersionHistory.vue";
 import { useThemeStore } from "../../stores/theme.js";
-import { usePhase5Store } from "../../stores/phase5.js";
+import { useWorkspaceToolsStore } from "../../stores/workspace-tools.js";
 import type { NoteResult } from "@glyphquire/api-contract";
 import type { EditorSessionState } from "../../editors/editor-session.types.js";
 import type {
@@ -270,13 +266,13 @@ import {
 } from "../../editors/visual/asset-resolver.js";
 
 const themeStore = useThemeStore();
-const phase5Store = usePhase5Store();
+const workspaceToolsStore = useWorkspaceToolsStore();
 
 const props = defineProps<{
   initialNotes?: readonly WorkbenchNote[];
   sessionFactory?: WorkbenchSessionFactory;
-  phase5WorkspaceId?: string;
-  phase5NoteId?: string;
+  workspaceId?: string;
+  noteId?: string;
   workspaceName?: string;
   accountLabel?: string;
 }>();
@@ -289,8 +285,8 @@ const emit = defineEmits<{
 const workbenchContext = createWorkbenchContext({
   initialNotes: props.initialNotes,
   sessionFactory: props.sessionFactory,
-  phase5WorkspaceId: props.phase5WorkspaceId,
-  phase5NoteId: props.phase5NoteId,
+  workspaceId: props.workspaceId,
+  noteId: props.noteId,
   workspaceName: props.workspaceName,
   accountLabel: props.accountLabel,
 });
@@ -302,16 +298,16 @@ const openTabs = computed<WorkbenchNote[]>(() =>
 );
 const activeNote = computed(() => workbenchState.activeNote);
 const activeNoteId = computed(() => workbenchState.activeNoteId);
-const workspaceId = computed(() => workbenchState.workspaceId);
-const noteId = computed(() => workbenchState.noteId);
-const phase5BaseRevision = computed<number | null>(() => {
+const currentWorkspaceId = computed(() => workbenchState.workspaceId);
+const currentNoteId = computed(() => workbenchState.noteId);
+const baseRevision = computed<number | null>(() => {
   const revision = workbenchState.sessionState?.baseRevision;
   return Number.isInteger(revision) && (revision ?? 0) > 0 ? revision! : null;
 });
-const phase5Panel = computed(() => workbenchState.phase5Panel);
-const phase5CloseRef = ref<HTMLButtonElement | null>(null);
-const phase5PanelLabel = computed(() => {
-  switch (phase5Panel.value) {
+const toolPanel = computed(() => workbenchState.toolPanel);
+const toolPanelCloseRef = ref<HTMLButtonElement | null>(null);
+const toolPanelLabel = computed(() => {
+  switch (toolPanel.value) {
     case "assets":
       return "Asset manager";
     case "search":
@@ -325,13 +321,13 @@ const phase5PanelLabel = computed(() => {
     case "shared-links":
       return "Shared links";
     default:
-      return "Phase 5 tools";
+      return "Tools";
   }
 });
 let releaseVisualAssetResolver: (() => void) | undefined;
-if (workspaceId.value) {
+if (currentWorkspaceId.value) {
   releaseVisualAssetResolver = registerVisualAssetResolver(
-    createAssetResolver({ workspaceId: workspaceId.value }),
+    createAssetResolver({ workspaceId: currentWorkspaceId.value }),
   );
 }
 
@@ -374,7 +370,7 @@ const slashRequest = shallowRef<
   (SlashCommandRequest & { readonly surface: WorkbenchEditorHandle }) | null
 >(null);
 
-const workspaceAvailable = computed(() => workspaceId.value !== null);
+const workspaceAvailable = computed(() => currentWorkspaceId.value !== null);
 const effectiveWorkspaceName = computed(() => workbenchState.workspaceName ?? props.workspaceName);
 const effectiveAccountLabel = computed(() => workbenchState.accountLabel ?? props.accountLabel);
 
@@ -553,23 +549,23 @@ function onAccountAction(action: WorkbenchAccountAction): void {
 
 function onContextAction(action: Exclude<ContextAction, "outline">): void {
   workbenchContext.setPanel(action);
-  if (workbenchState.phase5Panel === action) {
-    void nextTick(() => phase5CloseRef.value?.focus());
+  if (workbenchState.toolPanel === action) {
+    void nextTick(() => toolPanelCloseRef.value?.focus());
   }
 }
 
 function onSharedLinks(): void {
-  openPhase5Panel("shared-links");
+  openToolPanel("shared-links");
 }
 
 function onSharedLinkOpen(noteId: string): void {
   if (notes.value.some((note) => note.id === noteId)) openNote(noteId);
-  closePhase5Panel();
+  closeToolPanel();
 }
 
 async function onSharedLinkRevoke(linkId: string): Promise<void> {
   try {
-    await phase5Store.revokeShareLink(linkId);
+    await workspaceToolsStore.revokeShareLink(linkId);
   } catch {
     // The store owns the user-facing error projection for failed revocations.
   }
@@ -593,14 +589,14 @@ function openPalette(): void {
 }
 
 function closePalette(): void {
-  const phase5PanelWasOpened = workbenchState.phase5Panel !== null;
+  const toolPanelWasOpened = workbenchState.toolPanel !== null;
   paletteOpen.value = false;
   slashRequest.value = null;
   paletteInitialQuery.value = undefined;
   paletteCategoryFilter.value = undefined;
-  if (phase5PanelWasOpened) {
+  if (toolPanelWasOpened) {
     void nextTick(() => {
-      void nextTick(() => phase5CloseRef.value?.focus());
+      void nextTick(() => toolPanelCloseRef.value?.focus());
     });
     return;
   }
@@ -625,14 +621,14 @@ function onBlockCommand(definition: BlockCommandDefinition): void {
   closePalette();
 }
 
-function openPhase5Panel(panel: WorkbenchToolPanel): void {
+function openToolPanel(panel: WorkbenchToolPanel): void {
   workbenchContext.setPanel(panel);
-  if (workbenchState.phase5Panel === panel) {
-    void nextTick(() => phase5CloseRef.value?.focus());
+  if (workbenchState.toolPanel === panel) {
+    void nextTick(() => toolPanelCloseRef.value?.focus());
   }
 }
 
-function closePhase5Panel(): void {
+function closeToolPanel(): void {
   workbenchContext.setPanel(null);
   const paletteButton = topBarRef.value?.$el?.querySelector('[aria-label="Open command palette"]');
   if (paletteButton instanceof HTMLElement) paletteButton.focus();
@@ -644,32 +640,32 @@ function insertAssetReference(reference: string): void {
   const markdown = session.snapshot().markdown;
   const separator = markdown.endsWith("\n") || markdown.length === 0 ? "" : "\n";
   session.edit(`${markdown}${separator}\n![Asset](${reference})\n`);
-  closePhase5Panel();
+  closeToolPanel();
 }
 
 function selectSearchResult(noteId: string): void {
   if (notes.value.some((note) => note.id === noteId)) openNote(noteId);
-  closePhase5Panel();
+  closeToolPanel();
 }
 
 async function onHistoryRestored(result: NoteResult): Promise<void> {
   const currentNote = activeNote.value;
-  const expectedNoteId = noteId.value;
+  const expectedNoteId = currentNoteId.value;
   if (
     !currentNote ||
     !expectedNoteId ||
     result.id !== expectedNoteId ||
     result.id !== currentNote.id ||
-    result.workspaceId !== workspaceId.value
+    result.workspaceId !== currentWorkspaceId.value
   )
     return;
   const expectedMarkdown = result.contentMarkdown;
   const expectedRevision = result.revision;
-  if (!isValidRevision(expectedRevision) || !workspaceId.value) return;
+  if (!isValidRevision(expectedRevision) || !currentWorkspaceId.value) return;
   workbenchContext.openNote(result.id, {
     markdown: expectedMarkdown,
     baseRevision: expectedRevision,
-    workspaceId: workspaceId.value,
+    workspaceId: currentWorkspaceId.value,
   });
 }
 
@@ -703,38 +699,38 @@ const commands = computed<WorkbenchCommand[]>(() => {
       run: () => workbenchContext.closeNote(activeNoteId.value as string),
     });
   }
-  if (workspaceId.value) {
+  if (currentWorkspaceId.value) {
     result.push(
       {
-        id: "phase5-assets",
+        id: "tools-assets",
         label: "Manage assets",
         hint: "Workspace",
         category: "workspace",
-        run: () => openPhase5Panel("assets"),
+        run: () => openToolPanel("assets"),
       },
       {
-        id: "phase5-search",
+        id: "tools-search",
         label: "Search notes",
         hint: "Workspace",
         category: "workspace",
-        run: () => openPhase5Panel("search"),
+        run: () => openToolPanel("search"),
       },
       {
-        id: "phase5-transfer",
+        id: "tools-transfer",
         label: "Import or export",
         hint: "Workspace",
         category: "workspace",
-        run: () => openPhase5Panel("transfer"),
+        run: () => openToolPanel("transfer"),
       },
     );
   }
-  if (workspaceId.value && noteId.value) {
+  if (currentWorkspaceId.value && currentNoteId.value) {
     result.push({
-      id: "phase5-share",
+      id: "tools-share",
       label: "Create read-only share link",
       hint: "Note",
       category: "note",
-      run: () => openPhase5Panel("share"),
+      run: () => openToolPanel("share"),
     });
   }
   return result;

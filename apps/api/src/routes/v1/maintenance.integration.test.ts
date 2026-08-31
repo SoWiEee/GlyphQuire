@@ -105,7 +105,7 @@ describe("operator maintenance routes", () => {
           BETTER_AUTH_SECRET: "maintenance-route-test-secret-at-least-32-characters",
           BETTER_AUTH_URL: baseUrl,
           WEB_ORIGIN: "http://localhost:5173",
-          PHASE5_OPERATOR_IDS: actorId,
+          OPERATIONS_OPERATOR_IDS: actorId,
         },
         {
           db,

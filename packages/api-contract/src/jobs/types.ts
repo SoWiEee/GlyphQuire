@@ -137,7 +137,7 @@ export interface JobEnvelope<TType extends JobType = JobType> {
   payload: JobPayload<TType>;
 }
 
-export interface Phase5Cursor {
+export interface Cursor {
   createdAt: string;
   id: string;
 }

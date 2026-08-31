@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 
-export interface Phase6ReadinessState {
+export interface ReleaseReadinessState {
   readonly healthy: boolean;
   readonly ready: boolean;
   readonly restartRequested: boolean;
@@ -16,7 +16,7 @@ export interface ReadinessStateOptions {
   onHealthFailure?: () => void;
 }
 
-export function createReadinessState(options: ReadinessStateOptions = {}): Phase6ReadinessState {
+export function createReadinessState(options: ReadinessStateOptions = {}): ReleaseReadinessState {
   let healthy = true;
   let ready = true;
   let restartRequested = false;
@@ -63,7 +63,7 @@ export function createReadinessState(options: ReadinessStateOptions = {}): Phase
   };
 }
 
-function metrics(state: Phase6ReadinessState): string {
+function metrics(state: ReleaseReadinessState): string {
   return [
     "# TYPE glyphquire_health gauge",
     `glyphquire_health ${state.healthy ? 1 : 0}`,
@@ -81,7 +81,7 @@ function metrics(state: Phase6ReadinessState): string {
   ].join("\n");
 }
 
-export function createHealthRoutes(state: Phase6ReadinessState = createReadinessState()) {
+export function createHealthRoutes(state: ReleaseReadinessState = createReadinessState()) {
   return new Hono()
     .get("/health", (context) => {
       state.recordRequest();

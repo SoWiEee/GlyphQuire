@@ -213,8 +213,8 @@ async function putObject(storage: InMemoryObjectStorage, key: string): Promise<v
   });
 }
 
-describe("Phase 5 worker consumer modules", () => {
-  it("registers the complete reviewed Phase 5 handler set statically", () => {
+describe("Workspace services worker consumer modules", () => {
+  it("registers the complete reviewed workspace services handler set statically", () => {
     expect(Object.keys(jobRegistry)).toEqual([...JOB_TYPES]);
     expect(Object.values(jobRegistry).every((handler) => typeof handler === "function")).toBe(true);
     expect(Object.isFrozen(jobRegistry)).toBe(true);

@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "status": "blocked",
+  "scrubbed": true,
+  "producer": "task6-ui-ux",
+  "capturedAt": "2026-08-31T08:52:21.107Z",
+  "commit": "af8bc4444740d656b7bd7bbfb9a870e6242aecc2",
+  "browser": {
+    "name": "Chromium",
+    "version": "151.0.7922.34",
+    "engine": "Playwright Chrome for Testing"
+  },
+  "viewports": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 900,
+      "status": "passed"
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844,
+      "status": "passed"
+    }
+  ],
+  "checks": [
+    {
+      "id": "desktop-shell",
+      "status": "passed",
+      "evidence": "Explorer, centered editor, status projection, and hidden ContextRail shell rendered at 1440x900."
+    },
+    {
+      "id": "keyboard-palette",
+      "status": "passed",
+      "evidence": "Control+K dispatch, arrow navigation, Enter command execution, Escape close, and opener focus restoration passed."
+    },
+    {
+      "id": "toolbar-and-slash",
+      "status": "passed",
+      "evidence": "Existing /__readme-demo?scene=modes fixture routed Bold and slash block-command edits through canonical Markdown."
+    },
+    {
+      "id": "responsive-shell",
+      "status": "passed",
+      "evidence": "Explorer drawer, ContextRail dialog sheet, and scrollable editor passed at 390x844."
+    },
+    {
+      "id": "theme-contrast",
+      "status": "passed",
+      "evidence": "Default light and dark foreground, muted, accent, and border color pairs met the WCAG AA thresholds."
+    },
+    {
+      "id": "axe",
+      "status": "failed",
+      "evidence": "Local Chrome axe found serious color-contrast on the toolbar 10px mode label: #99a1af on #fffdf9, ratio 2.56:1."
+    },
+    {
+      "id": "backend-session-auth-conflict",
+      "status": "blocked",
+      "blockingReason": "WorkbenchPage has no authenticated session factory in this environment; offline, conflict recovery, writable account callbacks, and real save evidence require API and database."
+    },
+    {
+      "id": "cross-browser",
+      "status": "blocked",
+      "blockingReason": "Only local Chromium was available; BrowserStack credentials and Firefox, Edge, and WebKit browser binaries were unavailable."
+    },
+    {
+      "id": "assistive-technology",
+      "status": "blocked",
+      "blockingReason": "VoiceOver/NVDA hardware or screen-reader session was unavailable; axe and semantic keyboard smoke are not a substitute."
+    }
+  ],
+  "commands": [
+    {
+      "command": "pnpm --filter @glyphquire/web test -- src/components/workbench/workbench-a11y.test.ts",
+      "status": "passed",
+      "output": "2 tests passed"
+    },
+    {
+      "command": "pnpm exec playwright test tests/e2e/ui-ux-workbench.spec.ts --project=e2e",
+      "status": "failed",
+      "output": "All interaction steps reached their assertions; final axe gate reported 3 serious color-contrast findings."
+    }
+  ],
+  "notes": [
+    "The blocked status is intentional: external backend, cross-browser, and assistive-technology evidence is not available.",
+    "The axe failure is retained as a local source concern and is not whitelisted in the Task 6 smoke.",
+    "No provider diagnostics, private Markdown, credentials, or raw secrets were recorded."
+  ]
+}

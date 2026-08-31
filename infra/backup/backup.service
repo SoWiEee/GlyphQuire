@@ -1,0 +1,16 @@
+[Unit]
+Description=GlyphQuire encrypted PostgreSQL and object-storage backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/glyphquire/infra/backup/backup.sh
+EnvironmentFile=-/etc/glyphquire/backup.env
+User=glyphquire
+Group=glyphquire
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/glyphquire/backups

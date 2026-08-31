@@ -8,7 +8,7 @@ import { createOperatorAuthorizer } from "./OperatorAuthorizer.js";
  * `OperatorAuthorizer` is deliberately not a workspace-membership check — an
  * owner or editor of a workspace is never implicitly an operator, and there
  * is no membership role that grants it. It is a flat, exact-match allowlist
- * check against the parsed `PHASE5_OPERATOR_IDS` env value, and it must fail
+ * check against the parsed `OPERATIONS_OPERATOR_IDS` env value, and it must fail
  * closed whenever that allowlist is empty.
  */
 describe("OperatorAuthorizer", () => {
@@ -21,12 +21,12 @@ describe("OperatorAuthorizer", () => {
 
   it("parses the API operator allowlist once and rejects malformed deployment values", () => {
     expect(
-      parseEnv({ ...apiEnvironment, PHASE5_OPERATOR_IDS: "operator-a,operator-b" })
-        .PHASE5_OPERATOR_IDS,
+      parseEnv({ ...apiEnvironment, OPERATIONS_OPERATOR_IDS: "operator-a,operator-b" })
+        .OPERATIONS_OPERATOR_IDS,
     ).toEqual(["operator-a", "operator-b"]);
     expect(() =>
-      parseEnv({ ...apiEnvironment, PHASE5_OPERATOR_IDS: "operator-a, operator-b" }),
-    ).toThrow("Invalid environment variables: PHASE5_OPERATOR_IDS");
+      parseEnv({ ...apiEnvironment, OPERATIONS_OPERATOR_IDS: "operator-a, operator-b" }),
+    ).toThrow("Invalid environment variables: OPERATIONS_OPERATOR_IDS");
   });
 
   it("allows an exact configured operator id", () => {

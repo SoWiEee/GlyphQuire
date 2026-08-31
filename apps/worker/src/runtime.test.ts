@@ -5,7 +5,7 @@ import {
   type JobDispatcher,
   type JobRegistry,
 } from "@glyphquire/queue";
-import { phase5EnvSchema } from "@glyphquire/shared";
+import { workspaceServicesEnvSchema } from "@glyphquire/shared";
 import { WorkerRuntime } from "./runtime.js";
 
 const encryptionKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -15,9 +15,9 @@ const minimumEnv = {
   BACKUP_ENCRYPTION_KEY: encryptionKey,
 };
 
-describe("Phase 5 environment", () => {
+describe("workspace services environment", () => {
   it("applies the exact safe defaults once", () => {
-    expect(phase5EnvSchema.parse(minimumEnv)).toMatchObject({
+    expect(workspaceServicesEnvSchema.parse(minimumEnv)).toMatchObject({
       IDEMPOTENCY_LEASE_SECONDS: 60,
       JOB_LOCK_TIMEOUT_SECONDS: 300,
       JOB_MAX_ATTEMPTS: 5,
@@ -29,12 +29,12 @@ describe("Phase 5 environment", () => {
       ASSET_MAX_BYTES: 5_242_880,
       AUDIT_LOG_RETENTION_DAYS: 90,
       DELETION_DEADLINE_DAYS: 30,
-      PHASE5_OPERATOR_IDS: [],
+      OPERATIONS_OPERATOR_IDS: [],
     });
   });
 
   it("accepts a normal process environment while stripping unrelated variables", () => {
-    const parsed = phase5EnvSchema.parse({
+    const parsed = workspaceServicesEnvSchema.parse({
       ...minimumEnv,
       PATH: "/usr/bin",
       NODE_ENV: "test",
@@ -56,38 +56,42 @@ describe("Phase 5 environment", () => {
     ["JOB_MAX_ATTEMPTS", "21"],
     ["ASSET_CLEANUP_BATCH_SIZE", "101"],
   ])("rejects unsafe %s=%s rather than widening a limit", (field, value) => {
-    expect(phase5EnvSchema.safeParse({ ...minimumEnv, [field]: value }).success).toBe(false);
+    expect(workspaceServicesEnvSchema.safeParse({ ...minimumEnv, [field]: value }).success).toBe(
+      false,
+    );
   });
 
   it.each(["operator-a, operator-b", "operator-a,,operator-b", "*", "operator-a,operator-a"])(
     "rejects a malformed operator allowlist: %s",
     (value) => {
-      expect(phase5EnvSchema.safeParse({ ...minimumEnv, PHASE5_OPERATOR_IDS: value }).success).toBe(
-        false,
-      );
+      expect(
+        workspaceServicesEnvSchema.safeParse({ ...minimumEnv, OPERATIONS_OPERATOR_IDS: value })
+          .success,
+      ).toBe(false);
     },
   );
 
   it("parses at most twenty exact opaque operator ids", () => {
     const ids = Array.from({ length: 20 }, (_, index) => `operator-${index}`);
     expect(
-      phase5EnvSchema.parse({ ...minimumEnv, PHASE5_OPERATOR_IDS: ids.join(",") })
-        .PHASE5_OPERATOR_IDS,
+      workspaceServicesEnvSchema.parse({ ...minimumEnv, OPERATIONS_OPERATOR_IDS: ids.join(",") })
+        .OPERATIONS_OPERATOR_IDS,
     ).toEqual(ids);
     expect(
-      phase5EnvSchema.safeParse({
+      workspaceServicesEnvSchema.safeParse({
         ...minimumEnv,
-        PHASE5_OPERATOR_IDS: [...ids, "operator-20"].join(","),
+        OPERATIONS_OPERATOR_IDS: [...ids, "operator-20"].join(","),
       }).success,
     ).toBe(false);
   });
 
   it("requires exact 32-byte base64url encryption keys", () => {
     expect(
-      phase5EnvSchema.safeParse({ ...minimumEnv, IDEMPOTENCY_ENCRYPTION_KEY: "short" }).success,
+      workspaceServicesEnvSchema.safeParse({ ...minimumEnv, IDEMPOTENCY_ENCRYPTION_KEY: "short" })
+        .success,
     ).toBe(false);
     expect(
-      phase5EnvSchema.safeParse({
+      workspaceServicesEnvSchema.safeParse({
         ...minimumEnv,
         IDEMPOTENCY_ENCRYPTION_KEY: `${encryptionKey}=`,
       }).success,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertPhase5Complete, assertRegistryComplete } from "@glyphquire/queue";
+import { assertRequiredJobsComplete, assertRegistryComplete } from "@glyphquire/queue";
 import { type ShareCleanupAuditEvent } from "./handlers/share-cleanup.js";
 import { createStructuredShareCleanupAudit, jobRegistry } from "./registry.js";
 
@@ -38,9 +38,9 @@ describe("structured share cleanup audit", () => {
   });
 });
 
-describe("Phase 5 static registry handoff", () => {
+describe("static job registry handoff", () => {
   it("satisfies the P0 activation gate and the separate P1 diagnostic", () => {
     expect(() => assertRegistryComplete(jobRegistry)).not.toThrow();
-    expect(assertPhase5Complete(jobRegistry)).toEqual({ complete: true, missing: [] });
+    expect(assertRequiredJobsComplete(jobRegistry)).toEqual({ complete: true, missing: [] });
   });
 });

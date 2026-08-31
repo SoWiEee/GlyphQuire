@@ -1,0 +1,21 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: release-operator-channel
+  group_by:
+    - alertname
+    - release_alert
+  group_wait: 0s
+  group_interval: 30s
+  repeat_interval: 5m
+  routes:
+    - receiver: release-operator-channel
+      matchers:
+        - release_alert=~"probe_failure|backup_failure|dead_letter|oldest_queue_age|database_capacity|disk_capacity"
+
+receivers:
+  - name: release-operator-channel
+    webhook_configs:
+      - url: http://receiver:8080/events
+        send_resolved: true

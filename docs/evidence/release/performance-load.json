@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "status": "blocked",
+  "scrubbed": true,
+  "producer": "release-performance-load",
+  "recordedAt": "2026-08-31T00:00:00.000Z",
+  "blockingReason": "Measured host manifest and five actor credentials are unavailable",
+  "identity": {
+    "environmentManifestSha256": null,
+    "candidateSourceSha": null,
+    "lockfileSha256": null,
+    "imageDigests": null,
+    "host": null
+  },
+  "workload": {
+    "durationMs": 1800000,
+    "actors": 5,
+    "workspaces": 5,
+    "notesPerWorkspace": 1000,
+    "noteBytes": 102400,
+    "assetBytes": 5242880,
+    "autosaveIntervalMs": 2000,
+    "searchIntervalMs": 10000,
+    "assetIntervalMs": 300000,
+    "warmupMs": 120000
+  },
+  "api": {
+    "getNote": { "count": 0, "p50Ms": null, "p95Ms": null, "p99Ms": null, "thresholdMs": 500 },
+    "autosave": { "count": 0, "p50Ms": null, "p95Ms": null, "p99Ms": null, "thresholdMs": 1000 },
+    "search": { "count": 0, "p50Ms": null, "p95Ms": null, "p99Ms": null, "thresholdMs": 500 }
+  },
+  "integrity": {
+    "uploads": 0,
+    "integrityChecks": 0,
+    "newDeadLetters": 0,
+    "errors": 0,
+    "searchFreshWithin60Seconds": false
+  }
+}

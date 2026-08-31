@@ -2148,7 +2148,7 @@ Production readiness requirements (P0/P1 priority, evidence, and acceptance crit
 - CSP
 - security tests
 
-### Phase 5 — Product Services
+### Workspace Services
 
 - assets
 - search
@@ -2157,7 +2157,7 @@ Production readiness requirements (P0/P1 priority, evidence, and acceptance crit
 - share links
 - queue/worker
 
-### Phase 6 — Production Hardening
+### Release and Operations
 
 Production release requires passing all P0 items in §49 Production Readiness Contract。
 

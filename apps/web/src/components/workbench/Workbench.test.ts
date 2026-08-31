@@ -460,8 +460,8 @@ describe("Workbench EditorSession composition", () => {
     const wrapper = mount(Workbench, {
       props: {
         initialNotes: [{ id: NOTE_ID, title: "Authorized", markdown: "# Current" }],
-        phase5WorkspaceId: "33333333-3333-4333-8333-333333333333",
-        phase5NoteId: NOTE_ID,
+        workspaceId: "33333333-3333-4333-8333-333333333333",
+        noteId: NOTE_ID,
         sessionFactory,
       },
       global: {
@@ -507,8 +507,8 @@ describe("Workbench EditorSession composition", () => {
     const wrapper = mount(Workbench, {
       props: {
         initialNotes: [{ id: NOTE_ID, title: "Authorized", markdown: "# Current" }],
-        phase5WorkspaceId: "33333333-3333-4333-8333-333333333333",
-        phase5NoteId: NOTE_ID,
+        workspaceId: "33333333-3333-4333-8333-333333333333",
+        noteId: NOTE_ID,
         sessionFactory,
       },
       global: {
@@ -564,8 +564,8 @@ describe("Workbench EditorSession composition", () => {
           { id: NOTE_ID, title: "Current", markdown: "# Current" },
           { id: OTHER_NOTE_ID, title: "Other", markdown: "# Other seed" },
         ],
-        phase5WorkspaceId: "33333333-3333-4333-8333-333333333333",
-        phase5NoteId: NOTE_ID,
+        workspaceId: "33333333-3333-4333-8333-333333333333",
+        noteId: NOTE_ID,
         sessionFactory,
       },
       global: {
@@ -632,8 +632,8 @@ describe("Workbench EditorSession composition", () => {
           { id: NOTE_ID, title: "Current", markdown: "# Current" },
           { id: OTHER_NOTE_ID, title: "Other", markdown: "# Other seed" },
         ],
-        phase5WorkspaceId: "33333333-3333-4333-8333-333333333333",
-        phase5NoteId: NOTE_ID,
+        workspaceId: "33333333-3333-4333-8333-333333333333",
+        noteId: NOTE_ID,
         sessionFactory,
       },
       global: {
@@ -707,8 +707,8 @@ describe("Workbench EditorSession composition", () => {
     const wrapper = mount(Workbench, {
       props: {
         initialNotes: [{ id: NOTE_ID, title: "Current", markdown: "# Current" }],
-        phase5WorkspaceId: "33333333-3333-4333-8333-333333333333",
-        phase5NoteId: NOTE_ID,
+        workspaceId: "33333333-3333-4333-8333-333333333333",
+        noteId: NOTE_ID,
         sessionFactory,
       },
       global: {
@@ -795,8 +795,8 @@ describe("Workbench EditorSession composition", () => {
     const wrapper = mount(Workbench, {
       props: {
         initialNotes: [{ id: NOTE_ID, title: "Current", markdown: "# Current" }],
-        phase5WorkspaceId: "33333333-3333-4333-8333-333333333333",
-        phase5NoteId: NOTE_ID,
+        workspaceId: "33333333-3333-4333-8333-333333333333",
+        noteId: NOTE_ID,
         sessionFactory,
       },
       global: {

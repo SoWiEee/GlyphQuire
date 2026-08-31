@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GlyphQuire Release artifact manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "candidateSourceSha",
+    "lockfileSha256",
+    "nodeVersion",
+    "pnpmVersion",
+    "migrationJournal",
+    "imageDigests"
+  ],
+  "properties": {
+    "candidateSourceSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "lockfileSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "nodeVersion": { "type": "string", "minLength": 1 },
+    "pnpmVersion": { "type": "string", "minLength": 1 },
+    "migrationJournal": {
+      "type": "object",
+      "required": [
+        "0000",
+        "0001",
+        "0002",
+        "0003",
+        "0004",
+        "0005",
+        "0006",
+        "0007",
+        "0008",
+        "0009",
+        "0010",
+        "0011"
+      ],
+      "patternProperties": {
+        "^00(?:0[0-9]|1[01])$": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "imageDigests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["api", "web", "worker"],
+      "properties": {
+        "api": { "$ref": "#/$defs/imageDigest" },
+        "web": { "$ref": "#/$defs/imageDigest" },
+        "worker": { "$ref": "#/$defs/imageDigest" }
+      }
+    }
+  },
+  "$defs": { "imageDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" } }
+}

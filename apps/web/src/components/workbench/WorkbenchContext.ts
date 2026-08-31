@@ -52,8 +52,8 @@ interface WorkbenchRouteContext {
 export interface WorkbenchContextOptions {
   readonly initialNotes?: readonly WorkbenchNote[];
   readonly sessionFactory?: WorkbenchSessionFactory;
-  readonly phase5WorkspaceId?: string;
-  readonly phase5NoteId?: string;
+  readonly workspaceId?: string;
+  readonly noteId?: string;
   readonly workspaceName?: string;
   readonly accountLabel?: string;
   readonly route?: WorkbenchRouteLocation;
@@ -74,7 +74,7 @@ export interface WorkbenchContextSnapshot {
   readonly noteId: string | null;
   readonly workspaceName?: string;
   readonly accountLabel?: string;
-  readonly phase5Panel: WorkbenchToolPanel | null;
+  readonly toolPanel: WorkbenchToolPanel | null;
   readonly explorerOpen: boolean;
   readonly contextRailOpen: boolean;
   readonly panel: WorkbenchPanel;
@@ -127,7 +127,7 @@ interface MutableWorkbenchContextSnapshot {
   noteId: string | null;
   workspaceName?: string;
   accountLabel?: string;
-  phase5Panel: WorkbenchToolPanel | null;
+  toolPanel: WorkbenchToolPanel | null;
   explorerOpen: boolean;
   contextRailOpen: boolean;
   panel: WorkbenchPanel;
@@ -194,13 +194,13 @@ export function createWorkbenchContext(options: WorkbenchContextOptions = {}): W
     activeNote: initialNote,
     activeNoteId: initialNoteId,
     workspaceId: firstCanonicalUuid(
-      options.phase5WorkspaceId,
+      options.workspaceId,
       options.sessionFactory ? route.workspaceId : null,
     ),
-    noteId: firstCanonicalUuid(options.phase5NoteId, initialNoteId, route.noteId),
+    noteId: firstCanonicalUuid(options.noteId, initialNoteId, route.noteId),
     workspaceName: options.workspaceName,
     accountLabel: options.accountLabel,
-    phase5Panel: null,
+    toolPanel: null,
     explorerOpen: true,
     contextRailOpen: false,
     panel: null,
@@ -229,10 +229,10 @@ export function createWorkbenchContext(options: WorkbenchContextOptions = {}): W
     state.openTabs = state.openTabs
       .map((tab) => state.notes.find((note) => note.id === tab.id))
       .filter((note): note is WorkbenchNote => note !== undefined);
-    state.noteId = firstCanonicalUuid(options.phase5NoteId, state.activeNoteId, route.noteId);
+    state.noteId = firstCanonicalUuid(options.noteId, state.activeNoteId, route.noteId);
     if (state.sessionContext?.workspaceId) {
       state.workspaceId =
-        firstCanonicalUuid(options.phase5WorkspaceId, state.sessionContext.workspaceId) ??
+        firstCanonicalUuid(options.workspaceId, state.sessionContext.workspaceId) ??
         state.workspaceId;
     }
   }
@@ -270,7 +270,7 @@ export function createWorkbenchContext(options: WorkbenchContextOptions = {}): W
     state.workspaceName = context?.workspaceName ?? options.workspaceName;
     state.accountLabel = context?.accountLabel ?? options.accountLabel;
     state.workspaceId = firstCanonicalUuid(
-      options.phase5WorkspaceId,
+      options.workspaceId,
       context?.workspaceId,
       options.sessionFactory ? route.workspaceId : null,
     );
@@ -477,7 +477,7 @@ export function createWorkbenchContext(options: WorkbenchContextOptions = {}): W
   function setPanel(panel: WorkbenchPanel): void {
     if (disposed) return;
     if (panel === null) {
-      state.phase5Panel = null;
+      state.toolPanel = null;
       state.contextRailOpen = false;
       state.panel = null;
       return;
@@ -489,7 +489,7 @@ export function createWorkbenchContext(options: WorkbenchContextOptions = {}): W
     }
     if (panel === "context") {
       state.contextRailOpen = !state.contextRailOpen;
-      state.phase5Panel = null;
+      state.toolPanel = null;
       state.panel = state.contextRailOpen ? "context" : null;
       return;
     }
@@ -499,7 +499,7 @@ export function createWorkbenchContext(options: WorkbenchContextOptions = {}): W
       if (!state.noteId || !validRevision(revision)) return;
     }
     if (panel === "share" && (!state.noteId || state.sessionState?.readOnly)) return;
-    state.phase5Panel = panel;
+    state.toolPanel = panel;
     state.contextRailOpen = false;
     state.panel = panel;
   }

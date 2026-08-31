@@ -112,7 +112,6 @@ test("captures the four README demo scenes", async ({ page }) => {
   });
 
   await page.goto("/__readme-demo?scene=modes");
-  await expect(page.getByLabel("Save status")).toHaveText("Saved · Revision 2");
   await expect(page.getByRole("button", { name: "Open command palette" })).toBeVisible();
   await expect(page.getByRole("tabpanel", { name: /editor$/u })).toBeVisible();
   await expect(page.getByRole("radiogroup", { name: "Editor mode" })).toBeVisible();
@@ -158,9 +157,9 @@ test("captures the four README demo scenes", async ({ page }) => {
     buffer: Buffer.from("safe demo", "utf8"),
   });
   await transfer.getByRole("button", { name: "Start import" }).click();
-  await expect(transfer.getByText("Import: completed")).toBeVisible();
+  await expect(transfer.getByText("Import complete")).toBeVisible();
   await transfer.getByRole("button", { name: "Export workspace", exact: true }).click();
-  await expect(transfer.getByText("Export markdown: completed")).toBeVisible();
+  await expect(transfer.getByText("Markdown export ready")).toBeVisible();
   await assertDemoDomSafe(page);
   await page.screenshot({ path: "docs/assets/readme/03-search-transfer.png", fullPage: false });
 
@@ -168,18 +167,12 @@ test("captures the four README demo scenes", async ({ page }) => {
   await openTool(page, "Create read-only share link");
   const share = page.getByRole("dialog", { name: "Share link" });
   await expect(share.getByRole("button", { name: "Create share link" })).toBeVisible();
-  await share.getByRole("button", { name: "Close Phase 5 tools" }).click();
+  await share.getByRole("button", { name: "Close tools" }).click();
 
   await page.goto("/__readme-demo");
-  await expect(page.getByRole("heading", { name: "Sharing and maintenance" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sharing" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Share link" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Administrative maintenance" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Maintenance", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start search rebuild" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Run asset cleanup" })).toBeVisible();
-  await page.getByRole("button", { name: "Refresh maintenance diagnostics" }).click();
-  await expect(page.getByRole("region", { name: "Dead-letter jobs" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Backup verification" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Administrative maintenance" })).toHaveCount(0);
   await assertDemoDomSafe(page);
-  await page.screenshot({ path: "docs/assets/readme/04-sharing-maintenance.png", fullPage: false });
+  await page.screenshot({ path: "docs/assets/readme/04-sharing.png", fullPage: false });
 });

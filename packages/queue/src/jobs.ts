@@ -38,7 +38,7 @@ export interface JobDispatcher {
   dispatchBatch(handlers: JobRegistry, signal?: AbortSignal): Promise<DispatchSummary>;
 }
 
-export interface Phase5RegistryDiagnostic {
+export interface JobRegistryDiagnostic {
   complete: boolean;
   missing: JobType[];
 }
@@ -81,7 +81,7 @@ export function assertRegistryComplete(
   }
 }
 
-export function assertPhase5Complete(registry: JobRegistry): Phase5RegistryDiagnostic {
+export function assertRequiredJobsComplete(registry: JobRegistry): JobRegistryDiagnostic {
   validateRegistryKeys(registry);
   const missing = P1_JOB_TYPES.filter((type) => typeof registry[type] !== "function");
   return { complete: missing.length === 0, missing: [...missing] };

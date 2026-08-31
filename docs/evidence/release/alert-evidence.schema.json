@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glyphquire.example/schemas/release/alert-evidence.schema.json",
+  "title": "GlyphQuire Release alert evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "producer",
+    "capturedAt",
+    "deliveryDeadlineSeconds",
+    "events"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["blocked", "passed", "failed"] },
+    "producer": { "const": "release-observability" },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "deliveryDeadlineSeconds": { "const": 300 },
+    "blockingReason": { "type": "string", "maxLength": 240, "pattern": "^[A-Za-z0-9 .,;:_-]+$" },
+    "events": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 20,
+      "items": {
+        "$ref": "#/$defs/alertEvent"
+      }
+    }
+  },
+  "$defs": {
+    "alertEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "phase",
+        "alert",
+        "severity",
+        "detectedAt",
+        "emittedAt",
+        "requestId",
+        "correlationId"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "phase": { "enum": ["firing", "resolved"] },
+        "alert": {
+          "enum": [
+            "probe_failure",
+            "backup_failure",
+            "dead_letter",
+            "oldest_queue_age",
+            "database_capacity",
+            "disk_capacity"
+          ]
+        },
+        "severity": { "enum": ["warning", "critical"] },
+        "detectedAt": { "type": "string", "format": "date-time" },
+        "emittedAt": { "type": "string", "format": "date-time" },
+        "deliveredAt": { "type": "string", "format": "date-time" },
+        "deliveryStatus": { "type": "integer", "minimum": 200, "maximum": 299 },
+        "requestId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "correlationId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "jobId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "observedValue": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "threshold": { "type": "number", "minimum": -1000000, "maximum": 1000000 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "passed" } } },
+      "then": {
+        "properties": {
+          "events": {
+            "minItems": 2,
+            "allOf": [
+              {
+                "contains": {
+                  "type": "object",
+                  "required": ["phase"],
+                  "properties": { "phase": { "const": "firing" } }
+                },
+                "minContains": 1
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "required": ["phase"],
+                  "properties": { "phase": { "const": "resolved" } }
+                },
+                "minContains": 1
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

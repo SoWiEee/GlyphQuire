@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "status": "blocked",
+  "scrubbed": true,
+  "target": "isolated",
+  "producer": "release-backup-restore",
+  "capturedAt": "2026-08-31T00:00:00.000Z",
+  "blockingReason": "disposable PostgreSQL and object storage are not provisioned",
+  "encryption": {
+    "algorithm": "AES-256-GCM",
+    "authenticated": true,
+    "keyVersion": "v1"
+  },
+  "retentionDays": 30,
+  "artifacts": {
+    "database": {
+      "authenticated": true,
+      "plaintextBytes": 0,
+      "ciphertextBytes": 0,
+      "plaintextSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "ciphertextSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "objectStorage": {
+      "authenticated": true,
+      "plaintextBytes": 0,
+      "ciphertextBytes": 0,
+      "plaintextSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "ciphertextSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "fileCount": 0,
+      "totalBytes": 0,
+      "aggregateSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "aggregateSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "invariants": {
+    "migrationJournalSha256": "a3662853e91dcea9d934506e3863365f5fb35d58b433e0db9b1d59389c9bffb5",
+    "forwardOnly": true,
+    "schemaVersion": 1,
+    "migrationCount": 12,
+    "notesRows": 0,
+    "noteVersionsRows": 0,
+    "assetsRows": 0,
+    "relationships": true,
+    "rowHashes": true,
+    "canonicalMarkdownPreserved": true
+  },
+  "checks": {
+    "encryption": true,
+    "keyVersion": true,
+    "checksums": true,
+    "aggregateHash": true,
+    "isolation": true,
+    "retention": true,
+    "bounds": true,
+    "migration": true,
+    "relationships": true,
+    "rollbackCanonicalMarkdown": true,
+    "idempotent": true,
+    "temporaryKeyCleanup": true
+  },
+  "recordedAt": "2026-08-31T00:00:00.000Z"
+}

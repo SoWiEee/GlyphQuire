@@ -1,14 +1,17 @@
 import { createPinia, setActivePinia } from "pinia";
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Phase5ApiError } from "../../api/Phase5Client.js";
-import { usePhase5Store, type Phase5ClientPort } from "../../stores/phase5.js";
+import { WorkspaceToolsApiError } from "../../api/WorkspaceToolsClient.js";
+import {
+  useWorkspaceToolsStore,
+  type WorkspaceToolsClientPort,
+} from "../../stores/workspace-tools.js";
 import SearchPalette from "./SearchPalette.vue";
 
 const WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
 const NOTE_ID = "22222222-2222-4222-8222-222222222222";
 
-function client(search: Phase5ClientPort["search"]): Phase5ClientPort {
+function client(search: WorkspaceToolsClientPort["search"]): WorkspaceToolsClientPort {
   return {
     uploadAsset: vi.fn(),
     search,
@@ -18,7 +21,7 @@ function client(search: Phase5ClientPort["search"]): Phase5ClientPort {
     getExport: vi.fn(),
     createShareLink: vi.fn(),
     revokeShareLink: vi.fn(),
-  } as Phase5ClientPort;
+  } as WorkspaceToolsClientPort;
 }
 
 describe("SearchPalette", () => {
@@ -38,7 +41,7 @@ describe("SearchPalette", () => {
       ],
       nextCursor: null,
     }));
-    const store = usePhase5Store();
+    const store = useWorkspaceToolsStore();
     store.configure(client(search));
     const wrapper = mount(SearchPalette, { props: { workspaceId: WORKSPACE_ID } });
     await wrapper.get('input[aria-label="Search notes"]').setValue("needle");
@@ -53,12 +56,16 @@ describe("SearchPalette", () => {
   });
 
   it("shows a uniform permission state without distinguishing tenant existence", async () => {
-    const store = usePhase5Store();
+    const store = useWorkspaceToolsStore();
     store.configure(
       client(
         vi.fn(async () =>
           Promise.reject(
-            new Phase5ApiError("NOTE_NOT_FOUND", 404, "33333333-3333-4333-8333-333333333333"),
+            new WorkspaceToolsApiError(
+              "NOTE_NOT_FOUND",
+              404,
+              "33333333-3333-4333-8333-333333333333",
+            ),
           ),
         ),
       ),

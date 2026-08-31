@@ -1,0 +1,17 @@
+service: release-alert-evaluator
+probe:
+  interval: 30s
+  timeout: 5s
+  endpoint: http://api:3000/api/health
+policy:
+  consecutive_failures: 3
+  rolling_window: 5m
+  failure_ratio: 0.5
+  recovery_successes: 3
+  delivery_deadline: 5m
+capacity:
+  warning_ratio: 0.8
+  critical_ratio: 0.9
+transport:
+  router_endpoint: http://router:8080/events
+  payload: sanitized-alert-event-v1
