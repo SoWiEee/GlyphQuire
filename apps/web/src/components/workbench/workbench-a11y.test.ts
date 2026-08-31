@@ -12,6 +12,27 @@ const notes = [
   },
 ];
 
+function installButtonKeyboardActivationShim(): () => void {
+  const activateButton = (event: Event): void => {
+    if (!(event instanceof KeyboardEvent) || event.key !== "Enter") return;
+    const target = event.target;
+    if (
+      event.defaultPrevented ||
+      !(target instanceof HTMLButtonElement) ||
+      target.disabled ||
+      target !== document.activeElement
+    ) {
+      return;
+    }
+
+    // happy-dom dispatches keyboard events but does not implement the browser
+    // default action that activates a focused button on Enter.
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  };
+  document.addEventListener("keydown", activateButton);
+  return () => document.removeEventListener("keydown", activateButton);
+}
+
 describe("Workbench accessibility smoke", () => {
   beforeEach(() => {
     const pinia = createPinia();
@@ -44,19 +65,20 @@ describe("Workbench accessibility smoke", () => {
 
     expect(wrapper.get('button[aria-label="Open shared links"]').isDisabled()).toBe(true);
 
+    const removeKeyboardActivationShim = installButtonKeyboardActivationShim();
     const accountButton = wrapper.get('button[aria-label="Open account menu"]').element;
     accountButton.focus();
+    expect(document.activeElement).toBe(accountButton);
     accountButton.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
     );
-    // happy-dom does not synthesize a native button click from keydown; this is
-    // the browser's default Enter activation represented explicitly in the smoke.
-    accountButton.click();
     await nextTick();
     expect(wrapper.get('[role="menu"][aria-label="Account menu"]').exists()).toBe(true);
 
-    const accountMenu = wrapper.get('[role="menu"][aria-label="Account menu"]').element;
-    accountMenu.dispatchEvent(
+    const signOutButton = wrapper.get('button[aria-label="Sign out"]').element;
+    signOutButton.focus();
+    expect(document.activeElement).toBe(signOutButton);
+    signOutButton.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
     );
     await nextTick();
@@ -66,17 +88,19 @@ describe("Workbench accessibility smoke", () => {
     accountButton.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
     );
-    accountButton.click();
     await nextTick();
-    const signOutButton = wrapper.get('button[aria-label="Sign out"]').element;
-    signOutButton.focus();
-    signOutButton.dispatchEvent(
+    expect(wrapper.get('[role="menu"][aria-label="Account menu"]').exists()).toBe(true);
+
+    const reopenedSignOutButton = wrapper.get('button[aria-label="Sign out"]').element;
+    reopenedSignOutButton.focus();
+    expect(document.activeElement).toBe(reopenedSignOutButton);
+    reopenedSignOutButton.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
     );
-    signOutButton.click();
     await nextTick();
     expect(wrapper.emitted("account-action")).toEqual([["sign-out"]]);
 
+    removeKeyboardActivationShim();
     wrapper.unmount();
   });
 });
