@@ -113,6 +113,15 @@
         </button>
         <button
           type="button"
+          aria-label="Manage custom blocks"
+          :aria-describedby="workspaceAvailable ? undefined : 'context-rail-workspace-unavailable'"
+          :disabled="!workspaceAvailable"
+          @click="emit('action', 'custom-blocks')"
+        >
+          Custom Blocks
+        </button>
+        <button
+          type="button"
           aria-label="Import or export"
           :aria-describedby="workspaceAvailable ? undefined : 'context-rail-workspace-unavailable'"
           :disabled="!workspaceAvailable"

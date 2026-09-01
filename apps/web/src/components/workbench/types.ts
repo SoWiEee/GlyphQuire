@@ -48,6 +48,7 @@ export type WorkbenchEditorMode = "source" | "visual" | "split";
 /** Which contextual tool panel is open in the workbench. */
 export type WorkbenchToolPanel =
   | "assets"
+  | "custom-blocks"
   | "search"
   | "transfer"
   | "share"
@@ -58,7 +59,14 @@ export type WorkbenchToolPanel =
 export type WorkbenchPanel = "explorer" | "context" | WorkbenchToolPanel | null;
 
 /** Actions exposed by the context rail; outline selection is a separate event. */
-export type ContextAction = "outline" | "history" | "assets" | "search" | "transfer" | "share";
+export type ContextAction =
+  | "outline"
+  | "history"
+  | "assets"
+  | "custom-blocks"
+  | "search"
+  | "transfer"
+  | "share";
 
 /** Account actions are forwarded to the authenticated host without side effects here. */
 export type WorkbenchAccountAction = "theme" | "sign-out";

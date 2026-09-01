@@ -199,6 +199,12 @@
           @open="onSharedLinkOpen"
           @revoke="onSharedLinkRevoke"
         />
+        <CustomBlocksPanel
+          v-else-if="toolPanel === 'custom-blocks'"
+          :workspace-id="currentWorkspaceId"
+          @close="closeToolPanel"
+          @insert="insertCustomBlock"
+        />
       </div>
     </div>
 
@@ -233,6 +239,7 @@ import SourceEditor from "../source/SourceEditor.vue";
 import VisualEditor from "../visual/VisualEditor.vue";
 import SplitEditor from "../split/SplitEditor.vue";
 import ThemeEditorPanel from "../theme-editor/ThemeEditorPanel.vue";
+import CustomBlocksPanel from "../custom-blocks/CustomBlocksPanel.vue";
 import AssetManager from "../assets/AssetManager.vue";
 import SearchPalette from "../search/SearchPalette.vue";
 import TransferDialog from "../transfer/TransferDialog.vue";
@@ -240,6 +247,7 @@ import ShareLinkDialog from "../share/ShareLinkDialog.vue";
 import SharedLinksPanel from "../share/SharedLinksPanel.vue";
 import VersionHistory from "../history/VersionHistory.vue";
 import { useThemeStore } from "../../stores/theme.js";
+import { useCustomBlocksStore } from "../../stores/custom-blocks.js";
 import { useWorkspaceToolsStore } from "../../stores/workspace-tools.js";
 import type { NoteResult } from "@glyphquire/api-contract";
 import type { EditorSessionState } from "../../editors/editor-session.types.js";
@@ -272,6 +280,7 @@ import {
 import { trapFocus, type FocusTrapHandle } from "../../lib/focusTrap.js";
 
 const themeStore = useThemeStore();
+const customBlocksStore = useCustomBlocksStore();
 const workspaceToolsStore = useWorkspaceToolsStore();
 
 const props = defineProps<{
@@ -328,6 +337,8 @@ const toolPanelLabel = computed(() => {
       return "Version history";
     case "shared-links":
       return "Shared links";
+    case "custom-blocks":
+      return "Custom Blocks";
     default:
       return "Tools";
   }
@@ -626,6 +637,19 @@ function onBlockCommand(definition: BlockCommandDefinition): void {
   closePalette();
 }
 
+function serializeCustomBlock(
+  record: import("@glyphquire/api-contract").CustomBlockRecord,
+): string {
+  const attributes = Object.entries(record.definition.propsSchema)
+    .filter(([, descriptor]) => descriptor.default !== undefined)
+    .map(
+      ([name, descriptor]) =>
+        `${name}=\"${String(descriptor.default).replace(/[\\"]/gu, (character) => `\\${character}`)}\"`,
+    );
+  const opening = `:::${record.name}{version=\"${record.version}\"${attributes.length ? ` ${attributes.join(" ")}` : ""}}`;
+  return record.definition.contentPolicy === "none" ? `${opening}\n:::` : `${opening}\n\n:::`;
+}
+
 function openToolPanel(panel: WorkbenchToolPanel): void {
   workbenchContext.setPanel(panel);
 }
@@ -642,6 +666,15 @@ function insertAssetReference(reference: string): void {
   const markdown = session.snapshot().markdown;
   const separator = markdown.endsWith("\n") || markdown.length === 0 ? "" : "\n";
   session.edit(`${markdown}${separator}\n![Asset](${reference})\n`);
+  closeToolPanel();
+}
+
+function insertCustomBlock(markdown: string): void {
+  const session = activeSession.value;
+  if (!session || session.snapshot().readOnly) return;
+  const current = session.snapshot().markdown;
+  const separator = current.endsWith("\n") || current.length === 0 ? "" : "\n";
+  session.edit(`${current}${separator}\n${markdown}\n`);
   closeToolPanel();
 }
 
@@ -711,6 +744,13 @@ const commands = computed<WorkbenchCommand[]>(() => {
         run: () => openToolPanel("assets"),
       },
       {
+        id: "tools-custom-blocks",
+        label: "Manage Custom Blocks",
+        hint: "Workspace",
+        category: "workspace",
+        run: () => openToolPanel("custom-blocks"),
+      },
+      {
         id: "tools-search",
         label: "Search notes",
         hint: "Workspace",
@@ -740,7 +780,18 @@ const commands = computed<WorkbenchCommand[]>(() => {
 
 const blockCommands = computed<WorkbenchCommand[]>(() =>
   paletteOpen.value && slashRequest.value
-    ? BLOCK_COMMANDS.map((definition) => materializeBlockCommand(definition, onBlockCommand))
+    ? [
+        ...BLOCK_COMMANDS,
+        ...customBlocksStore.definitions
+          .filter((record) => record.status === "published")
+          .map((record) => ({
+            id: `custom-block-${record.id}`,
+            label: record.name,
+            category: "block" as const,
+            markdown: serializeCustomBlock(record),
+            cursorOffset: 0,
+          })),
+      ].map((definition) => materializeBlockCommand(definition, onBlockCommand))
     : [],
 );
 const paletteCommands = computed<WorkbenchCommand[]>(() =>
@@ -778,6 +829,13 @@ function syncToolPanelTrap(): void {
 }
 
 watch(toolPanel, syncToolPanelTrap, { flush: "post" });
+watch(
+  currentWorkspaceId,
+  (workspaceId) => {
+    if (workspaceId) void customBlocksStore.load(workspaceId).catch(() => undefined);
+  },
+  { immediate: true },
+);
 
 onMounted(() => {
   window.addEventListener("keydown", onGlobalKeydown, true);

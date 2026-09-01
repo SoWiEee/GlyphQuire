@@ -2,4 +2,5 @@
 export { useNotesStore } from "./notes.js";
 export { useNoteVersionsStore } from "./noteVersions.js";
 export { useConflictStore } from "./conflict.js";
+export { useCustomBlocksStore } from "./custom-blocks.js";
 export type { ActiveConflict } from "./conflict.js";
