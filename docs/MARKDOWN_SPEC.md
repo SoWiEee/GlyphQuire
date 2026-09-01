@@ -1050,19 +1050,24 @@ Example manifest concept：
   "name": "user-rating",
   "version": 1,
   "kind": "container",
-  "props": {
+  "propsSchema": {
     "value": {
       "type": "number",
-      "min": 0,
-      "max": 5
+      "required": true,
+      "minimum": 0,
+      "maximum": 5
     },
     "label": {
-      "type": "string"
+      "type": "string",
+      "required": false,
+      "maxLength": 120
     }
   },
-  "renderer": {
-    "preset": "rating"
-  }
+  "contentPolicy": "optional",
+  "icon": "info",
+  "preset": "rating",
+  "variant": "solid",
+  "capabilities": ["static"]
 }
 ```
 
@@ -1094,7 +1099,9 @@ Definition lifecycle：
 - Built-in names remain reserved and MUST NOT be shadowed。
 - Disabled、deleted、unknown 或 unavailable definition MUST render an unsupported placeholder while preserving the original directive for round-trip serialization。
 - Cross-workspace definition resolution is invalid。
-- Executable third-party blocks are outside P0。
+- The first release accepts only `static` and `interactive-ui` capabilities。
+- Executable third-party blocks, sandbox runtime requests, and arbitrary code
+  are outside this contract。
 
 Production release priority and evidence: see `SPEC.md` §49 Production Readiness Contract。
 
@@ -1107,16 +1114,17 @@ Detailed requirement: see §29。
 v0.1 user definition MAY specify：
 
 - block name
-- title/description
-- property schema
+- positive definition version
+- `container`, `leaf`, or `text` kind
+- bounded string, number, and boolean property schema
 - defaults
 - enums
-- number limits
-- nested-content policy
-- approved renderer preset
-- icon
-- theme token hooks
-- approved runtime capability
+- number minimum/maximum limits
+- `none`, `optional`, or `required` nested-content policy
+- one approved renderer preset and optional variant
+- one allowlisted icon
+- up to eight semantic theme-token mappings
+- `static` and/or `interactive-ui` capability
 
 MUST NOT specify：
 
@@ -1183,6 +1191,11 @@ font
 spacing
 decoration
 ```
+
+Theme mode, selected system theme, and bounded user overrides are account
+preferences, not document data. They MUST be persisted through the authenticated
+preferences API and MUST NOT be serialized into Markdown frontmatter or
+directives.
 
 ---
 

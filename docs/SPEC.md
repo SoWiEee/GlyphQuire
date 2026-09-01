@@ -608,8 +608,8 @@ Built-in preset 與 user-defined block 共用相同 Component Registry contract�
 - icon
 - component preset / variant
 - design-token mapping
-- sandbox runtime request
 - declarative composition of approved primitives
+- capabilities limited to `static` and `interactive-ui`
 
 不允許：
 
@@ -618,8 +618,33 @@ Built-in preset 與 user-defined block 共用相同 Component Registry contract�
 - 任意 filesystem access
 - 任意 network credentials
 - mutation application global state
+- sandbox runtime request（需另行核准 runtime contract；不屬於目前 Custom Block API）
 
 ---
+
+### 11.4 Custom Block persistence contract
+
+Custom Block definitions are workspace-scoped records with a mutable draft and
+immutable published versions. Owners and editors may create, update drafts,
+publish, or remove drafts; viewers may list definitions but cannot mutate them.
+Every mutation carries a canonical `operationId` and `baseRevision` compare-and-
+swap token. A stale revision returns `REVISION_CONFLICT`; a reused operation
+identifier with a different request returns `OPERATION_REUSED`.
+
+The first-party endpoints are:
+
+```text
+GET    /api/v1/workspaces/:workspaceId/custom-blocks
+POST   /api/v1/workspaces/:workspaceId/custom-blocks
+PUT    /api/v1/custom-blocks/:id/draft
+POST   /api/v1/custom-blocks/:id/publish
+DELETE /api/v1/custom-blocks/:id       # draft only
+```
+
+Definitions are validated by the shared `theme-sdk` schema. The schema limits
+property count, string/enum sizes, icon names, renderer presets, token paths,
+and capabilities before persistence. Published versions are never edited in
+place; a new positive version must be drafted and published instead.
 
 ## 12. Plugin Manifest
 
@@ -708,9 +733,36 @@ v1：
 
 v1 不允許 unrestricted global CSS。
 
+### 13.4 Persisted user preferences
+
+Theme mode and bounded token/variant overrides are persisted for the
+authenticated user, independent of the active workspace or device. The
+preference API is intentionally user-scoped: clients MUST NOT send a user ID or
+workspace ID. `themeId` may reference only a built-in system theme; workspace
+themes can be copied into bounded overrides but are not global preference
+identities. Writes use `baseRevision` compare-and-swap and return
+`REVISION_CONFLICT` when stale.
+
+```text
+GET /api/v1/me/preferences/theme
+PUT /api/v1/me/preferences/theme
+```
+
+The web client applies the server result through `ThemeProvider` and keeps
+failed saves as an unapplied draft. No theme preference is stored in
+`localStorage`, URL parameters, or document Markdown.
+
+### 13.5 Icon contract
+
+Persisted icon references use a finite Lucide name allowlist shared by
+`theme-sdk`, API validation, and the web `GqIcon` wrapper. Unknown names are
+rejected before persistence. Decorative icons are `aria-hidden`; meaningful
+icons require an accessible label. Components MUST NOT render arbitrary icon
+component names or raw SVG supplied by a user.
+
 後期可加入 restricted CSS sandbox。
 
-### 13.4 Visual direction (P1)
+### 13.6 Visual direction (P1)
 
 GlyphQuire 使用 Paper Canvas 作為 editor 的視覺基準：內容區以留白、紙張表面與清楚的排版層級為主，只有選取中或可互動的區塊才顯示額外 chrome。Built-in block 不得依賴裝飾性漸層、玻璃擬態、閃爍動畫或隨機旋轉來傳達功能。
 
@@ -1324,6 +1376,15 @@ DELETE /api/v1/share-links/:id
 
 GET    /api/v1/themes
 POST   /api/v1/themes
+
+GET    /api/v1/me/preferences/theme
+PUT    /api/v1/me/preferences/theme
+
+GET    /api/v1/workspaces/:workspaceId/custom-blocks
+POST   /api/v1/workspaces/:workspaceId/custom-blocks
+PUT    /api/v1/custom-blocks/:id/draft
+POST   /api/v1/custom-blocks/:id/publish
+DELETE /api/v1/custom-blocks/:id
 ```
 
 Hono RPC 作為 first-party frontend type-safe client。
