@@ -73,6 +73,7 @@ function walk(
       case "callout":
       case "sticky":
       case "toggle":
+      case "custom-block":
       case "quote":
       case "unknown-directive":
       case "footnoteDefinition":

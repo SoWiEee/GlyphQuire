@@ -5,6 +5,7 @@ import type { BlockNode, ValidationIssue } from "../ast/nodes.js";
 import type { DocumentDiagnostic } from "../validation/diagnostics.js";
 
 export type BlockCapability = "static" | "interactive-ui" | "sandbox-runtime" | "network-request";
+export type DeclarativeBlockCapability = "static" | "interactive-ui";
 
 export type DirectiveMdastNode = ContainerDirective | LeafDirective | TextDirective;
 

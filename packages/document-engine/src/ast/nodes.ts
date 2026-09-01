@@ -32,6 +32,7 @@ export type BlockNode =
   | ColumnsNode
   | ColumnNode
   | RuntimeNode
+  | CustomBlockNode
   | UnknownDirectiveNode
   | InvalidBlockNode;
 
@@ -188,6 +189,19 @@ export interface RuntimeNode {
   runtime: "p5" | "canvas";
   props: RuntimeProps;
   source: string;
+}
+
+export type CustomBlockScalar = string | number | boolean;
+
+export interface CustomBlockNode {
+  type: "custom-block";
+  name: string;
+  version: number;
+  attributes: Record<string, string>;
+  props: Record<string, CustomBlockScalar>;
+  children: BlockNode[];
+  /** Optional authored source retained by importers that can provide it. */
+  source?: string;
 }
 
 export interface UnknownDirectiveNode {

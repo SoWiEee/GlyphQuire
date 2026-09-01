@@ -116,6 +116,8 @@ function serializeBlock(
       );
     case "invalid-block":
       return serializeInvalid(node, registry, context);
+    case "custom-block":
+      return serializeDirectiveBlock(node, registry, context);
     default:
       return serializeDirectiveBlock(node, registry, context);
   }
@@ -167,7 +169,8 @@ function serializeDirectiveBlock(
   registry: BlockRegistry,
   context: SerializeContext,
 ): RootContent {
-  const name = node.type === "runtime" ? node.runtime : node.type;
+  const name =
+    node.type === "runtime" ? node.runtime : node.type === "custom-block" ? node.name : node.type;
   const def = registry.get(name);
   if (!def) {
     // Caller contract violation: the registry passed to serialize/

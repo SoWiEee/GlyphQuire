@@ -7,3 +7,4 @@ export {
   directiveTypeOf,
 } from "./registry.js";
 export { createRegistry } from "./builtins.js";
+export { registerDeclarative, parseDeclarativeProps } from "./declarative.js";

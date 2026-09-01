@@ -6,6 +6,7 @@ import type {
   themeComponentVariantsSchema,
   blockManifestSchema,
   runtimeManifestSchema,
+  customBlockDefinitionSchema,
 } from "./schemas.js";
 
 export type ThemeManifest = z.infer<typeof themeManifestSchema>;
@@ -14,3 +15,4 @@ export type ThemeTokensInput = z.infer<typeof themeTokensSchema>;
 export type ThemeComponentVariantsInput = z.infer<typeof themeComponentVariantsSchema>;
 export type BlockManifest = z.infer<typeof blockManifestSchema>;
 export type RuntimeManifest = z.infer<typeof runtimeManifestSchema>;
+export type CustomBlockDefinition = z.infer<typeof customBlockDefinitionSchema>;

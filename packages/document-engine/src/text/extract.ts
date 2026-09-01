@@ -56,6 +56,12 @@ function collectBlocks(nodes: BlockNode[], parts: string[]): void {
       case "columns":
         collectBlocks(node.children, parts);
         break;
+      case "custom-block":
+        for (const value of Object.values(node.props)) {
+          if (typeof value === "string") parts.push(value);
+        }
+        collectBlocks(node.children, parts);
+        break;
       case "unknown-directive":
       case "invalid-block":
         collectBlocks(node.children, parts);

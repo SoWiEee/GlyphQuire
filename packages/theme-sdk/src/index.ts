@@ -9,6 +9,15 @@ export {
   pluginPermissionSchema,
   isValidColorValue,
   isValidFontValue,
+  CUSTOM_BLOCK_MAX_PROPS,
+  CUSTOM_BLOCK_MAX_ENUM_VALUES,
+  CUSTOM_BLOCK_MAX_STRING_LENGTH,
+  CUSTOM_BLOCK_PRESETS,
+  CUSTOM_BLOCK_VARIANTS,
+  CUSTOM_BLOCK_CAPABILITIES,
+  CUSTOM_BLOCK_CONTENT_POLICIES,
+  customBlockPropSchema,
+  customBlockDefinitionSchema,
 } from "./schemas.js";
 export { CUSTOM_BLOCK_ICON_NAMES, iconNameSchema } from "./icons.js";
 export type {
@@ -18,6 +27,7 @@ export type {
   ThemeComponentVariantsInput,
   BlockManifest,
   RuntimeManifest,
+  CustomBlockDefinition,
 } from "./types.js";
 export type { IconName } from "./icons.js";
 export {
