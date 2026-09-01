@@ -73,3 +73,10 @@ export {
   type AccountDeletionStatus,
   type AccountDeletionManifest,
 } from "./account-deletions.js";
+export {
+  customBlocks,
+  customBlocksRelations,
+  customBlockVersions,
+  customBlockVersionsRelations,
+  type CustomBlockVersionStatus,
+} from "./custom-blocks.js";

@@ -33,6 +33,10 @@ export {
   userThemesRelations,
   userPreferences,
   userPreferencesRelations,
+  customBlocks,
+  customBlocksRelations,
+  customBlockVersions,
+  customBlockVersionsRelations,
   jobs,
   jobsRelations,
   idempotencyRecords,
@@ -74,6 +78,7 @@ export {
   type AccountDeletionStatus,
   type AccountDeletionManifest,
   type ThemePreferenceMode,
+  type CustomBlockVersionStatus,
 } from "./schema/index.js";
 
 export {
@@ -108,6 +113,8 @@ import type {
   themes,
   userThemes,
   userPreferences,
+  customBlocks,
+  customBlockVersions,
   workspaceMembers,
   workspaces,
   workspaceDeletions,
@@ -132,6 +139,10 @@ export type UserTheme = InferSelectModel<typeof userThemes>;
 export type NewUserTheme = InferInsertModel<typeof userThemes>;
 export type UserPreference = InferSelectModel<typeof userPreferences>;
 export type NewUserPreference = InferInsertModel<typeof userPreferences>;
+export type CustomBlock = InferSelectModel<typeof customBlocks>;
+export type NewCustomBlock = InferInsertModel<typeof customBlocks>;
+export type CustomBlockVersion = InferSelectModel<typeof customBlockVersions>;
+export type NewCustomBlockVersion = InferInsertModel<typeof customBlockVersions>;
 export type Job = InferSelectModel<typeof jobs>;
 export type NewJob = InferInsertModel<typeof jobs>;
 export type IdempotencyRecord = InferSelectModel<typeof idempotencyRecords>;

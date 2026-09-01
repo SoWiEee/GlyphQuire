@@ -25,6 +25,7 @@ export * from "./share-links/types.js";
 export * from "./maintenance/schemas.js";
 export * from "./maintenance/types.js";
 export * from "./preferences/index.js";
+export * from "./custom-blocks/index.js";
 
 // The public cursor contract is the canonical encoded job cursor. Note pages
 // continue to expose their transport cursor schema from `notes/schemas.js`.

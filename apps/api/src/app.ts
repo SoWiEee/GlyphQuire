@@ -74,6 +74,11 @@ import {
   type UserPreferenceService,
 } from "./modules/preferences/UserPreferenceService.js";
 import { createUserPreferenceRoutes } from "./routes/v1/preferences.js";
+import {
+  CustomBlockServiceImpl,
+  type CustomBlockService,
+} from "./modules/custom-blocks/CustomBlockService.js";
+import { createCustomBlockRoutes } from "./routes/v1/custom-blocks.js";
 import { createSearchRoutes } from "./routes/v1/search.js";
 import { createAssetRoutes } from "./routes/v1/assets.js";
 import { createTransferRoutes } from "./routes/v1/transfer.js";
@@ -105,6 +110,7 @@ export interface AppDependencies {
   noteService?: NoteService;
   themeService?: ThemeService;
   userPreferenceService?: UserPreferenceService;
+  customBlockService?: CustomBlockService;
   searchService?: SearchService;
   workspaceDeletionService?: WorkspaceDeletionService;
   accountDeletionService?: AccountDeletionService;
@@ -159,6 +165,7 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
   const themeService = dependencies.themeService ?? new ThemeServiceImpl(db);
   const userPreferenceService =
     dependencies.userPreferenceService ?? new UserPreferenceServiceImpl(db);
+  const customBlockService = dependencies.customBlockService ?? new CustomBlockServiceImpl(db);
   const operatorAuthorizer =
     dependencies.operatorAuthorizer ?? createOperatorAuthorizer(env.OPERATIONS_OPERATOR_IDS);
   const jobDispatcher = dependencies.jobDispatcher ?? new PostgresJobDispatcher(db);
@@ -425,6 +432,7 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
   app.route("/api/v1", createVersionRoutes(noteService));
   app.route("/api/v1", createThemeRoutes(themeService));
   app.route("/api/v1", createUserPreferenceRoutes(userPreferenceService));
+  app.route("/api/v1", createCustomBlockRoutes(customBlockService));
   app.route("/api/v1", createSearchRoutes(searchService, operatorAuthorizer));
   if (assetService) app.route("/api/v1", createAssetRoutes(assetService));
   if (importService) app.route("/api/v1", createTransferRoutes(importService, exportService));
