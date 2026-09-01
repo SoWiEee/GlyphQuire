@@ -37,7 +37,12 @@
           New block
         </button>
       </div>
-      <CustomBlockForm v-if="showForm" @save="onCreate" @cancel="showForm = false" />
+      <CustomBlockForm
+        v-if="showForm"
+        :initial="editingDefinition"
+        @save="onSave"
+        @cancel="cancelForm"
+      />
       <ul v-else class="grid gap-2">
         <li
           v-for="record in store.definitions"
@@ -49,6 +54,9 @@
           <span class="text-[10px] uppercase text-gray-500"
             >{{ record.status }} · v{{ record.version }}</span
           >
+          <button type="button" class="rounded border px-2 py-1 text-[11px]" @click="edit(record)">
+            {{ record.status === "draft" ? "Edit" : "New version" }}
+          </button>
           <button
             v-if="record.status === 'draft'"
             type="button"
@@ -74,6 +82,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import type { CustomBlockDefinition } from "@glyphquire/theme-sdk";
+import type { CustomBlockRecord } from "@glyphquire/api-contract";
 import { useCustomBlocksStore } from "../../stores/custom-blocks.js";
 import CustomBlockForm from "./CustomBlockForm.vue";
 import CustomBlockPicker from "./CustomBlockPicker.vue";
@@ -83,11 +92,33 @@ const props = defineProps<{ workspaceId: string }>();
 const emit = defineEmits<{ close: []; insert: [markdown: string] }>();
 const store = useCustomBlocksStore();
 const showForm = ref(false);
+const editingDefinition = ref<CustomBlockDefinition | undefined>();
 
-async function onCreate(definition: CustomBlockDefinition): Promise<void> {
+function edit(record: CustomBlockRecord): void {
+  editingDefinition.value = {
+    ...record.definition,
+    version: record.status === "published" ? record.version + 1 : record.version,
+  };
+  showForm.value = true;
+}
+
+function cancelForm(): void {
+  showForm.value = false;
+  editingDefinition.value = undefined;
+}
+
+async function onSave(definition: CustomBlockDefinition): Promise<void> {
   try {
-    await store.create(definition);
-    showForm.value = false;
+    if (editingDefinition.value) {
+      const current = store.definitions.find(
+        (record) => record.name === editingDefinition.value?.name,
+      );
+      if (!current) throw new Error("Custom Block is no longer available");
+      await store.updateDraft(current.id, definition);
+    } else {
+      await store.create(definition);
+    }
+    cancelForm();
   } catch {
     // Store owns the user-facing error projection.
   }

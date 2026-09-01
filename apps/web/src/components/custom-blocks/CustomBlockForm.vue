@@ -39,6 +39,14 @@
     </div>
     <div class="grid grid-cols-2 gap-2">
       <label class="text-xs font-medium text-gray-700"
+        >Kind
+        <select v-model="kind" class="mt-1 w-full rounded border px-2 py-1.5 text-sm">
+          <option value="container">Container</option>
+          <option value="leaf">Leaf</option>
+          <option value="text">Text</option>
+        </select>
+      </label>
+      <label class="text-xs font-medium text-gray-700"
         >Content
         <select v-model="contentPolicy" class="mt-1 w-full rounded border px-2 py-1.5 text-sm">
           <option value="none">No nested content</option>
@@ -91,6 +99,7 @@ const emit = defineEmits<{ save: [definition: CustomBlockDefinition]; cancel: []
 const initial = props.initial;
 const name = ref(initial?.name ?? "my-block");
 const version = ref(initial?.version ?? 1);
+const kind = ref<CustomBlockDefinition["kind"]>(initial?.kind ?? "container");
 const preset = ref(initial?.preset ?? "card");
 const icon = ref(initial?.icon ?? "info");
 const contentPolicy = ref<CustomBlockDefinition["contentPolicy"]>(
@@ -115,7 +124,7 @@ function submit(): void {
   const result = customBlockDefinitionSchema.safeParse({
     name: name.value,
     version: version.value,
-    kind: "container",
+    kind: kind.value,
     propsSchema: parsedProps,
     contentPolicy: contentPolicy.value,
     icon: icon.value,

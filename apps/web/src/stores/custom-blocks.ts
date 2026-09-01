@@ -61,10 +61,29 @@ export const useCustomBlocksStore = defineStore("custom-blocks", () => {
       );
   }
 
+  async function mutation<T>(run: () => Promise<T>): Promise<T> {
+    busy.value = true;
+    error.value = null;
+    try {
+      return await run();
+    } catch (cause) {
+      error.value = cause instanceof Error ? cause.message : "Custom Block action failed.";
+      throw cause;
+    } finally {
+      busy.value = false;
+    }
+  }
+
   async function create(definition: CustomBlockDefinition): Promise<CustomBlockRecord> {
-    const record = await client.value.create(requireWorkspace(), operationIdFactory(), definition);
-    replace(record);
-    return record;
+    return mutation(async () => {
+      const record = await client.value.create(
+        requireWorkspace(),
+        operationIdFactory(),
+        definition,
+      );
+      replace(record);
+      return record;
+    });
   }
 
   async function updateDraft(
@@ -73,27 +92,33 @@ export const useCustomBlocksStore = defineStore("custom-blocks", () => {
   ): Promise<CustomBlockRecord> {
     const current = definitions.value.find((item) => item.id === blockId);
     if (!current) throw new Error("Custom Block is no longer available");
-    const record = await client.value.updateDraft(
-      blockId,
-      operationIdFactory(),
-      current.revision,
-      definition,
-    );
-    replace(record);
-    return record;
+    return mutation(async () => {
+      const record = await client.value.updateDraft(
+        blockId,
+        operationIdFactory(),
+        current.revision,
+        definition,
+      );
+      replace(record);
+      return record;
+    });
   }
 
   async function publish(blockId: string): Promise<CustomBlockRecord> {
     const current = definitions.value.find((item) => item.id === blockId);
     if (!current) throw new Error("Custom Block is no longer available");
-    const record = await client.value.publish(blockId, operationIdFactory(), current.revision);
-    replace(record);
-    return record;
+    return mutation(async () => {
+      const record = await client.value.publish(blockId, operationIdFactory(), current.revision);
+      replace(record);
+      return record;
+    });
   }
 
   async function remove(blockId: string): Promise<void> {
-    await client.value.remove(blockId);
-    definitions.value = definitions.value.filter((item) => item.id !== blockId);
+    await mutation(async () => {
+      await client.value.remove(blockId);
+      definitions.value = definitions.value.filter((item) => item.id !== blockId);
+    });
   }
 
   return {
