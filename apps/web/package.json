@@ -24,6 +24,7 @@
     "@glyphquire/document-engine": "workspace:*",
     "@glyphquire/runtime-protocol": "workspace:*",
     "@glyphquire/theme-engine": "workspace:*",
+    "@lucide/vue": "1.38.0",
     "@milkdown/kit": "7.22.1",
     "katex": "^0.18.4",
     "pinia": "^3.0.0",

@@ -1,11 +1,55 @@
 import { describe, expect, it } from "vitest";
 import {
+  CUSTOM_BLOCK_ICON_NAMES,
+  iconNameSchema,
   themeTokensSchema,
   partialThemeTokensSchema,
   themeComponentVariantsSchema,
   themeManifestSchema,
   pluginManifestSchema,
 } from "../src/index.js";
+
+describe("iconNameSchema", () => {
+  it("accepts every allowlisted control and Custom Block icon", () => {
+    expect(CUSTOM_BLOCK_ICON_NAMES).toEqual([
+      "x",
+      "check",
+      "loader-circle",
+      "circle-alert",
+      "info",
+      "lightbulb",
+      "sticky-note",
+      "chevron-down",
+      "chevrons-right",
+      "columns-3",
+      "layout-panel-top",
+      "search",
+      "upload",
+      "download",
+      "link-2",
+      "settings",
+      "palette",
+      "play",
+      "square",
+      "rotate-ccw",
+      "bold",
+      "italic",
+      "heading-2",
+      "list",
+      "file-text",
+    ]);
+
+    for (const name of CUSTOM_BLOCK_ICON_NAMES) {
+      expect(iconNameSchema.safeParse(name).success).toBe(true);
+    }
+  });
+
+  it("rejects icon names outside the allowlist", () => {
+    expect(iconNameSchema.safeParse("sparkles").success).toBe(false);
+    expect(iconNameSchema.safeParse("<svg>").success).toBe(false);
+    expect(iconNameSchema.safeParse(42).success).toBe(false);
+  });
+});
 
 describe("themeTokensSchema", () => {
   it("accepts valid complete tokens", () => {

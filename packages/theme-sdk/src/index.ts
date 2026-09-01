@@ -10,6 +10,7 @@ export {
   isValidColorValue,
   isValidFontValue,
 } from "./schemas.js";
+export { CUSTOM_BLOCK_ICON_NAMES, iconNameSchema } from "./icons.js";
 export type {
   ThemeManifest,
   PluginManifest,
@@ -18,6 +19,7 @@ export type {
   BlockManifest,
   RuntimeManifest,
 } from "./types.js";
+export type { IconName } from "./icons.js";
 export {
   validateThemeManifest,
   validateColorValue,
