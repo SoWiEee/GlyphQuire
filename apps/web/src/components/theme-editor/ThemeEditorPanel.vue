@@ -48,12 +48,15 @@
         </div>
 
         <div class="px-4 pb-3">
+          <p v-if="themeStore.error" class="mb-2 text-xs text-red-600" role="alert">
+            {{ themeStore.error }}
+          </p>
           <ThemeActions
             :has-changes="editor.hasUnsavedChanges.value"
             :is-dark="themeContext.isDark.value"
             @save="onSave"
             @reset="editor.reset()"
-            @toggle-dark="themeContext.isDark.value = !themeContext.isDark.value"
+            @toggle-dark="onToggleDark"
           />
         </div>
       </aside>
@@ -67,6 +70,7 @@ import GqIcon from "../icons/GqIcon.vue";
 import { useThemeStore } from "../../stores/theme.js";
 import { THEME_INJECTION_KEY, type ThemeContext } from "../../themes/ThemeProvider.js";
 import { useThemeEditor } from "../../themes/useThemeEditor.js";
+import { useThemePersistence } from "../../themes/useThemePersistence.js";
 import ThemeSelector from "./ThemeSelector.vue";
 import TokenEditor from "./TokenEditor.vue";
 import VariantPicker from "./VariantPicker.vue";
@@ -77,11 +81,18 @@ const emit = defineEmits<{
   close: [];
 }>();
 
+const props = defineProps<{
+  workspaceId?: string;
+}>();
+
 const themeStore = useThemeStore();
 const themeContext = inject(THEME_INJECTION_KEY) as ThemeContext;
 const editor = useThemeEditor(themeContext);
+const persistence = useThemePersistence(themeContext);
 const panelRef = ref<HTMLElement | null>(null);
-const selectedThemeId = ref(themeStore.activeUserTheme?.themeId ?? "");
+const selectedThemeId = ref(
+  themeContext.themeId.value ?? themeStore.activeUserTheme?.themeId ?? "",
+);
 let focusTrap: FocusTrapHandle | undefined;
 
 function onThemeSelect(themeId: string) {
@@ -101,14 +112,50 @@ function onVariantUpdate(component: string, variant: string) {
   );
 }
 
-function onSave() {
-  themeContext.commitDraft();
-  themeContext.applyToDocument();
-  editor.hasUnsavedChanges.value = false;
+async function onSave() {
+  themeStore.loading = true;
+  themeStore.error = null;
+  try {
+    const result = await persistence.save({
+      themeId: selectedThemeId.value || null,
+      mode: themeContext.isDark.value ? "dark" : "light",
+      customOverrides: {
+        color: editor.draftColor.value,
+        typography: editor.draftTypography.value,
+        radius: editor.draftRadius.value,
+        spacing: editor.draftSpacing.value,
+      },
+      variantOverrides: themeContext.preferenceSnapshot().variantOverrides,
+    });
+    themeStore.setPreference(result);
+    editor.loadFromTokens(themeContext.tokens.value);
+    editor.hasUnsavedChanges.value = false;
+  } catch (error) {
+    themeStore.error = error instanceof Error ? error.message : "Theme could not be saved";
+  } finally {
+    themeStore.loading = false;
+  }
+}
+
+async function onToggleDark() {
+  themeContext.isDark.value = !themeContext.isDark.value;
+  try {
+    const result = await persistence.save();
+    themeStore.setPreference(result);
+  } catch (error) {
+    themeStore.error =
+      error instanceof Error ? error.message : "Theme preference could not be saved";
+  }
 }
 
 onMounted(() => {
   if (panelRef.value) focusTrap = trapFocus(panelRef.value);
+  if (props.workspaceId) {
+    void persistence.client
+      .listWorkspaceThemes(props.workspaceId)
+      .then((themes) => themeStore.setAvailableThemes(themes))
+      .catch(() => undefined);
+  }
 });
 
 onBeforeUnmount(() => {

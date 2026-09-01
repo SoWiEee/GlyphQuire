@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, shallowRef } from "vue";
-import type { ThemeResult, UserThemeResult } from "@glyphquire/api-contract";
+import type { ThemePreferenceResult, ThemeResult, UserThemeResult } from "@glyphquire/api-contract";
 
 export const useThemeStore = defineStore("theme", () => {
   const availableThemes = ref<ThemeResult[]>([]);
@@ -8,6 +8,7 @@ export const useThemeStore = defineStore("theme", () => {
   const loading = ref(false);
   const error = ref<string | null>(null);
   const editorOpen = ref(false);
+  const preference = shallowRef<ThemePreferenceResult | null>(null);
 
   function setAvailableThemes(themes: ThemeResult[]) {
     availableThemes.value = themes;
@@ -15,6 +16,11 @@ export const useThemeStore = defineStore("theme", () => {
 
   function setActiveUserTheme(userTheme: UserThemeResult) {
     activeUserTheme.value = userTheme;
+  }
+
+  function setPreference(value: ThemePreferenceResult) {
+    preference.value = value;
+    error.value = null;
   }
 
   function openEditor() {
@@ -31,8 +37,10 @@ export const useThemeStore = defineStore("theme", () => {
     loading,
     error,
     editorOpen,
+    preference,
     setAvailableThemes,
     setActiveUserTheme,
+    setPreference,
     openEditor,
     closeEditor,
   };

@@ -1,4 +1,5 @@
 import { computed, ref, watch, type InjectionKey, type Ref, type ComputedRef } from "vue";
+import type { ThemePreferenceResult } from "@glyphquire/api-contract";
 import {
   resolveTheme,
   tokensToCssVariables,
@@ -16,12 +17,22 @@ export interface ThemeContext {
   readonly variants: ComputedRef<ThemeComponentVariants>;
   readonly cssVariables: ComputedRef<Record<string, string>>;
   readonly isDark: Ref<boolean>;
+  readonly themeId: Ref<string | null>;
+  readonly preferenceRevision: Ref<number>;
   setTheme(tokens: ThemeTokenOverrides, variants?: Partial<ThemeComponentVariants>): void;
   setDraftTokens(overrides: ThemeTokenOverrides): void;
   setDraftVariants(overrides: Partial<ThemeComponentVariants>): void;
   commitDraft(): void;
   resetDraft(): void;
   applyToDocument(): void;
+  applyPreference(preference: ThemePreferenceResult): void;
+  preferenceSnapshot(): {
+    themeId: string | null;
+    mode: "light" | "dark";
+    customOverrides: ThemeTokenOverrides;
+    variantOverrides: Partial<ThemeComponentVariants>;
+    revision: number;
+  };
 }
 
 export const THEME_INJECTION_KEY: InjectionKey<ThemeContext> = Symbol("glyphquire-theme");
@@ -70,6 +81,8 @@ function mergeVariantOverrides(
 
 export function useTheme(): ThemeContext {
   const isDark = ref(false);
+  const themeId = ref<string | null>(null);
+  const preferenceRevision = ref(0);
   const baseTokenOverrides = ref<ThemeTokenOverrides>({});
   const baseVariantOverrides = ref<Partial<ThemeComponentVariants>>({});
   const draftTokenOverrides = ref<ThemeTokenOverrides | null>(null);
@@ -98,6 +111,31 @@ export function useTheme(): ThemeContext {
     if (variantOverrides) baseVariantOverrides.value = variantOverrides;
     draftTokenOverrides.value = null;
     draftVariantOverrides.value = null;
+  }
+
+  function applyPreference(preference: ThemePreferenceResult): void {
+    themeId.value = preference.themeId;
+    isDark.value = preference.mode === "dark";
+    baseTokenOverrides.value = preference.customOverrides as ThemeTokenOverrides;
+    baseVariantOverrides.value = preference.variantOverrides as Partial<ThemeComponentVariants>;
+    preferenceRevision.value = preference.revision;
+    draftTokenOverrides.value = null;
+    draftVariantOverrides.value = null;
+    applyToDocument();
+  }
+
+  function preferenceSnapshot() {
+    const effectiveVariants =
+      draftVariantOverrides.value === null
+        ? baseVariantOverrides.value
+        : mergeVariantOverrides(baseVariantOverrides.value, draftVariantOverrides.value);
+    return {
+      themeId: themeId.value,
+      mode: isDark.value ? ("dark" as const) : ("light" as const),
+      customOverrides: draftTokenOverrides.value ?? baseTokenOverrides.value,
+      variantOverrides: effectiveVariants,
+      revision: preferenceRevision.value,
+    };
   }
 
   function setDraftTokens(overrides: ThemeTokenOverrides) {
@@ -159,11 +197,15 @@ export function useTheme(): ThemeContext {
     variants,
     cssVariables,
     isDark,
+    themeId,
+    preferenceRevision,
     setTheme,
     setDraftTokens,
     setDraftVariants,
     commitDraft,
     resetDraft,
     applyToDocument,
+    applyPreference,
+    preferenceSnapshot,
   };
 }

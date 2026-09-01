@@ -10,9 +10,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, provide } from "vue";
+import { computed, onMounted, provide } from "vue";
 import { RouterView, useRoute } from "vue-router";
 import { THEME_INJECTION_KEY, useTheme } from "../themes/ThemeProvider.js";
+import { useThemePersistence } from "../themes/useThemePersistence.js";
+import { useThemeStore } from "../stores/theme.js";
 import { provideWorkbenchHostContext } from "../components/workbench/WorkbenchContext.js";
 
 const route = useRoute();
@@ -22,6 +24,13 @@ const isFullBleed = computed(() => route.meta.fullBleed === true);
 // body), but it still relies on Vue's logical component ancestry for its
 // ThemeContext.  Provide one application-scoped context here so every page
 // beneath AppLayout observes the same tokens, variants, and dark-mode state.
-provide(THEME_INJECTION_KEY, useTheme());
+const themeContext = useTheme();
+const themeStore = useThemeStore();
+provide(THEME_INJECTION_KEY, themeContext);
+const themePersistence = useThemePersistence(themeContext);
+onMounted(async () => {
+  const preference = await themePersistence.load();
+  if (preference) themeStore.setPreference(preference);
+});
 provideWorkbenchHostContext({});
 </script>

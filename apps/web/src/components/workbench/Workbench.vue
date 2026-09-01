@@ -210,7 +210,11 @@
       @close="closePalette"
     />
 
-    <ThemeEditorPanel v-if="themeStore.editorOpen" @close="themeStore.closeEditor()" />
+    <ThemeEditorPanel
+      v-if="themeStore.editorOpen"
+      :workspace-id="currentWorkspaceId ?? undefined"
+      @close="themeStore.closeEditor()"
+    />
   </div>
 </template>
 
