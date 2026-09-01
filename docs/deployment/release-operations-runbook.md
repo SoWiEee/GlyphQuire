@@ -88,7 +88,7 @@ or artifact references.
 The release process keeps the existing migration chain forward-only. The deployment
 rehearsal uses an explicitly isolated PostgreSQL/object-storage target, runs
 role and schema preflight before starting services, and applies only the
-frozen `0000`–`0011` migration and snapshot artifacts. Runtime connections use
+frozen `0000`–`0015` migration and snapshot artifacts. Runtime connections use
 the canonical `glyphquire_app` role; migrations use the separate
 `glyphquire_migration` role. The rehearsal records SHA-256 hashes of every
 SQL, snapshot, and journal byte before and after both application images boot.

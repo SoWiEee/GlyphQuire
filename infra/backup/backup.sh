@@ -21,7 +21,7 @@ readonly RETENTION_DAYS=30
 readonly MAX_BACKUP_BYTES="${BACKUP_MAX_BYTES:-1073741824}"
 readonly MAX_BACKUP_FILES="${BACKUP_MAX_FILES:-100000}"
 readonly SCHEMA_VERSION="${BACKUP_SCHEMA_VERSION:-1}"
-readonly EXPECTED_MIGRATION_COUNT="${BACKUP_EXPECTED_MIGRATION_COUNT:-12}"
+readonly EXPECTED_MIGRATION_COUNT="${BACKUP_EXPECTED_MIGRATION_COUNT:-16}"
 readonly MIGRATIONS_DIR="${BACKUP_MIGRATIONS_DIR:-${REPOSITORY_ROOT}/packages/database/src/migrations}"
 readonly MIGRATION_JOURNAL_FILE="${BACKUP_MIGRATION_JOURNAL_FILE:-${MIGRATIONS_DIR}/meta/_journal.json}"
 
@@ -117,7 +117,7 @@ validate_configuration() {
   [[ -n "$BACKUP_ENCRYPTION_KEY" ]] || skip_external "BACKUP_ENCRYPTION_KEY_MISSING"
   [[ "$BACKUP_ENCRYPTION_KEY_VERSION" =~ ^[A-Za-z0-9._-]{1,32}$ ]] || fail "KEY_VERSION_INVALID"
   [[ "$SCHEMA_VERSION" =~ ^[1-9][0-9]*$ ]] || fail "SCHEMA_VERSION_INVALID"
-  [[ "$EXPECTED_MIGRATION_COUNT" == "12" ]] || fail "MIGRATION_COUNT_INVALID"
+  [[ "$EXPECTED_MIGRATION_COUNT" == "16" ]] || fail "MIGRATION_COUNT_INVALID"
   valid_bounded_integer "$MAX_BACKUP_BYTES" || fail "MAX_BACKUP_BYTES_INVALID"
   valid_bounded_integer "$MAX_BACKUP_FILES" || fail "MAX_BACKUP_FILES_INVALID"
   [[ -n "${DATABASE_URL:-}" ]] || skip_external "DATABASE_URL_MISSING"
@@ -135,7 +135,7 @@ verify_forward_only_migrations() {
   local version sql_file snapshot_file
   local -a sql_files
   local -a expected_names=(
-    0000 0001 0002 0003 0004 0005 0006 0007 0008 0009 0010 0011
+    0000 0001 0002 0003 0004 0005 0006 0007 0008 0009 0010 0011 0012 0013 0014 0015
   )
   [[ -d "$MIGRATIONS_DIR" ]] || fail "MIGRATIONS_DIRECTORY_MISSING"
   [[ -f "$MIGRATION_JOURNAL_FILE" && ! -L "$MIGRATION_JOURNAL_FILE" ]] || fail "MIGRATION_JOURNAL_MISSING"
@@ -152,7 +152,7 @@ verify_forward_only_migrations() {
   done
   for sql_file in "${sql_files[@]}"; do
     version="$(basename -- "$sql_file" | cut -c1-4)"
-    [[ "$version" =~ ^00(0[0-9]|1[01])$ ]] || fail "FORWARD_ONLY_MIGRATION_AHEAD"
+    [[ "$version" =~ ^00(0[0-9]|1[0-5])$ ]] || fail "FORWARD_ONLY_MIGRATION_AHEAD"
   done
   migration_journal_sha256="$(sha256sum -- "$MIGRATION_JOURNAL_FILE" | awk '{print $1}')" || fail "MIGRATION_JOURNAL_HASH_FAILED"
   valid_hash "$migration_journal_sha256" || fail "MIGRATION_JOURNAL_HASH_INVALID"
@@ -341,7 +341,7 @@ const manifest = {
     journalSha256: env.RELEASE_MIGRATION_JOURNAL_SHA256,
     schemaVersion: Number(env.RELEASE_SCHEMA_VERSION),
     migrationCount: Number(env.RELEASE_MIGRATION_COUNT),
-    versions: ["0000", "0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010", "0011"],
+    versions: ["0000", "0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0015"],
   },
   database: {
     artifact: databaseArtifact,
@@ -379,10 +379,10 @@ import { readFileSync } from "node:fs";
 const manifest = JSON.parse(readFileSync(process.env.RELEASE_MANIFEST_FILE, "utf8"));
 if (manifest.schemaVersion !== 1 || manifest.producer !== "release-backup-restore" || manifest.backupId !== process.env.RELEASE_BACKUP_ID) process.exit(1);
 if (manifest.encryption?.algorithm !== "AES-256-GCM" || manifest.encryption?.authenticated !== true || manifest.encryption?.keyVersion !== process.env.RELEASE_KEY_VERSION) process.exit(1);
-const expectedVersions = ["0000", "0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010", "0011"];
+const expectedVersions = ["0000", "0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0015"];
 const hashPattern = /^[a-f0-9]{64}$/;
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
-if (manifest.migration?.direction !== "forward-only" || JSON.stringify(manifest.migration?.versions) !== JSON.stringify(expectedVersions) || manifest.migration?.migrationCount !== 12 || !hashPattern.test(manifest.migration?.journalSha256 ?? "")) process.exit(1);
+if (manifest.migration?.direction !== "forward-only" || JSON.stringify(manifest.migration?.versions) !== JSON.stringify(expectedVersions) || manifest.migration?.migrationCount !== 16 || !hashPattern.test(manifest.migration?.journalSha256 ?? "")) process.exit(1);
 if (!manifest.bounds || manifest.bounds.maxBytes < 1 || manifest.bounds.maxBytes > Number(process.env.RELEASE_MAX_BYTES) || manifest.bounds.maxFiles < 1 || manifest.bounds.maxFiles > Number(process.env.RELEASE_MAX_FILES)) process.exit(1);
 if (manifest.database?.relationshipViolations !== 0 || !manifest.database?.rowCounts || !manifest.database?.rowHashes || !hashPattern.test(manifest.database?.canonicalMarkdownSha256 ?? "")) process.exit(1);
 if (!manifest.objectStorage || !Number.isInteger(manifest.objectStorage.fileCount) || !Number.isInteger(manifest.objectStorage.totalBytes) || manifest.objectStorage.fileCount < 0 || manifest.objectStorage.fileCount > Number(process.env.RELEASE_MAX_FILES) || manifest.objectStorage.totalBytes < 0 || manifest.objectStorage.totalBytes > Number(process.env.RELEASE_MAX_BYTES) || !hashPattern.test(manifest.objectStorage.aggregateSha256 ?? "")) process.exit(1);

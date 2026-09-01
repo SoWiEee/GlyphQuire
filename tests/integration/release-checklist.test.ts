@@ -49,6 +49,10 @@ const validArtifactManifest = {
     "0009": "c".repeat(64),
     "0010": "c".repeat(64),
     "0011": "c".repeat(64),
+    "0012": "c".repeat(64),
+    "0013": "c".repeat(64),
+    "0014": "c".repeat(64),
+    "0015": "c".repeat(64),
   },
   imageDigests: {
     api: `sha256:${"d".repeat(64)}`,

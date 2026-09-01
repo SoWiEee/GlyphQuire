@@ -33,10 +33,10 @@
   },
   "aggregateSha256": "0000000000000000000000000000000000000000000000000000000000000000",
   "invariants": {
-    "migrationJournalSha256": "a3662853e91dcea9d934506e3863365f5fb35d58b433e0db9b1d59389c9bffb5",
+    "migrationJournalSha256": "df6d98b755654ac185a8f6633c7a14abbd77a3b719d9ce62c6e28e239d2f9c91",
     "forwardOnly": true,
     "schemaVersion": 1,
-    "migrationCount": 12,
+    "migrationCount": 16,
     "notesRows": 0,
     "noteVersionsRows": 0,
     "assetsRows": 0,

@@ -164,13 +164,13 @@ validate_configuration() {
 
 verify_forward_only_migrations() {
   local version sql_file snapshot_file
-  local -a expected_names=(0000 0001 0002 0003 0004 0005 0006 0007 0008 0009 0010 0011)
+  local -a expected_names=(0000 0001 0002 0003 0004 0005 0006 0007 0008 0009 0010 0011 0012 0013 0014 0015)
   local -a sql_files
   [[ -d "$MIGRATIONS_DIR" ]] || fail "MIGRATIONS_DIRECTORY_MISSING"
   [[ -f "$MIGRATION_JOURNAL_FILE" && ! -L "$MIGRATION_JOURNAL_FILE" ]] || fail "MIGRATION_JOURNAL_MISSING"
   shopt -s nullglob
   sql_files=("$MIGRATIONS_DIR"/*.sql)
-  ((${#sql_files[@]} == 12)) || fail "FORWARD_ONLY_MIGRATION_INVENTORY_INVALID"
+  ((${#sql_files[@]} == 16)) || fail "FORWARD_ONLY_MIGRATION_INVENTORY_INVALID"
   for version in "${expected_names[@]}"; do
     local matches=("$MIGRATIONS_DIR/${version}_"*.sql)
     ((${#matches[@]} == 1)) || fail "FORWARD_ONLY_MIGRATION_${version}_MISSING"
@@ -181,7 +181,7 @@ verify_forward_only_migrations() {
   done
   for sql_file in "${sql_files[@]}"; do
     version="$(basename -- "$sql_file" | cut -c1-4)"
-    [[ "$version" =~ ^00(0[0-9]|1[01])$ ]] || fail "FORWARD_ONLY_MIGRATION_AHEAD"
+    [[ "$version" =~ ^00(0[0-9]|1[0-5])$ ]] || fail "FORWARD_ONLY_MIGRATION_AHEAD"
   done
   migration_journal_sha256="$(sha256sum -- "$MIGRATION_JOURNAL_FILE" | awk '{print $1}')" || fail "MIGRATION_JOURNAL_HASH_FAILED"
   valid_hash "$migration_journal_sha256" || fail "MIGRATION_JOURNAL_HASH_INVALID"
@@ -198,10 +198,10 @@ const env = process.env;
 const manifest = JSON.parse(readFileSync(env.RELEASE_MANIFEST_FILE, "utf8"));
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const hashPattern = /^[a-f0-9]{64}$/;
-const expectedVersions = ["0000", "0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010", "0011"];
+const expectedVersions = ["0000", "0001", "0002", "0003", "0004", "0005", "0006", "0007", "0008", "0009", "0010", "0011", "0012", "0013", "0014", "0015"];
 if (manifest.schemaVersion !== 1 || manifest.producer !== "release-backup-restore" || manifest.backupId !== env.RELEASE_BACKUP_ID) process.exit(1);
 if (manifest.encryption?.algorithm !== "AES-256-GCM" || manifest.encryption?.authenticated !== true || manifest.encryption?.keyVersion !== env.RELEASE_KEY_VERSION) process.exit(1);
-if (manifest.migration?.direction !== "forward-only" || JSON.stringify(manifest.migration?.versions) !== JSON.stringify(expectedVersions) || manifest.migration?.migrationCount !== 12 || !hashPattern.test(manifest.migration?.journalSha256 ?? "")) process.exit(1);
+if (manifest.migration?.direction !== "forward-only" || JSON.stringify(manifest.migration?.versions) !== JSON.stringify(expectedVersions) || manifest.migration?.migrationCount !== 16 || !hashPattern.test(manifest.migration?.journalSha256 ?? "")) process.exit(1);
 if (!manifest.bounds || manifest.bounds.maxBytes < 1 || manifest.bounds.maxFiles < 1 || manifest.bounds.maxBytes > Number(env.RELEASE_MAX_BYTES) || manifest.bounds.maxFiles > Number(env.RELEASE_MAX_FILES)) process.exit(1);
 const database = manifest.database;
 const objects = manifest.objectStorage;

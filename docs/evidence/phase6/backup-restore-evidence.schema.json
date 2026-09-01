@@ -119,7 +119,7 @@
         "migrationJournalSha256": { "$ref": "#/$defs/sha256" },
         "forwardOnly": { "type": "boolean" },
         "schemaVersion": { "type": "integer", "minimum": 1 },
-        "migrationCount": { "type": "integer", "minimum": 0, "maximum": 12 },
+        "migrationCount": { "type": "integer", "minimum": 0, "maximum": 16 },
         "notesRows": { "type": "integer", "minimum": 0 },
         "noteVersionsRows": { "type": "integer", "minimum": 0 },
         "assetsRows": { "type": "integer", "minimum": 0 },
@@ -193,7 +193,7 @@
           "invariants": {
             "properties": {
               "forwardOnly": { "const": true },
-              "migrationCount": { "const": 12 },
+              "migrationCount": { "const": 16 },
               "relationships": { "const": true },
               "rowHashes": { "const": true },
               "canonicalMarkdownPreserved": { "const": true }

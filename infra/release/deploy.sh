@@ -142,7 +142,7 @@ require_release_identity() {
 }
 
 frozen_files=()
-frozen_versions=(0000 0001 0002 0003 0004 0005 0006 0007 0008 0009 0010 0011)
+frozen_versions=(0000 0001 0002 0003 0004 0005 0006 0007 0008 0009 0010 0011 0012 0013 0014 0015)
 declare -A frozen_sql_hashes=(
   [0000]=7fbba803d17ce335f8acc41fd7027c3c1278d4af79225c48ac6d0ab885028863
   [0001]=c0aac84d7bb3fd4766604dfa46d2f0df18b5b4f027e42e5ec6696e9386f1f162
@@ -156,6 +156,10 @@ declare -A frozen_sql_hashes=(
   [0009]=cad40a10a1f8649a73b60b45d4cd27b2c8e03771d323028a90c451eaa8385fab
   [0010]=a9dd8e0fb7640e1f19ec8aac42f5b1a6c414f1ee2be10ec1c8ee09f707afba21
   [0011]=b911d7eccb8482baa164898e5b9fbc359bdb79f23e480c82734ea7e68e4ea5be
+  [0012]=4f5c9d4a31559a99cc9c6efb5dc6a36886cd84441351648a15a6f436ead9ab29
+  [0013]=dba72e0f6686ae555725edb078c65eaadd3c8d94f7218a61a209653d5ef21702
+  [0014]=402cad16ed81ee7cc92ecee3141b240fdda2c3d84db5ee97211aba8fdf9c4e09
+  [0015]=d630a8506bb2fe6b46c10b67942ff7fc4c57f851fd4da4f21f6b3b9958eca6bb
 )
 declare -A frozen_snapshot_hashes=(
   [0000]=ddbdd01656f226667fc4e9b8533d946d8d57ed643d580ade86d4451a27c0be66
@@ -170,14 +174,20 @@ declare -A frozen_snapshot_hashes=(
   [0009]=def5267a8e12090d69f9caeff4bb86857f9094a46f6a044fa1417d4e0725c7f9
   [0010]=083f0d9e77c2c53d2135c6f34b6b1496ef16eef02477b6b09fa7bd9e5772e727
   [0011]=2e334c01d975eed6c0f12bc182ed47e3399c2ffb8c4d81583d385504ee6729f8
+  [0012]=6f42871810aa2f57f14376e9d5aeeb7c441bc315269e1101f46523dff4560c60
+  [0013]=21e5719ce4cba412aea34d927b2513a0f268aea63ac8cf572bc1edea0064bfba
+  [0014]=b0ff301fa0a69c37406dfcdd54acc8e57e4b30dbee08999004cb62263b51fdd4
+  [0015]=cb580d4961e535a847918676c5ff2c7ba8a6dfb4e339bc598d83b27be1cc6367
 )
-readonly frozen_journal_hash=a3662853e91dcea9d934506e3863365f5fb35d58b433e0db9b1d59389c9bffb5
+readonly frozen_journal_hash=df6d98b755654ac185a8f6633c7a14abbd77a3b719d9ce62c6e28e239d2f9c91
 
 expected_sql_names=(
   0000_phase0_auth.sql 0001_phase2_workspaces.sql 0002_phase2_notes.sql
   0003_phase2_rate_limits.sql 0004_phase3_themes.sql 0005_phase5_jobs.sql
   0006_phase5_assets.sql 0007_phase5_search.sql 0008_phase5_exports.sql
   0009_phase5_share_links.sql 0010_phase5_lifecycle.sql 0011_phase5_export_formats.sql
+  0012_user_preferences.sql 0013_custom_blocks.sql 0014_custom_block_operation_kind.sql
+  0015_custom_block_operations.sql
 )
 
 find_frozen_files() {
@@ -217,7 +227,7 @@ find_frozen_files() {
 
   local -a meta_names
   mapfile -t meta_names < <(find "$MIGRATIONS_DIR/meta" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)
-  ((${#meta_names[@]} == 13)) || fail "FROZEN_METADATA_INVENTORY_MISMATCH"
+  ((${#meta_names[@]} == 17)) || fail "FROZEN_METADATA_INVENTORY_MISMATCH"
   [[ " ${meta_names[*]} " == *" _journal.json "* ]] || fail "MIGRATION_JOURNAL_NOT_CANONICAL"
   for version in "${frozen_versions[@]}"; do
     [[ " ${meta_names[*]} " == *" ${version}_snapshot.json "* ]] || fail "FROZEN_SNAPSHOT_${version}_MISSING"
@@ -325,12 +335,13 @@ write_evidence() {
       import { dirname, join } from "node:path";
       const hash = (path) => createHash("sha256").update(readFileSync(path)).digest("hex");
       const root = process.env.RELEASE_MIGRATIONS_DIR;
-      const versions = ["0000","0001","0002","0003","0004","0005","0006","0007","0008","0009","0010","0011"];
+      const versions = ["0000","0001","0002","0003","0004","0005","0006","0007","0008","0009","0010","0011","0012","0013","0014","0015"];
       const artifacts = versions.map((version) => {
         const sqlPath = join(root, `${version}_${({
           "0000":"phase0_auth","0001":"phase2_workspaces","0002":"phase2_notes","0003":"phase2_rate_limits",
           "0004":"phase3_themes","0005":"phase5_jobs","0006":"phase5_assets","0007":"phase5_search",
-          "0008":"phase5_exports","0009":"phase5_share_links","0010":"phase5_lifecycle","0011":"phase5_export_formats"
+          "0008":"phase5_exports","0009":"phase5_share_links","0010":"phase5_lifecycle","0011":"phase5_export_formats",
+          "0012":"user_preferences","0013":"custom_blocks","0014":"custom_block_operation_kind","0015":"custom_block_operations"
         })[version]}.sql`);
         const snapshotPath = join(root, "meta", `${version}_snapshot.json`);
         return { version, sqlSha256: hash(sqlPath), snapshotSha256: hash(snapshotPath) };

@@ -72,7 +72,7 @@ case "$query" in
   *FROM\\ public.note_versions*) printf '1\\n' ;;
   *FROM\\ public.assets*) printf '1\\n' ;;
   *FROM\\ public.notes*) printf '1\\n' ;;
-  *drizzle.__drizzle_migrations*) printf '12\\n' ;;
+  *drizzle.__drizzle_migrations*) printf '16\\n' ;;
   *) exit 1 ;;
 esac
 `,

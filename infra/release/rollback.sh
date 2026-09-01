@@ -161,7 +161,7 @@ write_evidence() {
         externalEvidenceAvailable: process.env.RELEASE_EXTERNAL === "1",
         candidate: { sourceSha: process.env.RELEASE_PREVIOUS_SOURCE_SHA, api: digest(process.env.RELEASE_PREVIOUS_API_IMAGE), web: digest(process.env.RELEASE_PREVIOUS_WEB_IMAGE), worker: digest(process.env.RELEASE_PREVIOUS_WORKER_IMAGE) },
         previous: { sourceSha: process.env.RELEASE_PREVIOUS_SOURCE_SHA, manifestSha256: process.env.RELEASE_PREVIOUS_MANIFEST_SHA, api: digest(process.env.RELEASE_PREVIOUS_API_IMAGE), web: digest(process.env.RELEASE_PREVIOUS_WEB_IMAGE), worker: digest(process.env.RELEASE_PREVIOUS_WORKER_IMAGE) },
-        migration: { journalSha256: "0".repeat(64), snapshotSha256: "0".repeat(64), artifacts: ["0000","0001","0002","0003","0004","0005","0006","0007","0008","0009","0010","0011"].map((version) => ({ version, sqlSha256: "0".repeat(64), snapshotSha256: "0".repeat(64) })), frozenByteIdentical: true },
+        migration: { journalSha256: "0".repeat(64), snapshotSha256: "0".repeat(64), artifacts: ["0000","0001","0002","0003","0004","0005","0006","0007","0008","0009","0010","0011","0012","0013","0014","0015"].map((version) => ({ version, sqlSha256: "0".repeat(64), snapshotSha256: "0".repeat(64) })), frozenByteIdentical: true },
         checks: { preflight: process.env.RELEASE_EXTERNAL === "1", migration: false, candidateBoot: false, previousBoot: process.env.RELEASE_PREVIOUS_BOOT === "1", compatibility: process.env.RELEASE_PREVIOUS_BOOT === "1", noHistoryRewrite: true },
         probes: { read: process.env.RELEASE_PREVIOUS_BOOT === "1", write: false },
         recordedAt: new Date().toISOString()

@@ -121,7 +121,7 @@ write_evidence() {
       import { mkdirSync, writeFileSync } from "node:fs";
       import { dirname } from "node:path";
       const zeros = "0".repeat(64);
-      const artifacts = ["0000","0001","0002","0003","0004","0005","0006","0007","0008","0009","0010","0011"].map((version) => ({ version, sqlSha256: zeros, snapshotSha256: zeros }));
+      const artifacts = ["0000","0001","0002","0003","0004","0005","0006","0007","0008","0009","0010","0011","0012","0013","0014","0015"].map((version) => ({ version, sqlSha256: zeros, snapshotSha256: zeros }));
       const evidence = {
         schemaVersion: 1,
         status: process.env.RELEASE_STATUS,
