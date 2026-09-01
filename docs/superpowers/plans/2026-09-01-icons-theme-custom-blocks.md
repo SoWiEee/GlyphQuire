@@ -23,11 +23,13 @@
 ### Task 1: Shared Icon Contract and Lucide Wrapper
 
 **Files:**
+
 - Modify: `packages/theme-sdk/src/schemas.ts`, `packages/theme-sdk/src/index.ts`, `packages/theme-sdk/tests/schemas.test.ts`
 - Create: `packages/theme-sdk/src/icons.ts`, `apps/web/src/components/icons/GqIcon.vue`, `apps/web/src/components/icons/GqIcon.test.ts`
 - Modify: `apps/web/package.json`, `pnpm-lock.yaml`
 
 **Interfaces:**
+
 - Produce `IconName`, `iconNameSchema`, and `CUSTOM_BLOCK_ICON_NAMES` from `@glyphquire/theme-sdk`.
 - Produce `<GqIcon :name :size :stroke-width :decorative :label />` with `size` values `sm | md | lg`, `currentColor`, and `aria-hidden` for decorative use.
 
@@ -50,6 +52,7 @@
 ### Task 2: Replace UI Glyphs with Icons
 
 **Files:**
+
 - Modify: `apps/web/src/components/workbench/StatusIndicator.vue`
 - Modify: `apps/web/src/runtime/RuntimeHost.vue`
 - Modify: `apps/web/src/components/workbench/ContextRail.vue`
@@ -60,6 +63,7 @@
 - Modify: focused existing component tests only when selectors or accessible names change
 
 **Interfaces:**
+
 - Consume `GqIcon` and `IconName` from Task 1.
 - Preserve all existing emitted events, button labels, disabled states, and keyboard behavior.
 
@@ -78,6 +82,7 @@
 ### Task 3: Persist User Theme Preferences in the API
 
 **Files:**
+
 - Create: `packages/database/src/schema/user-preferences.ts`, `packages/database/src/migrations/0012_user_preferences.sql`
 - Modify: `packages/database/src/schema/index.ts`, `packages/database/src/index.ts`
 - Create: `packages/api-contract/src/preferences/schemas.ts`, `packages/api-contract/src/preferences/types.ts`
@@ -87,6 +92,7 @@
 - Create: `apps/api/src/modules/preferences/UserPreferenceService.integration.test.ts`, `apps/api/src/routes/v1/preferences.integration.test.ts`
 
 **Interfaces:**
+
 - `GET /api/v1/me/preferences/theme` returns `{ themeId: string | null, mode: "light" | "dark", customOverrides: object, variantOverrides: object, revision: number, updatedAt: string }`.
 - `PUT /api/v1/me/preferences/theme` accepts the same complete payload plus `baseRevision`; revision `0` creates the first row and later writes use exact CAS.
 - Theme ids must reference system themes only; workspace theme selection remains handled by existing workspace-scoped APIs.
@@ -110,11 +116,13 @@
 ### Task 4: Synchronize ThemeProvider and Theme Editor
 
 **Files:**
+
 - Create: `apps/web/src/api/ThemePreferenceClient.ts`, `apps/web/src/themes/useThemePersistence.ts`
 - Modify: `apps/web/src/themes/ThemeProvider.ts`, `apps/web/src/stores/theme.ts`, `apps/web/src/layouts/AppLayout.vue`, `apps/web/src/components/theme-editor/ThemeEditorPanel.vue`, `apps/web/src/components/theme-editor/ThemeActions.vue`
 - Create: `apps/web/src/themes/useThemePersistence.test.ts`
 
 **Interfaces:**
+
 - `ThemePreferenceClient.get()` and `.put(input)` use the shared API contract and return the server revision.
 - `useThemePersistence(context)` exposes `load()` and `save()`; `save()` commits the provider only after a successful response.
 
@@ -137,12 +145,14 @@
 ### Task 5: Declarative Custom Block Contract and Document Engine
 
 **Files:**
+
 - Modify: `packages/theme-sdk/src/schemas.ts`, `packages/theme-sdk/src/types.ts`, `packages/theme-sdk/src/index.ts`
 - Modify: `packages/document-engine/src/ast/nodes.ts`, `packages/document-engine/src/registry/types.ts`, `packages/document-engine/src/registry/registry.ts`, `packages/document-engine/src/registry/index.ts`, `packages/document-engine/src/parser/transform.ts`, `packages/document-engine/src/serializer/to-mdast.ts`
 - Create: `packages/document-engine/src/registry/declarative.ts`
 - Create/modify: `packages/theme-sdk/tests/custom-block-schema.test.ts`, `packages/document-engine/src/registry/declarative.test.ts`, `packages/document-engine/src/parser/custom-block.test.ts`, `packages/document-engine/src/serializer/custom-block.test.ts`
 
 **Interfaces:**
+
 - `CustomBlockDefinition` contains `name`, positive `version`, `kind`, bounded `propsSchema`, `contentPolicy`, allowlisted `icon`, approved `preset`, optional approved `variant`, token mapping, and `capabilities: ("static" | "interactive-ui")[]`.
 - `CustomBlockNode` contains `type: "custom-block"`, `name`, `version`, string attributes, parsed props, children, and optional original source.
 - `registerDeclarative(registry, definition)` adapts a validated definition to the existing registry without constructing executable code.
@@ -166,6 +176,7 @@
 ### Task 6: Custom Block Persistence and Workspace API
 
 **Files:**
+
 - Create: `packages/database/src/schema/custom-blocks.ts`, `packages/database/src/migrations/0013_custom_blocks.sql`
 - Modify: `packages/database/src/schema/index.ts`, `packages/database/src/index.ts`
 - Create: `packages/api-contract/src/custom-blocks/schemas.ts`, `packages/api-contract/src/custom-blocks/types.ts`
@@ -175,6 +186,7 @@
 - Create: `apps/api/src/modules/custom-blocks/CustomBlockService.integration.test.ts`, `apps/api/src/routes/v1/custom-blocks.integration.test.ts`
 
 **Interfaces:**
+
 - `GET/POST /api/v1/workspaces/:workspaceId/custom-blocks` lists or creates definitions.
 - `PUT /api/v1/custom-blocks/:id/draft` updates a draft with `baseRevision`.
 - `POST /api/v1/custom-blocks/:id/publish` publishes the next immutable version.
@@ -195,12 +207,14 @@
 ### Task 7: Web Custom Block Management and Editor Integration
 
 **Files:**
+
 - Create: `apps/web/src/api/CustomBlockClient.ts`, `apps/web/src/stores/custom-blocks.ts`
 - Create: `apps/web/src/components/custom-blocks/CustomBlocksPanel.vue`, `apps/web/src/components/custom-blocks/CustomBlockForm.vue`, `apps/web/src/components/custom-blocks/CustomBlockPicker.vue`, `apps/web/src/components/custom-blocks/UnsupportedCustomBlock.vue`
 - Modify: `apps/web/src/components/workbench/Workbench.vue` (including command definitions), `apps/web/src/components/workbench/ContextRail.vue`, `apps/web/src/editors/visual/MilkdownVisualAdapter.ts`, `apps/web/src/editors/visual/schema.ts`
 - Create: `apps/web/src/components/custom-blocks/custom-blocks.test.ts`
 
 **Interfaces:**
+
 - `CustomBlockClient` consumes Task 6 contracts and returns published/draft definitions.
 - `useCustomBlocksStore` exposes `definitions`, `load(workspaceId)`, `createDraft`, `updateDraft`, `publish`, and `deleteDraft`.
 - `CustomBlockPicker` emits a directive insertion request; `UnsupportedCustomBlock` renders a non-executable recoverable notice.
@@ -224,6 +238,7 @@
 ### Task 8: SPEC Update and Integrated Release Verification
 
 **Files:**
+
 - Modify: `docs/SPEC.md`, `docs/MARKDOWN_SPEC.md`, `README.md` only where the user-facing feature list is stale
 - Create: `docs/superpowers/plans/2026-09-01-icons-theme-custom-blocks-report.md`
 
