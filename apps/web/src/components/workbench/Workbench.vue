@@ -644,9 +644,9 @@ function serializeCustomBlock(
     .filter(([, descriptor]) => descriptor.default !== undefined)
     .map(
       ([name, descriptor]) =>
-        `${name}=\"${String(descriptor.default).replace(/[\\"]/gu, (character) => `\\${character}`)}\"`,
+        `${name}="${String(descriptor.default).replace(/[\\"]/gu, (character) => `\\${character}`)}"`,
     );
-  const opening = `:::${record.name}{version=\"${record.version}\"${attributes.length ? ` ${attributes.join(" ")}` : ""}}`;
+  const opening = `:::${record.name}{version="${record.version}"${attributes.length ? ` ${attributes.join(" ")}` : ""}}`;
   return record.definition.contentPolicy === "none" ? `${opening}\n:::` : `${opening}\n\n:::`;
 }
 

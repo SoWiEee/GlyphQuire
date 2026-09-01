@@ -43,8 +43,8 @@ function escapeAttribute(value: string): string {
 function serialize(record: CustomBlockRecord): string {
   const attributes = Object.entries(record.definition.propsSchema)
     .filter(([, descriptor]) => descriptor.default !== undefined)
-    .map(([name, descriptor]) => `${name}=\"${escapeAttribute(String(descriptor.default))}\"`);
-  const opening = `:::${record.name}{version=\"${record.version}\"${attributes.length ? ` ${attributes.join(" ")}` : ""}}`;
+    .map(([name, descriptor]) => `${name}="${escapeAttribute(String(descriptor.default))}"`);
+  const opening = `:::${record.name}{version="${record.version}"${attributes.length ? ` ${attributes.join(" ")}` : ""}}`;
   return record.definition.contentPolicy === "none" ? `${opening}\n:::` : `${opening}\n\n:::`;
 }
 </script>
