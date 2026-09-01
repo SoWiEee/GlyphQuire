@@ -6,7 +6,7 @@
 
 ## Product decisions
 
-- Icons use `lucide-vue-next` with a single web `GqIcon` wrapper. Icon names are allowlisted in `packages/theme-sdk`; the wrapper controls size, stroke width, `currentColor`, and decorative versus labelled semantics.
+- Icons use the current `@lucide/vue` package with a single web `GqIcon` wrapper. Icon names are allowlisted in `packages/theme-sdk`; the wrapper controls size, stroke width, `currentColor`, and decorative versus labelled semantics.
 - Theme preferences are user-scoped. The server stores the selected system theme, `light`/`dark` mode, token overrides, component variant overrides, and a revision. No localStorage fallback is used. Workspace-selected themes remain workspace-scoped; global user preferences control the user's display mode and global overrides.
 - Custom Blocks are declarative only. Users may define a name, version, directive kind, constrained props schema, nested-content policy, allowlisted icon, approved component preset/variant, token mapping, and declared capability. Custom definitions cannot contain Vue, JavaScript, HTML, arbitrary CSS, filesystem access, credentials, or unrestricted network access.
 - The first Custom Block release accepts only `static` and `interactive-ui` capabilities. Existing `p5` and `canvas` blocks continue to use the established sandbox runtime; custom runtime requests are rejected until a separately approved runtime contract exists.
