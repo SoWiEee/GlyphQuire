@@ -15,34 +15,13 @@ import type { Result } from "axe-core";
  * component-level unit tests today and are noted as skipped here.
  *
  * Writing this suite surfaced several real, previously-undetected WCAG
- * 2.2 AA gaps; the ones with a small, safe, unambiguous fix were fixed
- * directly (see the Task 13 report for the full list: a missing accessible
- * name on the CodeMirror source textbox, several `text-gray-400` command
- * palette labels under the 4.5:1 contrast floor, and a stripped focus ring
- * on the palette's filter input). One is recorded here instead of fixed:
+ * 2.2 AA gaps; the small, safe, unambiguous fixes are applied in the
+ * workbench and editor components. The remaining screen-reader smoke check
+ * is intentionally manual and tracked in the specification.
  */
-
-/**
- * `EditorTabs.vue` nests a focusable "close tab" `<button>` inside its
- * `role="tab"` element. axe's `nested-interactive` rule (WCAG 4.1.2) flags
- * this — screen readers do not reliably expose an interactive control
- * nested inside another one. A correct fix needs a real restructure (the
- * close control has to become a keyboard-reachable sibling outside the
- * tab's own accessible-name computation, e.g. following the ARIA APG
- * "tabs with delete buttons" pattern) rather than a class/attribute tweak,
- * so it is out of scope for this evidence task and is recorded as a known,
- * open finding instead of silently passing or blocking the whole gate.
- * Tracked here — remove this allowance the moment EditorTabs.vue is fixed.
- */
-const KNOWN_AXE_FINDINGS = new Set(["nested-interactive"]);
-
-function unexpectedViolations(violations: readonly Result[]): Result[] {
-  return violations.filter((violation) => !KNOWN_AXE_FINDINGS.has(violation.id));
-}
-
 async function scanForAxeViolations(page: Page): Promise<Result[]> {
   const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
-  return unexpectedViolations(results.violations);
+  return results.violations;
 }
 
 test.describe("axe accessibility scan", () => {
@@ -65,24 +44,6 @@ test.describe("axe accessibility scan", () => {
 
     const violations = await scanForAxeViolations(page);
     expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
-  });
-
-  test("the known EditorTabs nested-interactive finding is still the only allowance in use", async ({
-    page,
-  }) => {
-    // Trip-wire: reproduces in the same state as the command-palette scan
-    // above (oddly, axe does not surface it against the bare workbench
-    // shell — the finding is real regardless, EditorTabs.vue's markup does
-    // not change between the two scans). If this ever finds zero
-    // nested-interactive hits, the allowance above is stale and should be
-    // deleted along with this test.
-    await page.goto("/workspace");
-    await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
-    await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
-
-    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
-    const nested = results.violations.filter((v) => v.id === "nested-interactive");
-    expect(nested.length).toBeGreaterThan(0);
   });
 });
 

@@ -1,11 +1,17 @@
 :root {
-  --gq-color-background: #ffffff;
-  --gq-color-foreground: #1a1a1a;
-  --gq-color-muted: #6b7280;
-  --gq-color-accent: #2563eb;
-  --gq-color-border: #e5e7eb;
+  --gq-color-background: #f7f3ed;
+  --gq-color-surface: #fffdf9;
+  --gq-color-surface-muted: #eee8df;
+  --gq-color-foreground: #2e2924;
+  --gq-color-muted: #6f675f;
+  --gq-color-accent: #4f5f9f;
+  --gq-color-accent-contrast: #ffffff;
+  --gq-color-border: #9c8e7f;
+  --gq-color-success: #31724d;
+  --gq-color-warning: #8a5a16;
+  --gq-color-danger: #a13d3d;
   --gq-typography-body-font: "Inter", "Noto Sans TC", system-ui, sans-serif;
-  --gq-typography-heading-font: "Inter", "Noto Sans TC", system-ui, sans-serif;
+  --gq-typography-heading-font: "Source Serif 4", Georgia, serif;
   --gq-typography-mono-font: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
   --gq-radius-sm: 0.25rem;
   --gq-radius-md: 0.5rem;

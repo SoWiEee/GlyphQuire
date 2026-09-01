@@ -366,12 +366,12 @@ function hasBoundedVisualSource(source: string): boolean {
 function visualWarningLabel(node: BlockNode): string | null {
   switch (node.type) {
     case "unknown-directive":
-      return `Unknown directive: ${node.name}`;
+      return `Unsupported block: ${node.name}`;
     case "invalid-block":
-      return `Invalid block: ${node.originalType}`;
+      return `Unsupported block: ${node.originalType}`;
     case "tab":
     case "column":
-      return `Invalid structural block: ${node.type}`;
+      return `Unsupported structure: ${node.type}`;
     default:
       return null;
   }
@@ -767,7 +767,15 @@ export interface VisualControlSpec {
   readonly label: string;
   readonly type: "text" | "checkbox" | "select";
   readonly options?: readonly string[];
+  readonly optionLabels?: Readonly<Record<string, string>>;
   readonly dataAttribute?: string;
+}
+
+export interface VisualContainerNodeViewOptions {
+  readonly label?: string;
+  readonly dataAttributes?: (
+    node: ProseNode,
+  ) => Readonly<Record<string, string | null | undefined>>;
 }
 
 function controlValue(control: HTMLInputElement | HTMLSelectElement): string | boolean {
@@ -786,19 +794,56 @@ function syncControl(control: HTMLInputElement | HTMLSelectElement, value: unkno
   if (control instanceof HTMLInputElement) control.setAttribute("value", next);
 }
 
+let visualControlId = 0;
+
+function nextVisualControlId(nodeType: string, attribute: string): string {
+  visualControlId += 1;
+  return `gq-${nodeType}-${attribute}-${visualControlId}`;
+}
+
+function syncContainerDataAttributes(
+  dom: HTMLElement,
+  current: Readonly<Record<string, string | null | undefined>>,
+  previous: ReadonlySet<string>,
+): Set<string> {
+  const next = new Set<string>();
+  for (const key of previous) {
+    if (!(key in current) || current[key] === null || current[key] === undefined) {
+      dom.removeAttribute(key);
+    }
+  }
+  for (const [key, value] of Object.entries(current)) {
+    if (value === null || value === undefined) {
+      dom.removeAttribute(key);
+      continue;
+    }
+    dom.setAttribute(key, value);
+    next.add(key);
+  }
+  return next;
+}
+
 /** DOM-only editable container node view; note content never becomes markup. */
 export function createContainerNodeView(
   nodeType: string,
   controls: readonly VisualControlSpec[],
+  options: VisualContainerNodeViewOptions = {},
 ): NodeViewConstructor {
   return (initialNode, view, getPos) => {
     let currentNode = initialNode;
     const dom = document.createElement("section");
     dom.dataset.glyphquireNode = nodeType;
+    let appliedDataAttributes = new Set<string>();
+    const nodeLabel = options.label ?? nodeType;
     const header = document.createElement("header");
     header.contentEditable = "false";
+    header.dataset.glyphquireControls = "";
+    header.setAttribute("role", "group");
+    header.setAttribute("aria-label", `${nodeLabel} settings`);
     const heading = document.createElement("strong");
-    heading.append(document.createTextNode(nodeType));
+    heading.setAttribute("role", "heading");
+    heading.setAttribute("aria-level", "3");
+    heading.append(document.createTextNode(nodeLabel));
     header.append(heading);
 
     const renderedControls: Array<{
@@ -807,14 +852,17 @@ export function createContainerNodeView(
     }> = [];
     for (const spec of controls) {
       const label = document.createElement("label");
-      label.append(document.createTextNode(spec.label));
+      label.dataset.glyphquireField = spec.attribute;
+      const fieldLabel = document.createElement("span");
+      fieldLabel.append(document.createTextNode(spec.label));
+      label.append(fieldLabel);
       let control: HTMLInputElement | HTMLSelectElement;
       if (spec.type === "select") {
         const select = document.createElement("select");
         for (const value of spec.options ?? []) {
           const option = document.createElement("option");
           option.value = value;
-          option.append(document.createTextNode(value));
+          option.append(document.createTextNode(spec.optionLabels?.[value] ?? (value || "None")));
           select.append(option);
         }
         control = select;
@@ -823,6 +871,9 @@ export function createContainerNodeView(
         input.type = spec.type;
         control = input;
       }
+      control.id = nextVisualControlId(nodeType, spec.attribute);
+      label.htmlFor = control.id;
+      control.setAttribute("aria-label", spec.label);
       control.dataset.glyphquireControl = spec.attribute;
       if (spec.dataAttribute) control.setAttribute(spec.dataAttribute, "");
       syncControl(control, currentNode.attrs[spec.attribute]);
@@ -847,6 +898,11 @@ export function createContainerNodeView(
 
     const contentDOM = document.createElement("div");
     contentDOM.dataset.glyphquireContent = nodeType;
+    appliedDataAttributes = syncContainerDataAttributes(
+      dom,
+      options.dataAttributes?.(currentNode) ?? {},
+      appliedDataAttributes,
+    );
     dom.append(header, contentDOM);
 
     return {
@@ -855,6 +911,11 @@ export function createContainerNodeView(
       update(nextNode: ProseNode): boolean {
         if (nextNode.type !== currentNode.type) return false;
         currentNode = nextNode;
+        appliedDataAttributes = syncContainerDataAttributes(
+          dom,
+          options.dataAttributes?.(currentNode) ?? {},
+          appliedDataAttributes,
+        );
         for (const item of renderedControls) {
           syncControl(item.control, currentNode.attrs[item.spec.attribute]);
         }
@@ -862,7 +923,9 @@ export function createContainerNodeView(
       },
       stopEvent: (event) =>
         event.target instanceof globalThis.Node && header.contains(event.target),
-      ignoreMutation: (mutation) => header.contains(mutation.target),
+      ignoreMutation: (mutation) =>
+        header.contains(mutation.target) ||
+        (mutation.type === "attributes" && mutation.target === dom),
     };
   };
 }
@@ -873,23 +936,4 @@ export function setVisualControlsReadOnly(host: HTMLElement, readOnly: boolean):
   >("[data-glyphquire-control]")) {
     control.disabled = readOnly;
   }
-}
-
-export function themeVariantAttrs(
-  componentKey: string,
-  variants: Record<string, Record<string, string>>,
-): Record<string, string> {
-  const componentVariants = variants[componentKey];
-  if (!componentVariants) return {};
-  const attrs: Record<string, string> = {};
-  for (const [key, value] of Object.entries(componentVariants)) {
-    if (key === "variant") {
-      attrs["data-variant"] = value;
-    } else if (key === "decoration") {
-      attrs["data-decoration"] = value;
-    } else if (key === "animation") {
-      attrs["data-animation"] = value;
-    }
-  }
-  return attrs;
 }

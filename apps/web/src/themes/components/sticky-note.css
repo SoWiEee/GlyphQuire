@@ -5,21 +5,22 @@
   border-radius: var(--gq-radius-md);
 }
 
-[data-glyphquire-node="sticky"][data-variant="plain"] {
-  background: oklch(92% 0.06 90);
-  border: 1px solid oklch(85% 0.06 90);
+:root[data-gq-sticky-note-variant="plain"] [data-glyphquire-node="sticky"] {
+  background: color-mix(in srgb, var(--gq-color-warning) 18%, var(--gq-color-surface));
+  color: var(--gq-color-foreground);
+  border: 1px solid color-mix(in srgb, var(--gq-color-warning) 60%, var(--gq-color-border));
 }
 
-[data-glyphquire-node="sticky"][data-variant="paper"] {
-  background: oklch(95% 0.04 85);
-  border: none;
-  box-shadow: 2px 3px 8px oklch(0% 0 0 / 0.12);
-  transform: rotate(-1deg);
+:root[data-gq-sticky-note-variant="paper"] [data-glyphquire-node="sticky"] {
+  background: var(--gq-color-surface);
+  color: var(--gq-color-foreground);
+  border: 1px solid var(--gq-color-border);
+  box-shadow: 2px 3px 8px color-mix(in srgb, var(--gq-color-foreground) 12%, transparent);
 }
 
-[data-glyphquire-node="sticky"][data-variant="neon"] {
-  background: oklch(15% 0 0);
-  color: oklch(85% 0.2 160);
-  border: 1px solid oklch(60% 0.2 160);
-  box-shadow: 0 0 8px oklch(60% 0.2 160 / 0.3);
+:root[data-gq-sticky-note-variant="neon"] [data-glyphquire-node="sticky"] {
+  background: var(--gq-color-foreground);
+  color: var(--gq-color-background);
+  border: 1px solid var(--gq-color-accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--gq-color-accent) 30%, transparent);
 }

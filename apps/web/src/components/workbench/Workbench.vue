@@ -152,6 +152,7 @@
       @keydown.escape="closeToolPanel"
     >
       <div
+        ref="toolPanelRef"
         role="dialog"
         aria-modal="true"
         :aria-label="toolPanelLabel"
@@ -214,7 +215,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { canonicalUuidSchema } from "@glyphquire/api-contract";
 import CommandPalette from "./CommandPalette.vue";
 import ContextRail from "./ContextRail.vue";
@@ -264,6 +265,7 @@ import {
   createAssetResolver,
   registerVisualAssetResolver,
 } from "../../editors/visual/asset-resolver.js";
+import { trapFocus, type FocusTrapHandle } from "../../lib/focusTrap.js";
 
 const themeStore = useThemeStore();
 const workspaceToolsStore = useWorkspaceToolsStore();
@@ -305,7 +307,9 @@ const baseRevision = computed<number | null>(() => {
   return Number.isInteger(revision) && (revision ?? 0) > 0 ? revision! : null;
 });
 const toolPanel = computed(() => workbenchState.toolPanel);
+const toolPanelRef = ref<HTMLElement | null>(null);
 const toolPanelCloseRef = ref<HTMLButtonElement | null>(null);
+let toolPanelTrap: FocusTrapHandle | undefined;
 const toolPanelLabel = computed(() => {
   switch (toolPanel.value) {
     case "assets":
@@ -549,9 +553,6 @@ function onAccountAction(action: WorkbenchAccountAction): void {
 
 function onContextAction(action: Exclude<ContextAction, "outline">): void {
   workbenchContext.setPanel(action);
-  if (workbenchState.toolPanel === action) {
-    void nextTick(() => toolPanelCloseRef.value?.focus());
-  }
 }
 
 function onSharedLinks(): void {
@@ -623,15 +624,12 @@ function onBlockCommand(definition: BlockCommandDefinition): void {
 
 function openToolPanel(panel: WorkbenchToolPanel): void {
   workbenchContext.setPanel(panel);
-  if (workbenchState.toolPanel === panel) {
-    void nextTick(() => toolPanelCloseRef.value?.focus());
-  }
 }
 
 function closeToolPanel(): void {
+  toolPanelTrap?.release();
+  toolPanelTrap = undefined;
   workbenchContext.setPanel(null);
-  const paletteButton = topBarRef.value?.$el?.querySelector('[aria-label="Open command palette"]');
-  if (paletteButton instanceof HTMLElement) paletteButton.focus();
 }
 
 function insertAssetReference(reference: string): void {
@@ -764,6 +762,19 @@ function onCompactScreenChange(): void {
   updateCompactScreen();
 }
 
+function syncToolPanelTrap(): void {
+  toolPanelTrap?.release();
+  toolPanelTrap = undefined;
+  if (!toolPanel.value) return;
+  void nextTick(() => {
+    if (toolPanel.value && toolPanelRef.value) {
+      toolPanelTrap = trapFocus(toolPanelRef.value, toolPanelCloseRef.value);
+    }
+  });
+}
+
+watch(toolPanel, syncToolPanelTrap, { flush: "post" });
+
 onMounted(() => {
   window.addEventListener("keydown", onGlobalKeydown, true);
   if (typeof window.matchMedia === "function") {
@@ -777,6 +788,8 @@ onMounted(() => {
   }
 });
 onBeforeUnmount(() => {
+  toolPanelTrap?.release();
+  toolPanelTrap = undefined;
   window.removeEventListener("keydown", onGlobalKeydown, true);
   if (compactMediaQuery) {
     if (typeof compactMediaQuery.removeEventListener === "function") {

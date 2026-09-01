@@ -8,20 +8,23 @@
   border-radius: 0 var(--gq-radius-sm) var(--gq-radius-sm) 0;
 }
 
-[data-variant="sticky"] {
-  background: oklch(90% 0.05 85);
+:root[data-gq-quote-variant="sticky"] .ProseMirror blockquote,
+:root[data-gq-quote-variant="sticky"] [data-glyphquire-node="quote"] {
+  background: color-mix(in srgb, var(--gq-color-warning) 18%, var(--gq-color-surface));
+  color: var(--gq-color-foreground);
   border-left: none;
   border-radius: var(--gq-radius-md);
-  box-shadow: 2px 2px 6px oklch(0% 0 0 / 0.1);
-  transform: rotate(-0.5deg);
+  box-shadow: 2px 2px 6px color-mix(in srgb, var(--gq-color-foreground) 12%, transparent);
   padding: var(--gq-spacing-md);
 }
 
-[data-variant="paper"] {
-  background: var(--gq-color-background);
+:root[data-gq-quote-variant="paper"] .ProseMirror blockquote,
+:root[data-gq-quote-variant="paper"] [data-glyphquire-node="quote"] {
+  background: var(--gq-color-surface);
+  color: var(--gq-color-foreground);
   border: 1px solid var(--gq-color-border);
   border-left: 3px solid var(--gq-color-accent);
   border-radius: var(--gq-radius-md);
   padding: var(--gq-spacing-md);
-  box-shadow: 0 1px 3px oklch(0% 0 0 / 0.05);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--gq-color-foreground) 8%, transparent);
 }

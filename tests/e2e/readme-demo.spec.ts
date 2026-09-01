@@ -44,7 +44,7 @@ async function assertDemoDomSafe(page: import("@playwright/test").Page): Promise
 }
 
 async function openTool(page: Page, label: string): Promise<void> {
-  await page.getByRole("button", { name: "Open command palette" }).click();
+  await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
   const palette = page.getByRole("dialog", { name: "Command palette" });
   await palette.getByRole("textbox", { name: "Filter commands" }).fill(label);
   await expect(palette.getByRole("option", { name: label })).toBeVisible();
@@ -112,13 +112,15 @@ test("captures the four README demo scenes", async ({ page }) => {
   });
 
   await page.goto("/__readme-demo?scene=modes");
-  await expect(page.getByRole("button", { name: "Open command palette" })).toBeVisible();
+  await expect(
+    page.locator("header").getByRole("button", { name: "Open command palette" }),
+  ).toBeVisible();
   await expect(page.getByRole("tabpanel", { name: /editor$/u })).toBeVisible();
   await expect(page.getByRole("radiogroup", { name: "Editor mode" })).toBeVisible();
   await expect(page.getByRole("radio", { name: "Source" })).toBeVisible();
   await expect(page.getByRole("radio", { name: "Visual" })).toBeVisible();
   await expect(page.getByRole("radio", { name: "Split" })).toBeVisible();
-  await page.getByRole("button", { name: "Open command palette" }).click();
+  await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
   const palette = page.getByRole("dialog", { name: "Command palette" });
   for (const label of [
     "Switch to Visual mode",

@@ -18,7 +18,15 @@ export const visualColumnsSchema = $nodeSchema("gq_columns", () => ({
     gap: { default: null, validate: "string|null" },
   },
   parseDOM: [{ tag: "section[data-glyphquire-node='columns']" }],
-  toDOM: () => ["section", { "data-glyphquire-node": "columns" }, 0],
+  toDOM: (node) => [
+    "section",
+    {
+      "data-glyphquire-node": "columns",
+      "data-column-count": String(node.attrs.count || "2"),
+      "data-column-gap": String(node.attrs.gap || "default"),
+    },
+    0,
+  ],
   parseMarkdown: {
     match: (node) => annotatedVisualKind(node) === "columns",
     runner: (state, markdownNode, type) => {
@@ -77,23 +85,35 @@ export const visualColumnSchema = $nodeSchema("gq_column", () => ({
 }));
 
 const visualColumnsView = $view(visualColumnsSchema.node, () =>
-  createContainerNodeView("columns", [
+  createContainerNodeView(
+    "columns",
+    [
+      {
+        attribute: "count",
+        label: "Column count",
+        type: "select",
+        options: ["2", "3", "4"],
+        optionLabels: { "2": "2 columns", "3": "3 columns", "4": "4 columns" },
+      },
+      {
+        attribute: "gap",
+        label: "Column gap",
+        type: "select",
+        options: ["", "sm", "md", "lg"],
+        optionLabels: { "": "Default", sm: "Small", md: "Medium", lg: "Large" },
+      },
+    ],
     {
-      attribute: "count",
       label: "Columns",
-      type: "select",
-      options: ["2", "3", "4"],
+      dataAttributes: (node) => ({
+        "data-column-count": String(node.attrs.count || "2"),
+        "data-column-gap": String(node.attrs.gap || "default"),
+      }),
     },
-    {
-      attribute: "gap",
-      label: "Gap",
-      type: "select",
-      options: ["", "sm", "md", "lg"],
-    },
-  ]),
+  ),
 );
 const visualColumnView = $view(visualColumnSchema.node, () =>
-  createContainerNodeView("column", []),
+  createContainerNodeView("column", [], { label: "Column" }),
 );
 
 export const visualColumnsPlugins: MilkdownPlugin[] = [

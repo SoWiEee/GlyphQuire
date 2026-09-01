@@ -19,12 +19,11 @@ export const visualCalloutSchema = $nodeSchema("gq_callout", () => ({
     icon: { default: null, validate: "string|null" },
   },
   parseDOM: [{ tag: "section[data-glyphquire-node='callout']" }],
-  toDOM: () => [
+  toDOM: (node) => [
     "section",
     {
       "data-glyphquire-node": "callout",
-      "data-variant": "solid",
-      "data-animation": "none",
+      "data-callout-type": String(node.attrs.calloutType || "info"),
     },
     0,
   ],
@@ -61,16 +60,33 @@ export const visualCalloutSchema = $nodeSchema("gq_callout", () => ({
 }));
 
 const visualCalloutView = $view(visualCalloutSchema.node, () =>
-  createContainerNodeView("callout", [
+  createContainerNodeView(
+    "callout",
+    [
+      {
+        attribute: "calloutType",
+        label: "Callout type",
+        type: "select",
+        options: ["info", "note", "tip", "warning", "danger", "success"],
+        optionLabels: {
+          info: "Information",
+          note: "Note",
+          tip: "Tip",
+          warning: "Warning",
+          danger: "Danger",
+          success: "Success",
+        },
+      },
+      { attribute: "title", label: "Title", type: "text" },
+      { attribute: "icon", label: "Icon", type: "text" },
+    ],
     {
-      attribute: "calloutType",
-      label: "Type",
-      type: "select",
-      options: ["info", "note", "tip", "warning", "danger", "success"],
+      label: "Callout",
+      dataAttributes: (node) => ({
+        "data-callout-type": String(node.attrs.calloutType || "info"),
+      }),
     },
-    { attribute: "title", label: "Title", type: "text" },
-    { attribute: "icon", label: "Icon", type: "text" },
-  ]),
+  ),
 );
 
 export const visualCalloutPlugins: MilkdownPlugin[] = [...visualCalloutSchema, visualCalloutView];

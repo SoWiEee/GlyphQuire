@@ -18,7 +18,14 @@ export const visualStickySchema = $nodeSchema("gq_sticky", () => ({
     title: { default: null, validate: "string|null" },
   },
   parseDOM: [{ tag: "section[data-glyphquire-node='sticky']" }],
-  toDOM: () => ["section", { "data-glyphquire-node": "sticky", "data-variant": "plain" }, 0],
+  toDOM: (node) => [
+    "section",
+    {
+      "data-glyphquire-node": "sticky",
+      "data-sticky-tone": String(node.attrs.tone || "default"),
+    },
+    0,
+  ],
   parseMarkdown: {
     match: (node) => annotatedVisualKind(node) === "sticky",
     runner: (state, markdownNode, type) => {
@@ -50,15 +57,31 @@ export const visualStickySchema = $nodeSchema("gq_sticky", () => ({
 }));
 
 const visualStickyView = $view(visualStickySchema.node, () =>
-  createContainerNodeView("sticky", [
+  createContainerNodeView(
+    "sticky",
+    [
+      {
+        attribute: "tone",
+        label: "Tone",
+        type: "select",
+        options: ["default", "yellow", "pink", "blue", "green"],
+        optionLabels: {
+          default: "Default",
+          yellow: "Yellow",
+          pink: "Pink",
+          blue: "Blue",
+          green: "Green",
+        },
+      },
+      { attribute: "title", label: "Title", type: "text" },
+    ],
     {
-      attribute: "tone",
-      label: "Tone",
-      type: "select",
-      options: ["default", "yellow", "pink", "blue", "green"],
+      label: "Sticky note",
+      dataAttributes: (node) => ({
+        "data-sticky-tone": String(node.attrs.tone || "default"),
+      }),
     },
-    { attribute: "title", label: "Title", type: "text" },
-  ]),
+  ),
 );
 
 export const visualStickyPlugins: MilkdownPlugin[] = [...visualStickySchema, visualStickyView];

@@ -73,7 +73,7 @@
 </template>
 
 <script setup lang="ts">
-import { inject, onMounted, ref } from "vue";
+import { inject, onBeforeUnmount, onMounted, ref } from "vue";
 import { useThemeStore } from "../../stores/theme.js";
 import { THEME_INJECTION_KEY, type ThemeContext } from "../../themes/ThemeProvider.js";
 import { useThemeEditor } from "../../themes/useThemeEditor.js";
@@ -81,6 +81,7 @@ import ThemeSelector from "./ThemeSelector.vue";
 import TokenEditor from "./TokenEditor.vue";
 import VariantPicker from "./VariantPicker.vue";
 import ThemeActions from "./ThemeActions.vue";
+import { trapFocus, type FocusTrapHandle } from "../../lib/focusTrap.js";
 
 const emit = defineEmits<{
   close: [];
@@ -91,6 +92,7 @@ const themeContext = inject(THEME_INJECTION_KEY) as ThemeContext;
 const editor = useThemeEditor(themeContext);
 const panelRef = ref<HTMLElement | null>(null);
 const selectedThemeId = ref(themeStore.activeUserTheme?.themeId ?? "");
+let focusTrap: FocusTrapHandle | undefined;
 
 function onThemeSelect(themeId: string) {
   selectedThemeId.value = themeId;
@@ -101,7 +103,12 @@ function onThemeSelect(themeId: string) {
 }
 
 function onVariantUpdate(component: string, variant: string) {
-  themeContext.setDraftVariants({ [component]: { variant } });
+  editor.hasUnsavedChanges.value = true;
+  themeContext.setDraftVariants(
+    component === "heading"
+      ? { heading: { decoration: variant as "none" | "sparkle" | "line" } }
+      : { [component]: { variant } },
+  );
 }
 
 function onSave() {
@@ -111,6 +118,11 @@ function onSave() {
 }
 
 onMounted(() => {
-  panelRef.value?.focus();
+  if (panelRef.value) focusTrap = trapFocus(panelRef.value);
+});
+
+onBeforeUnmount(() => {
+  focusTrap?.release();
+  focusTrap = undefined;
 });
 </script>

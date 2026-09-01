@@ -24,7 +24,7 @@ function makeRuntimeSchema<const TId extends string>(id: TId, runtime: "p5" | "c
       source: { default: "", validate: "string" },
     },
     parseDOM: [{ tag: `section[data-glyphquire-node='${runtime}']` }],
-    toDOM: () => ["section", { "data-glyphquire-node": runtime }],
+    toDOM: () => ["section", { "data-glyphquire-node": runtime, "data-runtime-kind": runtime }],
     parseMarkdown: {
       match: (node) => annotatedVisualKind(node) === runtime,
       runner: (state, markdownNode, type) => {
@@ -70,11 +70,20 @@ function runtimeNodeView(runtime: "p5" | "canvas"): NodeViewConstructor {
     let currentNode = initialNode;
     const dom = document.createElement("section");
     dom.dataset.glyphquireNode = runtime;
+    dom.dataset.runtimeKind = runtime;
     dom.contentEditable = "false";
 
+    const runtimeLabel = runtime === "p5" ? "Interactive sketch" : "Interactive canvas";
+    const header = document.createElement("header");
+    header.dataset.glyphquireControls = "";
+    header.setAttribute("role", "group");
+    header.setAttribute("aria-label", `${runtimeLabel} settings`);
     const heading = document.createElement("strong");
-    heading.append(document.createTextNode(`${runtime} runtime`));
-    dom.append(heading);
+    heading.setAttribute("role", "heading");
+    heading.setAttribute("aria-level", "3");
+    heading.append(document.createTextNode(runtimeLabel));
+    header.append(heading);
+    dom.append(header);
 
     const controls: Array<{
       readonly attribute: "height" | "network" | "autoplay" | "source";
@@ -87,27 +96,43 @@ function runtimeNodeView(runtime: "p5" | "canvas"): NodeViewConstructor {
       type: "number" | "text" | "checkbox",
     ): void => {
       const label = document.createElement("label");
-      label.append(document.createTextNode(labelText));
+      label.dataset.glyphquireField = attribute;
+      const fieldLabel = document.createElement("span");
+      fieldLabel.append(document.createTextNode(labelText));
+      label.append(fieldLabel);
       const input = document.createElement("input");
       input.type = type;
       if (type === "number") input.min = "1";
+      input.id = `gq-${runtime}-${attribute}-${controls.length + 1}`;
+      input.setAttribute("aria-label", labelText);
+      label.htmlFor = input.id;
       input.dataset.glyphquireControl = attribute;
       label.append(input);
-      dom.append(label);
+      header.append(label);
       controls.push({ attribute, element: input });
     };
 
-    addInput("height", "Height", "number");
-    addInput("network", "Network declaration (inert)", "text");
-    addInput("autoplay", "Autoplay declaration (inert)", "checkbox");
+    addInput("height", "Preview height", "number");
+    addInput("network", "Network access", "text");
+    addInput("autoplay", "Run automatically", "checkbox");
 
+    const sourceDetails = document.createElement("details");
+    sourceDetails.dataset.runtimeSourceSettings = "";
+    const sourceSummary = document.createElement("summary");
+    sourceSummary.append(document.createTextNode("Source code"));
     const sourceLabel = document.createElement("label");
-    sourceLabel.append(document.createTextNode("Source"));
+    sourceLabel.dataset.glyphquireField = "source";
+    const sourceLabelText = document.createElement("span");
+    sourceLabelText.append(document.createTextNode("Source code"));
     const source = document.createElement("textarea");
+    source.id = `gq-${runtime}-source-${controls.length + 1}`;
+    source.setAttribute("aria-label", "Source code");
+    sourceLabel.htmlFor = source.id;
     source.dataset.glyphquireControl = "source";
     source.dataset.glyphquireRuntimeSource = "";
-    sourceLabel.append(source);
-    dom.append(sourceLabel);
+    sourceLabel.append(sourceLabelText, source);
+    sourceDetails.append(sourceSummary, sourceLabel);
+    dom.append(sourceDetails);
     controls.push({ attribute: "source", element: source });
 
     // -- Vue RuntimeHost mount --

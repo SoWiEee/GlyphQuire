@@ -3,15 +3,15 @@
   margin: var(--gq-spacing-sm) 0;
 }
 
-[data-glyphquire-node="toggle"][data-variant="plain"] {
+:root[data-gq-toggle-variant="plain"] [data-glyphquire-node="toggle"] {
   border-bottom: 1px solid var(--gq-color-border);
   padding: var(--gq-spacing-sm) 0;
 }
 
-[data-glyphquire-node="toggle"][data-variant="card"] {
-  background: var(--gq-color-background);
+:root[data-gq-toggle-variant="card"] [data-glyphquire-node="toggle"] {
+  background: var(--gq-color-surface);
   border: 1px solid var(--gq-color-border);
   border-radius: var(--gq-radius-md);
   padding: var(--gq-spacing-sm) var(--gq-spacing-md);
-  box-shadow: 0 1px 2px oklch(0% 0 0 / 0.05);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--gq-color-foreground) 8%, transparent);
 }

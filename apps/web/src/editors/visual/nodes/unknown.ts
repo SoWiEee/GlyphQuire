@@ -134,10 +134,19 @@ function warningNodeView(): NodeViewConstructor {
     dom.dataset.glyphquireWarning = "escaped";
     dom.contentEditable = "false";
     const label = document.createElement("strong");
+    label.setAttribute("role", "heading");
+    label.setAttribute("aria-level", "3");
+    label.dataset.glyphquireWarningLabel = "";
+    const details = document.createElement("details");
+    details.dataset.glyphquireWarningDetails = "";
+    const summary = document.createElement("summary");
+    summary.append(document.createTextNode("View original source"));
+    summary.setAttribute("aria-label", "View original source");
     const pre = document.createElement("pre");
     const code = document.createElement("code");
     pre.append(code);
-    dom.append(label, pre);
+    details.append(summary, pre);
+    dom.append(label, details);
 
     const sync = (): void => {
       const attrs = assertVisualBlockWarningAttrs(currentNode.attrs);

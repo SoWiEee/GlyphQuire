@@ -710,6 +710,22 @@ v1 不允許 unrestricted global CSS。
 
 後期可加入 restricted CSS sandbox。
 
+### 13.4 Visual direction (P1)
+
+GlyphQuire 使用 Paper Canvas 作為 editor 的視覺基準：內容區以留白、紙張表面與清楚的排版層級為主，只有選取中或可互動的區塊才顯示額外 chrome。Built-in block 不得依賴裝飾性漸層、玻璃擬態、閃爍動畫或隨機旋轉來傳達功能。
+
+Built-in custom block 的呈現規則：
+
+- callout 使用語意色帶、icon 與 optional title；顏色不能是唯一的狀態提示。
+- sticky note 預設使用低對比紙張色與清楚標籤；高對比變體不得取代文字或狀態語意。
+- toggle 使用 disclosure header、chevron 與 `aria-expanded`，內容可明確展開或收合。
+- tabs 使用 `tablist`、`tab`、`tabpanel` 語意，active tab 使用單一底線或同等低干擾指示。
+- columns 使用 tokenized gap；狹窄 editor pane 必須堆疊，不得產生水平溢出。
+- runtime 顯示 user-facing 的 preview、Run/Stop/Reset、loading 與 error 狀態；一般 UI 不顯示內部 capability 或 debug 名稱。
+- unknown/invalid block 顯示可恢復的 unsupported 狀態，原始來源放在明確的進階檢視中。
+
+Visual Mode 的 block controls 必須使用友善名稱並與 authored content 分離。Theme Editor 的 token 與 approved variant 變更必須即時反映在 editor，且所有狀態需維持 WCAG 2.2 AA 對比與可見 focus ring。P1 驗收以 Chrome 桌面畫面矩陣、鍵盤操作及 light/dark theme 人工檢視為主，不建立大量視覺 snapshot 測試。
+
 ---
 
 ## 14. Interactive Runtime

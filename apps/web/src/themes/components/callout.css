@@ -5,30 +5,30 @@
   font-family: var(--gq-typography-body-font);
 }
 
-[data-glyphquire-node="callout"][data-variant="solid"] {
-  background: oklch(from var(--gq-color-accent) l c h / 0.1);
-  border: 1px solid oklch(from var(--gq-color-accent) l c h / 0.3);
+:root[data-gq-callout-variant="solid"] [data-glyphquire-node="callout"] {
+  background: color-mix(in srgb, var(--gq-color-accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gq-color-accent) 30%, transparent);
 }
 
-[data-glyphquire-node="callout"][data-variant="glass"] {
-  background: oklch(from var(--gq-color-accent) l c h / 0.05);
+:root[data-gq-callout-variant="glass"] [data-glyphquire-node="callout"] {
+  background: color-mix(in srgb, var(--gq-color-accent) 5%, transparent);
   backdrop-filter: blur(8px);
-  border: 1px solid oklch(from var(--gq-color-accent) l c h / 0.15);
+  border: 1px solid color-mix(in srgb, var(--gq-color-accent) 15%, transparent);
 }
 
-[data-glyphquire-node="callout"][data-variant="outline"] {
+:root[data-gq-callout-variant="outline"] [data-glyphquire-node="callout"] {
   background: transparent;
   border: 2px solid var(--gq-color-accent);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  [data-glyphquire-node="callout"][data-animation="glow"] {
+  :root[data-gq-callout-animation="glow"] [data-glyphquire-node="callout"] {
     animation: gq-callout-glow 3s ease-in-out infinite alternate;
   }
 
-  [data-glyphquire-node="callout"][data-animation="lift"]:hover {
+  :root[data-gq-callout-animation="lift"] [data-glyphquire-node="callout"]:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px oklch(0% 0 0 / 0.1);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--gq-color-foreground) 12%, transparent);
     transition:
       transform 200ms ease,
       box-shadow 200ms ease;
@@ -37,9 +37,9 @@
 
 @keyframes gq-callout-glow {
   from {
-    box-shadow: 0 0 4px oklch(from var(--gq-color-accent) l c h / 0.2);
+    box-shadow: 0 0 4px color-mix(in srgb, var(--gq-color-accent) 20%, transparent);
   }
   to {
-    box-shadow: 0 0 12px oklch(from var(--gq-color-accent) l c h / 0.4);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--gq-color-accent) 40%, transparent);
   }
 }

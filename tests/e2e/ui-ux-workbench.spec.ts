@@ -10,11 +10,6 @@ const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
 const SHELL_ROUTE = "/workspace";
 const DEMO_ROUTE = "/__readme-demo?scene=modes";
 
-// EditorTabs currently keeps its close control inside the tab element. The
-// existing accessibility suite tracks this known axe finding separately; the
-// Task 6 smoke fails closed for every other critical or serious violation.
-const KNOWN_AXE_FINDINGS = new Set(["nested-interactive"]);
-
 async function dispatchShortcut(page: Page, modifier: "Control" | "Meta"): Promise<void> {
   await page.evaluate((key) => {
     window.dispatchEvent(
@@ -67,14 +62,12 @@ function expectThemeContrast(theme: ThemeTokens): void {
 async function criticalAxeFindings(page: Page): Promise<string[]> {
   const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   const unexpected = result.violations.filter(
-    (violation) =>
-      (violation.impact === "critical" || violation.impact === "serious") &&
-      !KNOWN_AXE_FINDINGS.has(violation.id),
+    (violation) => violation.impact === "critical" || violation.impact === "serious",
   );
   return unexpected.map((violation) => `${violation.id}:${violation.impact ?? "unknown"}`);
 }
 
-test.describe("Task 6 workbench UI acceptance", () => {
+test.describe("Workbench UI acceptance", () => {
   test("keeps the desktop keyboard flow and compact shell usable", async ({ page }) => {
     const axeFindings: string[] = [];
     await page.setViewportSize(DESKTOP_VIEWPORT);
