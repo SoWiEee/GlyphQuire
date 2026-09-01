@@ -31,6 +31,8 @@ export {
   themesRelations,
   userThemes,
   userThemesRelations,
+  userPreferences,
+  userPreferencesRelations,
   jobs,
   jobsRelations,
   idempotencyRecords,
@@ -71,6 +73,7 @@ export {
   type WorkspaceDeletionManifest,
   type AccountDeletionStatus,
   type AccountDeletionManifest,
+  type ThemePreferenceMode,
 } from "./schema/index.js";
 
 export {
@@ -104,6 +107,7 @@ import type {
   searchDocuments,
   themes,
   userThemes,
+  userPreferences,
   workspaceMembers,
   workspaces,
   workspaceDeletions,
@@ -126,6 +130,8 @@ export type Theme = InferSelectModel<typeof themes>;
 export type NewTheme = InferInsertModel<typeof themes>;
 export type UserTheme = InferSelectModel<typeof userThemes>;
 export type NewUserTheme = InferInsertModel<typeof userThemes>;
+export type UserPreference = InferSelectModel<typeof userPreferences>;
+export type NewUserPreference = InferInsertModel<typeof userPreferences>;
 export type Job = InferSelectModel<typeof jobs>;
 export type NewJob = InferInsertModel<typeof jobs>;
 export type IdempotencyRecord = InferSelectModel<typeof idempotencyRecords>;

@@ -69,6 +69,11 @@ import { createNoteRoutes } from "./routes/v1/notes.js";
 import { createVersionRoutes } from "./routes/v1/versions.js";
 import { ThemeServiceImpl, type ThemeService } from "./modules/themes/ThemeService.js";
 import { createThemeRoutes } from "./routes/v1/themes.js";
+import {
+  UserPreferenceServiceImpl,
+  type UserPreferenceService,
+} from "./modules/preferences/UserPreferenceService.js";
+import { createUserPreferenceRoutes } from "./routes/v1/preferences.js";
 import { createSearchRoutes } from "./routes/v1/search.js";
 import { createAssetRoutes } from "./routes/v1/assets.js";
 import { createTransferRoutes } from "./routes/v1/transfer.js";
@@ -99,6 +104,7 @@ export interface AppDependencies {
   workspaceService?: PersonalWorkspaceProvisioner;
   noteService?: NoteService;
   themeService?: ThemeService;
+  userPreferenceService?: UserPreferenceService;
   searchService?: SearchService;
   workspaceDeletionService?: WorkspaceDeletionService;
   accountDeletionService?: AccountDeletionService;
@@ -151,6 +157,8 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
   const workspaceService = dependencies.workspaceService ?? new WorkspaceService(db);
   const noteService = dependencies.noteService ?? new NoteServiceImpl(db);
   const themeService = dependencies.themeService ?? new ThemeServiceImpl(db);
+  const userPreferenceService =
+    dependencies.userPreferenceService ?? new UserPreferenceServiceImpl(db);
   const operatorAuthorizer =
     dependencies.operatorAuthorizer ?? createOperatorAuthorizer(env.OPERATIONS_OPERATOR_IDS);
   const jobDispatcher = dependencies.jobDispatcher ?? new PostgresJobDispatcher(db);
@@ -269,6 +277,7 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
     const path = context.req.path;
     if (
       path === "/api/v1/account/deletion" ||
+      path === "/api/v1/me/preferences/theme" ||
       path.startsWith("/api/v1/maintenance/") ||
       /^\/api\/v1\/workspaces\/[^/]+\/deletion$/u.test(path)
     ) {
@@ -415,6 +424,7 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
   app.route("/api/v1", createNoteRoutes(noteService));
   app.route("/api/v1", createVersionRoutes(noteService));
   app.route("/api/v1", createThemeRoutes(themeService));
+  app.route("/api/v1", createUserPreferenceRoutes(userPreferenceService));
   app.route("/api/v1", createSearchRoutes(searchService, operatorAuthorizer));
   if (assetService) app.route("/api/v1", createAssetRoutes(assetService));
   if (importService) app.route("/api/v1", createTransferRoutes(importService, exportService));
