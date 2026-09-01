@@ -1,6 +1,7 @@
 import {
   createCustomBlockInputSchema,
   customBlockIdParamsSchema,
+  deleteCustomBlockInputSchema,
   publishCustomBlockInputSchema,
   updateCustomBlockDraftInputSchema,
   workspaceIdParamsSchema,
@@ -58,9 +59,10 @@ export function createCustomBlockRoutes(service: CustomBlockService) {
     })
     .delete("/custom-blocks/:id", async (context) => {
       const params = customBlockIdParamsSchema.safeParse({ id: context.req.param("id") });
-      if (!params.success) invalid();
+      const body = deleteCustomBlockInputSchema.safeParse(await json(context.req.raw));
+      if (!params.success || !body.success) invalid();
       const { actorId } = getRequestContext(context);
-      await service.removeDraft(actorId, params.data.id);
+      await service.removeDraft(actorId, params.data.id, body.data);
       return context.json({ ok: true }, 200);
     });
 }

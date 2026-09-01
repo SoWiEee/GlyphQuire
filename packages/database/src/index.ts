@@ -37,6 +37,8 @@ export {
   customBlocksRelations,
   customBlockVersions,
   customBlockVersionsRelations,
+  customBlockOperations,
+  customBlockOperationsRelations,
   jobs,
   jobsRelations,
   idempotencyRecords,
@@ -79,6 +81,7 @@ export {
   type AccountDeletionManifest,
   type ThemePreferenceMode,
   type CustomBlockVersionStatus,
+  type CustomBlockVersionOperationKind,
   type CustomBlockOperationKind,
 } from "./schema/index.js";
 
@@ -116,6 +119,7 @@ import type {
   userPreferences,
   customBlocks,
   customBlockVersions,
+  customBlockOperations,
   workspaceMembers,
   workspaces,
   workspaceDeletions,
@@ -144,6 +148,8 @@ export type CustomBlock = InferSelectModel<typeof customBlocks>;
 export type NewCustomBlock = InferInsertModel<typeof customBlocks>;
 export type CustomBlockVersion = InferSelectModel<typeof customBlockVersions>;
 export type NewCustomBlockVersion = InferInsertModel<typeof customBlockVersions>;
+export type CustomBlockOperation = InferSelectModel<typeof customBlockOperations>;
+export type NewCustomBlockOperation = InferInsertModel<typeof customBlockOperations>;
 export type Job = InferSelectModel<typeof jobs>;
 export type NewJob = InferInsertModel<typeof jobs>;
 export type IdempotencyRecord = InferSelectModel<typeof idempotencyRecords>;

@@ -15,7 +15,8 @@ import { user } from "./auth.js";
 import { workspaces } from "./workspaces.js";
 
 export type CustomBlockVersionStatus = "draft" | "published";
-export type CustomBlockOperationKind = "create" | "update-draft" | "publish";
+export type CustomBlockVersionOperationKind = "create" | "update-draft" | "publish";
+export type CustomBlockOperationKind = CustomBlockVersionOperationKind | "delete-draft";
 
 export const customBlocks = pgTable(
   "custom_blocks",
@@ -58,7 +59,7 @@ export const customBlockVersions = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     operationId: text("operation_id").notNull(),
     operationKind: varchar("operation_kind", { length: 12 })
-      .$type<CustomBlockOperationKind>()
+      .$type<CustomBlockVersionOperationKind>()
       .notNull(),
     publishedAt: timestamp("published_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),

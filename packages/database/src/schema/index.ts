@@ -79,5 +79,10 @@ export {
   customBlockVersions,
   customBlockVersionsRelations,
   type CustomBlockVersionStatus,
+  type CustomBlockVersionOperationKind,
   type CustomBlockOperationKind,
 } from "./custom-blocks.js";
+export {
+  customBlockOperations,
+  customBlockOperationsRelations,
+} from "./custom-block-operations.js";

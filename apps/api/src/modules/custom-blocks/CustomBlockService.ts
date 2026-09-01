@@ -4,16 +4,19 @@ import {
   type CreateCustomBlockInput,
   type CustomBlockListResult,
   type CustomBlockRecord,
+  type DeleteCustomBlockInput,
   type PublishCustomBlockInput,
   type UpdateCustomBlockDraftInput,
 } from "@glyphquire/api-contract";
 import {
+  customBlockOperations,
   customBlockVersions,
   customBlocks,
   workspaceMembers,
   type Database,
 } from "@glyphquire/database";
 import { and, desc, eq } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { PublicApiError } from "../../middleware/error-handler.js";
 
 export interface CustomBlockService {
@@ -33,7 +36,7 @@ export interface CustomBlockService {
     blockId: string,
     input: PublishCustomBlockInput,
   ): Promise<CustomBlockRecord>;
-  removeDraft(actorId: string, blockId: string): Promise<void>;
+  removeDraft(actorId: string, blockId: string, input: DeleteCustomBlockInput): Promise<void>;
 }
 
 function invalid(): never {
@@ -56,6 +59,15 @@ function stableJson(value: unknown): string {
       .join(",")}}`;
   }
   return JSON.stringify(value);
+}
+
+function requestHash(value: unknown): string {
+  return createHash("sha256").update(stableJson(value), "utf8").digest("hex");
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  const candidate = error as { code?: string; cause?: { code?: string } };
+  return candidate?.code === "23505" || candidate?.cause?.code === "23505";
 }
 
 function toRecord(
@@ -129,20 +141,39 @@ export class CustomBlockServiceImpl implements CustomBlockService {
     return version;
   }
 
-  private async replay(actorId: string, operationId: string) {
+  private async replay(
+    actorId: string,
+    workspaceId: string | null,
+    operationId: string,
+    operationKind: "create" | "update-draft" | "publish" | "delete-draft",
+    blockId: string | null,
+    payload: unknown,
+  ): Promise<CustomBlockRecord | null | undefined> {
+    const predicates = [
+      eq(customBlockOperations.actorId, actorId),
+      eq(customBlockOperations.operationId, operationId),
+    ];
+    if (workspaceId !== null) {
+      predicates.push(eq(customBlockOperations.workspaceId, workspaceId));
+    } else if (blockId !== null) {
+      predicates.push(eq(customBlockOperations.targetBlockId, blockId));
+    }
     const rows = await this.db
-      .select({ block: customBlocks, version: customBlockVersions })
-      .from(customBlockVersions)
-      .innerJoin(customBlocks, eq(customBlocks.id, customBlockVersions.customBlockId))
-      .where(
-        and(
-          eq(customBlockVersions.createdBy, actorId),
-          eq(customBlockVersions.operationId, operationId),
-        ),
-      )
+      .select()
+      .from(customBlockOperations)
+      .where(and(...predicates))
       .limit(1);
-    const row = rows[0];
-    return row;
+    const operation = rows[0];
+    if (!operation) return undefined;
+    if (
+      operation.operationKind !== operationKind ||
+      (blockId !== null && operation.targetBlockId !== blockId) ||
+      operation.requestHash !== requestHash(payload)
+    ) {
+      operationReused();
+    }
+    if (operationKind === "delete-draft") return null;
+    return customBlockListResultSchema.shape.items.element.parse(operation.recordedResponse);
   }
 
   async list(actorId: string, workspaceId: string): Promise<CustomBlockListResult> {
@@ -165,46 +196,71 @@ export class CustomBlockServiceImpl implements CustomBlockService {
     input: CreateCustomBlockInput,
   ): Promise<CustomBlockRecord> {
     if ((await this.member(actorId, workspaceId)) === "viewer") notFound();
-    const replay = await this.replay(actorId, input.operationId);
     const definition = customBlockDefinitionSchema.safeParse(input.definition);
     if (!definition.success) invalid();
-    if (replay) {
-      if (
-        replay.version.operationKind !== "create" ||
-        replay.block.workspaceId !== workspaceId ||
-        stableJson(replay.version.definition) !== stableJson(definition.data)
-      ) {
-        operationReused();
-      }
-      return toRecord(replay.block, replay.version);
-    }
-    const result = await this.db.transaction(async (tx) => {
-      const [block] = await tx
-        .insert(customBlocks)
-        .values({
+    const payload = { definition: definition.data };
+    const replay = await this.replay(
+      actorId,
+      workspaceId,
+      input.operationId,
+      "create",
+      null,
+      payload,
+    );
+    if (replay !== undefined) return replay as CustomBlockRecord;
+    try {
+      const result = await this.db.transaction(async (tx) => {
+        const [block] = await tx
+          .insert(customBlocks)
+          .values({
+            workspaceId,
+            name: definition.data.name,
+            revision: 1,
+            createdBy: actorId,
+          })
+          .returning();
+        if (!block) throw new Error("Custom Block insert returned no row");
+        const [version] = await tx
+          .insert(customBlockVersions)
+          .values({
+            customBlockId: block.id,
+            version: definition.data.version,
+            status: "draft",
+            definition: definition.data,
+            createdBy: actorId,
+            operationId: input.operationId,
+            operationKind: "create",
+          })
+          .returning();
+        if (!version) throw new Error("Custom Block version insert returned no row");
+        const record = toRecord(block, version);
+        await tx.insert(customBlockOperations).values({
           workspaceId,
-          name: definition.data.name,
-          revision: 1,
-          createdBy: actorId,
-        })
-        .returning();
-      if (!block) throw new Error("Custom Block insert returned no row");
-      const [version] = await tx
-        .insert(customBlockVersions)
-        .values({
           customBlockId: block.id,
-          version: definition.data.version,
-          status: "draft",
-          definition: definition.data,
-          createdBy: actorId,
+          targetBlockId: block.id,
+          actorId,
           operationId: input.operationId,
           operationKind: "create",
-        })
-        .returning();
-      if (!version) throw new Error("Custom Block version insert returned no row");
-      return toRecord(block, version);
-    });
-    return result;
+          baseRevision: null,
+          requestHash: requestHash(payload),
+          recordedResponse: record,
+        });
+        return record;
+      });
+      return result;
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      const replay = await this.replay(
+        actorId,
+        workspaceId,
+        input.operationId,
+        "create",
+        null,
+        payload,
+      );
+      if (replay) return replay;
+      invalid();
+    }
   }
 
   async updateDraft(
@@ -214,19 +270,18 @@ export class CustomBlockServiceImpl implements CustomBlockService {
   ): Promise<CustomBlockRecord> {
     const { block, role } = await this.blockFor(actorId, blockId);
     this.assertMutable(role);
-    const replay = await this.replay(actorId, input.operationId);
     const definition = customBlockDefinitionSchema.safeParse(input.definition);
     if (!definition.success || definition.data.name !== block.name) invalid();
-    if (replay) {
-      if (
-        replay.block.id !== blockId ||
-        replay.version.operationKind !== "update-draft" ||
-        stableJson(replay.version.definition) !== stableJson(definition.data)
-      ) {
-        operationReused();
-      }
-      return toRecord(replay.block, replay.version);
-    }
+    const payload = { baseRevision: input.baseRevision, definition: definition.data };
+    const replay = await this.replay(
+      actorId,
+      block.workspaceId,
+      input.operationId,
+      "update-draft",
+      blockId,
+      payload,
+    );
+    if (replay) return replay;
     if (block.revision !== input.baseRevision) throw new PublicApiError("REVISION_CONFLICT", 409);
     const current = await this.latest(block.id);
     const expectedVersion = current.status === "draft" ? current.version : current.version + 1;
@@ -252,7 +307,19 @@ export class CustomBlockServiceImpl implements CustomBlockService {
           )
           .returning();
         if (!updatedVersion) throw new PublicApiError("REVISION_CONFLICT", 409);
-        return toRecord(updatedBlock, updatedVersion);
+        const record = toRecord(updatedBlock, updatedVersion);
+        await tx.insert(customBlockOperations).values({
+          workspaceId: block.workspaceId,
+          customBlockId: block.id,
+          targetBlockId: block.id,
+          actorId,
+          operationId: input.operationId,
+          operationKind: "update-draft",
+          baseRevision: input.baseRevision,
+          requestHash: requestHash(payload),
+          recordedResponse: record,
+        });
+        return record;
       }
       const [draft] = await tx
         .insert(customBlockVersions)
@@ -267,7 +334,19 @@ export class CustomBlockServiceImpl implements CustomBlockService {
         })
         .returning();
       if (!draft) throw new Error("Custom Block draft insert returned no row");
-      return toRecord(updatedBlock, draft);
+      const record = toRecord(updatedBlock, draft);
+      await tx.insert(customBlockOperations).values({
+        workspaceId: block.workspaceId,
+        customBlockId: block.id,
+        targetBlockId: block.id,
+        actorId,
+        operationId: input.operationId,
+        operationKind: "update-draft",
+        baseRevision: input.baseRevision,
+        requestHash: requestHash(payload),
+        recordedResponse: record,
+      });
+      return record;
     });
     return result;
   }
@@ -279,13 +358,16 @@ export class CustomBlockServiceImpl implements CustomBlockService {
   ): Promise<CustomBlockRecord> {
     const { block, role } = await this.blockFor(actorId, blockId);
     this.assertMutable(role);
-    const replay = await this.replay(actorId, input.operationId);
-    if (replay) {
-      if (replay.block.id !== blockId || replay.version.operationKind !== "publish") {
-        operationReused();
-      }
-      return toRecord(replay.block, replay.version);
-    }
+    const payload = { baseRevision: input.baseRevision };
+    const replay = await this.replay(
+      actorId,
+      block.workspaceId,
+      input.operationId,
+      "publish",
+      blockId,
+      payload,
+    );
+    if (replay) return replay;
     if (block.revision !== input.baseRevision) throw new PublicApiError("REVISION_CONFLICT", 409);
     const current = await this.latest(block.id);
     if (current.status !== "draft") invalid();
@@ -308,14 +390,50 @@ export class CustomBlockServiceImpl implements CustomBlockService {
         .where(and(eq(customBlockVersions.id, current.id), eq(customBlockVersions.status, "draft")))
         .returning();
       if (!published) throw new PublicApiError("REVISION_CONFLICT", 409);
-      return toRecord(updatedBlock, published);
+      const record = toRecord(updatedBlock, published);
+      await tx.insert(customBlockOperations).values({
+        workspaceId: block.workspaceId,
+        customBlockId: block.id,
+        targetBlockId: block.id,
+        actorId,
+        operationId: input.operationId,
+        operationKind: "publish",
+        baseRevision: input.baseRevision,
+        requestHash: requestHash(payload),
+        recordedResponse: record,
+      });
+      return record;
     });
     return result;
   }
 
-  async removeDraft(actorId: string, blockId: string): Promise<void> {
+  async removeDraft(
+    actorId: string,
+    blockId: string,
+    input: DeleteCustomBlockInput,
+  ): Promise<void> {
+    const payload = { baseRevision: input.baseRevision };
+    const replay = await this.replay(
+      actorId,
+      null,
+      input.operationId,
+      "delete-draft",
+      blockId,
+      payload,
+    );
+    if (replay !== undefined) return;
     const { block, role } = await this.blockFor(actorId, blockId);
     this.assertMutable(role);
+    const scopedReplay = await this.replay(
+      actorId,
+      block.workspaceId,
+      input.operationId,
+      "delete-draft",
+      blockId,
+      payload,
+    );
+    if (scopedReplay !== undefined) return;
+    if (block.revision !== input.baseRevision) throw new PublicApiError("REVISION_CONFLICT", 409);
     const current = await this.latest(block.id);
     if (current.status !== "draft") invalid();
     const versions = await this.db
@@ -323,9 +441,45 @@ export class CustomBlockServiceImpl implements CustomBlockService {
       .from(customBlockVersions)
       .where(eq(customBlockVersions.customBlockId, block.id));
     if (versions.length <= 1) {
-      await this.db.delete(customBlocks).where(eq(customBlocks.id, block.id));
+      await this.db.transaction(async (tx) => {
+        await tx.insert(customBlockOperations).values({
+          workspaceId: block.workspaceId,
+          customBlockId: block.id,
+          targetBlockId: block.id,
+          actorId,
+          operationId: input.operationId,
+          operationKind: "delete-draft",
+          baseRevision: input.baseRevision,
+          requestHash: requestHash(payload),
+          recordedResponse: { ok: true },
+        });
+        const deleted = await tx
+          .delete(customBlocks)
+          .where(and(eq(customBlocks.id, block.id), eq(customBlocks.revision, input.baseRevision)))
+          .returning({ id: customBlocks.id });
+        if (deleted.length !== 1) throw new PublicApiError("REVISION_CONFLICT", 409);
+      });
       return;
     }
-    await this.db.delete(customBlockVersions).where(eq(customBlockVersions.id, current.id));
+    await this.db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(customBlocks)
+        .set({ revision: block.revision + 1, updatedAt: new Date() })
+        .where(and(eq(customBlocks.id, block.id), eq(customBlocks.revision, input.baseRevision)))
+        .returning();
+      if (!updated) throw new PublicApiError("REVISION_CONFLICT", 409);
+      await tx.delete(customBlockVersions).where(eq(customBlockVersions.id, current.id));
+      await tx.insert(customBlockOperations).values({
+        workspaceId: block.workspaceId,
+        customBlockId: block.id,
+        targetBlockId: block.id,
+        actorId,
+        operationId: input.operationId,
+        operationKind: "delete-draft",
+        baseRevision: input.baseRevision,
+        requestHash: requestHash(payload),
+        recordedResponse: { ok: true },
+      });
+    });
   }
 }

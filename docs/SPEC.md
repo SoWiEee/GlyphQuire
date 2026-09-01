@@ -638,13 +638,16 @@ GET    /api/v1/workspaces/:workspaceId/custom-blocks
 POST   /api/v1/workspaces/:workspaceId/custom-blocks
 PUT    /api/v1/custom-blocks/:id/draft
 POST   /api/v1/custom-blocks/:id/publish
-DELETE /api/v1/custom-blocks/:id       # draft only
+DELETE /api/v1/custom-blocks/:id       # draft only; body has operationId + baseRevision
 ```
 
 Definitions are validated by the shared `theme-sdk` schema. The schema limits
 property count, string/enum sizes, icon names, renderer presets, token paths,
 and capabilities before persistence. Published versions are never edited in
-place; a new positive version must be drafted and published instead.
+place; a new positive version must be drafted and published instead. The
+server keeps an immutable operation ledger keyed by actor, workspace, and
+operation ID, including a request hash and target block identity, so retries
+return the recorded result without reapplying a mutation—even after deletion.
 
 ## 12. Plugin Manifest
 

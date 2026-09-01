@@ -202,7 +202,7 @@ describe("Phase 5 transfer schema and migration artifacts", () => {
     expect(snapshot).toContain('"public.exports"');
   });
 
-  it("preserves migrations through 0010 and appends the export-format check only in 0011", async () => {
+  it("preserves migrations through 0010 and keeps the export-format check in 0011", async () => {
     const frozen = [
       ["0008_phase5_exports", "9a6ad7ed95a5e65b0dc0e2daba5e3720c28e822752b32ff254565e754b42b14e"],
       [
@@ -217,10 +217,11 @@ describe("Phase 5 transfer schema and migration artifacts", () => {
     }
 
     const repository = await readRepositoryMigrations(migrationsDirectory);
-    expect(repository.map((entry) => entry.tag).slice(-2)).toEqual([
-      "0010_phase5_lifecycle",
-      "0011_phase5_export_formats",
-    ]);
+    const tags = repository.map((entry) => entry.tag);
+    const lifecycleIndex = tags.indexOf("0010_phase5_lifecycle");
+    const exportFormatsIndex = tags.indexOf("0011_phase5_export_formats");
+    expect(lifecycleIndex).toBeGreaterThanOrEqual(0);
+    expect(exportFormatsIndex).toBe(lifecycleIndex + 1);
     const snapshot = JSON.parse(
       await readFile(new URL("./meta/0011_snapshot.json", import.meta.url), "utf8"),
     ) as {

@@ -41,4 +41,8 @@ export const publishCustomBlockInputSchema = z
   .object({ operationId: requestIdSchema, baseRevision: z.number().int().positive() })
   .strict();
 
+export const deleteCustomBlockInputSchema = z
+  .object({ operationId: requestIdSchema, baseRevision: z.number().int().positive() })
+  .strict();
+
 export const customBlockIdParamsSchema = z.object({ id: canonicalUuidSchema }).strict();

@@ -115,8 +115,10 @@ export const useCustomBlocksStore = defineStore("custom-blocks", () => {
   }
 
   async function remove(blockId: string): Promise<void> {
+    const current = definitions.value.find((item) => item.id === blockId);
+    if (!current) throw new Error("Custom Block is no longer available");
     await mutation(async () => {
-      await client.value.remove(blockId);
+      await client.value.remove(blockId, operationIdFactory(), current.revision);
       definitions.value = definitions.value.filter((item) => item.id !== blockId);
     });
   }

@@ -97,10 +97,14 @@ export class CustomBlockClient {
     );
   }
 
-  async remove(blockId: string): Promise<void> {
+  async remove(blockId: string, operationId: string, baseRevision: number): Promise<void> {
     await this.request(
       `/api/v1/custom-blocks/${encodeURIComponent(blockId)}`,
-      { method: "DELETE" },
+      {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ operationId, baseRevision }),
+      },
       {
         parse: (value: unknown) => {
           if (!value || typeof value !== "object" || (value as { ok?: unknown }).ok !== true) {
