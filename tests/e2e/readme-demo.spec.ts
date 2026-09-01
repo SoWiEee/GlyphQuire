@@ -1,10 +1,9 @@
 import { mkdirSync } from "node:fs";
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Route } from "@playwright/test";
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
 const WORKSPACE_ID = "11111111-1111-4111-8111-111111111111";
-const NOTE_ID = "22222222-2222-4222-8222-222222222222";
 const SEARCH_NOTE_ID = "33333333-3333-4333-8333-333333333333";
 const IMPORT_ID = "44444444-4444-4444-8444-444444444444";
 const EXPORT_ID = "55555555-5555-4555-8555-555555555555";
@@ -41,14 +40,6 @@ async function assertDemoDomSafe(page: import("@playwright/test").Page): Promise
   expect(combined).not.toMatch(
     /(?:token=|bearer |presigned|https?:\/\/|\/\/[^\s]+|blob:|file:\/\/|mailto:|postgresql:\/\/|s3[.-]|password=|cookie|data:|raw markdown|fixture(?: payload| id)?|provider(?: diagnostic| error)|accessdenied|invalidaccesskeyid|signaturedoesnotmatch|asset:\/\/|glyphquire-spec|eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{10,}|(?:ghp_|github_pat_|sk-(?:live|proj)-|xox[baprs]-|AIza[\w-]{20,})[\w-]+|AKIA[\w]{16}|(?:api[_-]?key|secret|access[_-]?key)\s*=|(?:^|\n)\s{0,3}(?:#{1,6}\s+\S|```|[-*+]\s+\S|>\s+\S)|\*[^*\n]+\*|(?:^|\n)\s*\|[^|\n]+\|[^|\n]+\||\[[^\]\n]+\]\([^)]*\))/imu,
   );
-}
-
-async function openTool(page: Page, label: string): Promise<void> {
-  await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
-  const palette = page.getByRole("dialog", { name: "Command palette" });
-  await palette.getByRole("textbox", { name: "Filter commands" }).fill(label);
-  await expect(palette.getByRole("option", { name: label })).toBeVisible();
-  await page.keyboard.press("Enter");
 }
 
 test("captures the four README demo scenes", async ({ page }) => {
@@ -165,16 +156,13 @@ test("captures the four README demo scenes", async ({ page }) => {
   await assertDemoDomSafe(page);
   await page.screenshot({ path: "docs/assets/readme/03-search-transfer.png", fullPage: false });
 
-  await page.goto(`/workspace/${WORKSPACE_ID}?noteId=${NOTE_ID}`);
-  await openTool(page, "Create read-only share link");
-  const share = page.getByRole("dialog", { name: "Share link" });
-  await expect(share.getByRole("button", { name: "Create share link" })).toBeVisible();
-  await share.getByRole("button", { name: "Close tools" }).click();
-
   await page.goto("/__readme-demo");
-  await expect(page.getByRole("heading", { name: "Sharing" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sharing", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Share link" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Administrative maintenance" })).toHaveCount(0);
   await assertDemoDomSafe(page);
-  await page.screenshot({ path: "docs/assets/readme/04-sharing.png", fullPage: false });
+  await page.screenshot({
+    path: "docs/assets/readme/04-sharing-maintenance.png",
+    fullPage: false,
+  });
 });

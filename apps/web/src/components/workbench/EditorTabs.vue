@@ -1,16 +1,9 @@
 <template>
-  <div
-    role="tablist"
-    aria-label="Open notes"
-    class="gq-editor-tabs flex items-center overflow-x-auto border-b border-gray-200 bg-white"
-  >
-    <div
-      v-for="tab in tabs"
-      :key="tab.id"
-      role="presentation"
-      class="gq-editor-tabs__item group flex items-center border-r"
-    >
+  <div class="gq-editor-tabs flex items-center overflow-x-auto border-b border-gray-200 bg-white">
+    <div role="tablist" aria-label="Open notes" class="gq-editor-tabs__list flex items-center">
       <button
+        v-for="tab in tabs"
+        :key="tab.id"
         type="button"
         role="tab"
         :aria-selected="tab.id === activeTabId"
@@ -24,9 +17,15 @@
       >
         <span class="max-w-[10rem] truncate">{{ tab.title }}</span>
       </button>
+    </div>
+    <div
+      v-for="tab in tabs"
+      :key="tab.id"
+      class="gq-editor-tabs__close-item group flex items-center"
+    >
       <button
         type="button"
-        class="gq-editor-tabs__close mr-1 rounded px-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+        class="gq-editor-tabs__close mr-1 rounded px-1 focus-visible:opacity-100"
         :aria-label="`Close ${tab.title}`"
         @click.stop="emit('close', tab.id)"
       >

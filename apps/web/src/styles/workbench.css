@@ -235,6 +235,18 @@ body,
   color: var(--gq-color-foreground);
 }
 
+.gq-editor-tabs__list {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
+}
+
+.gq-editor-tabs__close-item {
+  flex: 0 0 auto;
+  min-height: 2.75rem;
+  border-inline-start: 1px solid var(--gq-color-border);
+}
+
 .gq-editor-tabs__tab {
   min-height: 2.75rem;
   border-color: var(--gq-color-border);

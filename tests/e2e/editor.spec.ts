@@ -139,12 +139,7 @@ test.describe("tab management", () => {
     const tabs = page.getByRole("tablist", { name: "Open notes" });
     await expect(tabs.getByRole("tab")).toHaveCount(2);
 
-    await tabs
-      .getByRole("tab", { name: "Roadmap" })
-      .getByRole("button", {
-        name: "Close Roadmap",
-      })
-      .click();
+    await page.getByRole("button", { name: "Close Roadmap" }).click();
 
     await expect(tabs.getByRole("tab")).toHaveCount(1);
     await expect(tabs.getByRole("tab", { name: "Welcome" })).toHaveAttribute(
@@ -157,12 +152,7 @@ test.describe("tab management", () => {
 
   test("closing every tab shows the empty-tabs affordance", async ({ page }) => {
     const tabs = page.getByRole("tablist", { name: "Open notes" });
-    await tabs
-      .getByRole("tab", { name: "Welcome" })
-      .getByRole("button", {
-        name: "Close Welcome",
-      })
-      .click();
+    await page.getByRole("button", { name: "Close Welcome" }).click();
 
     await expect(tabs.getByRole("tab")).toHaveCount(0);
     await expect(page.getByText("No notes open — pick one from the Explorer.")).toBeVisible();
