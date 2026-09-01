@@ -79,6 +79,7 @@ export {
   type AccountDeletionManifest,
   type ThemePreferenceMode,
   type CustomBlockVersionStatus,
+  type CustomBlockOperationKind,
 } from "./schema/index.js";
 
 export {

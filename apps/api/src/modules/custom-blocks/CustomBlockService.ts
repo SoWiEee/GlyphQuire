@@ -43,6 +43,21 @@ function notFound(): never {
   throw new PublicApiError("NOTE_NOT_FOUND", 404);
 }
 
+function operationReused(): never {
+  throw new PublicApiError("OPERATION_REUSED", 409);
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function toRecord(
   block: typeof customBlocks.$inferSelect,
   version: typeof customBlockVersions.$inferSelect,
@@ -114,10 +129,7 @@ export class CustomBlockServiceImpl implements CustomBlockService {
     return version;
   }
 
-  private async replay(
-    actorId: string,
-    operationId: string,
-  ): Promise<CustomBlockRecord | undefined> {
+  private async replay(actorId: string, operationId: string) {
     const rows = await this.db
       .select({ block: customBlocks, version: customBlockVersions })
       .from(customBlockVersions)
@@ -130,7 +142,7 @@ export class CustomBlockServiceImpl implements CustomBlockService {
       )
       .limit(1);
     const row = rows[0];
-    return row ? toRecord(row.block, row.version) : undefined;
+    return row;
   }
 
   async list(actorId: string, workspaceId: string): Promise<CustomBlockListResult> {
@@ -154,9 +166,18 @@ export class CustomBlockServiceImpl implements CustomBlockService {
   ): Promise<CustomBlockRecord> {
     if ((await this.member(actorId, workspaceId)) === "viewer") notFound();
     const replay = await this.replay(actorId, input.operationId);
-    if (replay) return replay;
     const definition = customBlockDefinitionSchema.safeParse(input.definition);
     if (!definition.success) invalid();
+    if (replay) {
+      if (
+        replay.version.operationKind !== "create" ||
+        replay.block.workspaceId !== workspaceId ||
+        stableJson(replay.version.definition) !== stableJson(definition.data)
+      ) {
+        operationReused();
+      }
+      return toRecord(replay.block, replay.version);
+    }
     const result = await this.db.transaction(async (tx) => {
       const [block] = await tx
         .insert(customBlocks)
@@ -177,6 +198,7 @@ export class CustomBlockServiceImpl implements CustomBlockService {
           definition: definition.data,
           createdBy: actorId,
           operationId: input.operationId,
+          operationKind: "create",
         })
         .returning();
       if (!version) throw new Error("Custom Block version insert returned no row");
@@ -193,10 +215,19 @@ export class CustomBlockServiceImpl implements CustomBlockService {
     const { block, role } = await this.blockFor(actorId, blockId);
     this.assertMutable(role);
     const replay = await this.replay(actorId, input.operationId);
-    if (replay) return replay;
-    if (block.revision !== input.baseRevision) throw new PublicApiError("REVISION_CONFLICT", 409);
     const definition = customBlockDefinitionSchema.safeParse(input.definition);
     if (!definition.success || definition.data.name !== block.name) invalid();
+    if (replay) {
+      if (
+        replay.block.id !== blockId ||
+        replay.version.operationKind !== "update-draft" ||
+        stableJson(replay.version.definition) !== stableJson(definition.data)
+      ) {
+        operationReused();
+      }
+      return toRecord(replay.block, replay.version);
+    }
+    if (block.revision !== input.baseRevision) throw new PublicApiError("REVISION_CONFLICT", 409);
     const current = await this.latest(block.id);
     const expectedVersion = current.status === "draft" ? current.version : current.version + 1;
     if (definition.data.version !== expectedVersion) invalid();
@@ -211,7 +242,11 @@ export class CustomBlockServiceImpl implements CustomBlockService {
       if (current.status === "draft") {
         const [updatedVersion] = await tx
           .update(customBlockVersions)
-          .set({ definition: definition.data, operationId: input.operationId })
+          .set({
+            definition: definition.data,
+            operationId: input.operationId,
+            operationKind: "update-draft",
+          })
           .where(
             and(eq(customBlockVersions.id, current.id), eq(customBlockVersions.status, "draft")),
           )
@@ -228,6 +263,7 @@ export class CustomBlockServiceImpl implements CustomBlockService {
           definition: definition.data,
           createdBy: actorId,
           operationId: input.operationId,
+          operationKind: "update-draft",
         })
         .returning();
       if (!draft) throw new Error("Custom Block draft insert returned no row");
@@ -244,7 +280,12 @@ export class CustomBlockServiceImpl implements CustomBlockService {
     const { block, role } = await this.blockFor(actorId, blockId);
     this.assertMutable(role);
     const replay = await this.replay(actorId, input.operationId);
-    if (replay) return replay;
+    if (replay) {
+      if (replay.block.id !== blockId || replay.version.operationKind !== "publish") {
+        operationReused();
+      }
+      return toRecord(replay.block, replay.version);
+    }
     if (block.revision !== input.baseRevision) throw new PublicApiError("REVISION_CONFLICT", 409);
     const current = await this.latest(block.id);
     if (current.status !== "draft") invalid();
@@ -258,7 +299,12 @@ export class CustomBlockServiceImpl implements CustomBlockService {
       if (!updatedBlock) throw new PublicApiError("REVISION_CONFLICT", 409);
       const [published] = await tx
         .update(customBlockVersions)
-        .set({ status: "published", publishedAt: now, operationId: input.operationId })
+        .set({
+          status: "published",
+          publishedAt: now,
+          operationId: input.operationId,
+          operationKind: "publish",
+        })
         .where(and(eq(customBlockVersions.id, current.id), eq(customBlockVersions.status, "draft")))
         .returning();
       if (!published) throw new PublicApiError("REVISION_CONFLICT", 409);
