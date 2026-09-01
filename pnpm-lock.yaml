@@ -193,6 +193,9 @@ importers:
       '@glyphquire/theme-engine':
         specifier: workspace:*
         version: link:../../packages/theme-engine
+      '@glyphquire/theme-sdk':
+        specifier: workspace:*
+        version: link:../../packages/theme-sdk
       '@lucide/vue':
         specifier: 1.38.0
         version: 1.38.0(vue@3.5.41(typescript@5.9.3))

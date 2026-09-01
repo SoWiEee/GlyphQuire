@@ -23,6 +23,7 @@
     "@glyphquire/api-contract": "workspace:*",
     "@glyphquire/document-engine": "workspace:*",
     "@glyphquire/runtime-protocol": "workspace:*",
+    "@glyphquire/theme-sdk": "workspace:*",
     "@glyphquire/theme-engine": "workspace:*",
     "@lucide/vue": "1.38.0",
     "@milkdown/kit": "7.22.1",
