@@ -29,7 +29,7 @@
         :aria-label="`Close ${tab.title}`"
         @click.stop="emit('close', tab.id)"
       >
-        ×
+        <GqIcon name="x" size="sm" />
       </button>
     </div>
     <p v-if="tabs.length === 0" class="gq-editor-empty px-3 py-1.5 text-sm">
@@ -39,6 +39,7 @@
 </template>
 
 <script setup lang="ts">
+import GqIcon from "../icons/GqIcon.vue";
 import type { WorkbenchNote } from "./types.js";
 
 defineProps<{

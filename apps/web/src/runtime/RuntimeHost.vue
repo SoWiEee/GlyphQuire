@@ -5,6 +5,7 @@ const activeCount = ref(0);
 
 <script setup lang="ts">
 import { computed, onUnmounted, watch } from "vue";
+import GqIcon from "../components/icons/GqIcon.vue";
 import { useRuntimeBridge } from "./useRuntimeBridge.js";
 import { SANDBOX_ORIGIN } from "./runtime-config.js";
 import { MAX_IFRAMES_PER_PAGE, MAX_CODE_SIZE_BYTES } from "@glyphquire/runtime-protocol";
@@ -127,7 +128,8 @@ onUnmounted(() => {
     >
       <pre class="runtime-code-preview">{{ codePreview }}</pre>
       <button v-if="!isAtLimit" data-testid="runtime-play" class="runtime-play-btn" @click="play">
-        ▶ Run
+        <GqIcon name="play" size="sm" />
+        <span>Run</span>
       </button>
       <p v-else class="runtime-limit-msg">
         Maximum active runtimes reached. Stop another runtime to start this one.
@@ -149,7 +151,10 @@ onUnmounted(() => {
 
       <div v-if="bridge.state.value === 'initializing'" class="runtime-placeholder">
         <pre class="runtime-code-preview">{{ codePreview }}</pre>
-        <div class="runtime-spinner">Loading…</div>
+        <div class="runtime-spinner">
+          <GqIcon name="loader-circle" size="sm" />
+          <span>Loading</span>
+        </div>
       </div>
 
       <div
@@ -158,7 +163,8 @@ onUnmounted(() => {
       >
         <pre class="runtime-code-preview">{{ codePreview }}</pre>
         <button v-if="!isAtLimit" data-testid="runtime-play" class="runtime-play-btn" @click="play">
-          ▶ Run
+          <GqIcon name="play" size="sm" />
+          <span>Run</span>
         </button>
         <p v-else class="runtime-limit-msg">
           Maximum active runtimes reached. Stop another runtime to start this one.
@@ -167,7 +173,8 @@ onUnmounted(() => {
 
       <div v-else-if="bridge.state.value === 'executing'" class="runtime-controls">
         <button data-testid="runtime-stop" class="runtime-stop-btn" @click="handleStop">
-          ■ Stop
+          <GqIcon name="square" size="sm" />
+          <span>Stop</span>
         </button>
       </div>
 
@@ -177,7 +184,8 @@ onUnmounted(() => {
           Line {{ bridge.error.value.line }}
         </p>
         <button data-testid="runtime-reset" class="runtime-reset-btn" @click="handleReset">
-          Reset
+          <GqIcon name="rotate-ccw" size="sm" />
+          <span>Reset</span>
         </button>
       </div>
     </div>

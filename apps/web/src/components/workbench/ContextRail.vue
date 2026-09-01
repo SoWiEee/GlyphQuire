@@ -36,7 +36,7 @@
           class="gq-context-rail__close rounded p-1 hover:bg-gray-100 hover:text-gray-900"
           @click="emit('close')"
         >
-          ×
+          <GqIcon name="x" size="sm" />
         </button>
       </header>
 
@@ -145,6 +145,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { trapFocus, type FocusTrapHandle } from "../../lib/focusTrap.js";
+import GqIcon from "../icons/GqIcon.vue";
 import type { ContextAction, OutlineEntry } from "./types.js";
 
 const props = defineProps<{

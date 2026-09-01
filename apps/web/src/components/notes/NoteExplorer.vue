@@ -10,7 +10,8 @@
         class="rounded px-1.5 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
         @click="startCreate"
       >
-        + New
+        <GqIcon name="sticky-note" size="sm" />
+        <span>New</span>
       </button>
     </div>
 
@@ -56,7 +57,7 @@
             @keydown.escape="cancelRename"
           />
           <button type="submit" class="shrink-0 text-xs text-gray-600" aria-label="Save name">
-            ✓
+            <GqIcon name="check" size="sm" />
           </button>
           <button
             type="button"
@@ -64,13 +65,13 @@
             aria-label="Cancel rename"
             @click="cancelRename"
           >
-            ✕
+            <GqIcon name="x" size="sm" />
           </button>
         </form>
         <div v-else class="group flex items-center px-1">
           <button
             type="button"
-            class="flex-1 truncate rounded px-2 py-1.5 text-left text-sm"
+            class="flex flex-1 items-center gap-1.5 truncate rounded px-2 py-1.5 text-left text-sm"
             :class="
               note.id === activeNoteId
                 ? 'bg-gray-200 font-medium text-gray-900'
@@ -79,7 +80,8 @@
             :aria-current="note.id === activeNoteId ? 'true' : undefined"
             @click="emit('open', note.id)"
           >
-            {{ note.title }}
+            <GqIcon v-if="note.id === activeNoteId" name="file-text" size="sm" />
+            <span class="truncate">{{ note.title }}</span>
           </button>
           <button
             type="button"
@@ -115,7 +117,7 @@
       @click="trashOpen = !trashOpen"
     >
       <span>Trash ({{ store.trashedNotes.length }})</span>
-      <span aria-hidden="true">{{ trashOpen ? "−" : "+" }}</span>
+      <GqIcon :name="trashOpen ? 'chevron-down' : 'chevrons-right'" size="sm" aria-hidden="true" />
     </button>
     <ul v-if="trashOpen" id="note-explorer-trash-list" class="pb-3" aria-label="Deleted notes">
       <li
@@ -162,6 +164,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import ConfirmDialog from "../common/ConfirmDialog.vue";
+import GqIcon from "../icons/GqIcon.vue";
 import { useNotesStore } from "../../stores/notes.js";
 
 const props = defineProps<{

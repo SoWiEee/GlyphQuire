@@ -2,6 +2,9 @@ import type { MilkdownPlugin } from "@milkdown/kit/ctx";
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import type { NodeViewConstructor } from "@milkdown/kit/prose/view";
 import { $nodeSchema, $view } from "@milkdown/kit/utils";
+import { createVNode, render } from "vue";
+import type { IconName } from "@glyphquire/theme-sdk";
+import GqIcon from "../../../components/icons/GqIcon.vue";
 import {
   addSemanticContainerToMarkdown,
   annotatedVisualKind,
@@ -110,7 +113,8 @@ function toggleNodeView(): NodeViewConstructor {
       const title = typeof currentNode.attrs.title === "string" ? currentNode.attrs.title : "";
       dom.dataset.toggleOpen = String(expanded);
       disclosure.setAttribute("aria-expanded", String(expanded));
-      chevron.textContent = expanded ? "⌄" : "›";
+      const iconName: IconName = expanded ? "chevron-down" : "chevrons-right";
+      render(createVNode(GqIcon, { name: iconName, size: "sm" }), chevron);
       disclosureTitle.textContent = title || "Toggle details";
       contentDOM.hidden = !expanded;
       titleInput.value = title;
@@ -161,6 +165,9 @@ function toggleNodeView(): NodeViewConstructor {
         expanded = currentNode.attrs.open === true;
         sync();
         return true;
+      },
+      destroy(): void {
+        render(null, chevron);
       },
       stopEvent: (event) =>
         event.target instanceof globalThis.Node && header.contains(event.target),
