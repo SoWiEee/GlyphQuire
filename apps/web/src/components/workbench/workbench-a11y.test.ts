@@ -63,7 +63,7 @@ describe("Workbench accessibility smoke", () => {
     });
     await flushPromises();
 
-    expect(wrapper.get('button[aria-label="Open shared links"]').isDisabled()).toBe(true);
+    expect(wrapper.get('button[role="tab"][aria-label="Shared"]').isDisabled()).toBe(true);
 
     const removeKeyboardActivationShim = installButtonKeyboardActivationShim();
     const accountButton = wrapper.get('button[aria-label="Open account menu"]').element;
@@ -74,7 +74,7 @@ describe("Workbench accessibility smoke", () => {
     );
     await nextTick();
     expect(wrapper.get('[role="menu"][aria-label="Account menu"]').exists()).toBe(true);
-    expect(document.activeElement).toBe(wrapper.get('button[aria-label="Theme"]').element);
+    expect(document.activeElement).toBe(wrapper.get('button[aria-label="Sign out"]').element);
 
     await wrapper.get('button[aria-label="Close menu"]').trigger("click");
     await nextTick();
@@ -85,7 +85,7 @@ describe("Workbench accessibility smoke", () => {
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
     );
     await nextTick();
-    expect(document.activeElement).toBe(wrapper.get('button[aria-label="Theme"]').element);
+    expect(document.activeElement).toBe(wrapper.get('button[aria-label="Sign out"]').element);
 
     const signOutButton = wrapper.get('button[aria-label="Sign out"]').element;
     signOutButton.focus();
@@ -103,7 +103,7 @@ describe("Workbench accessibility smoke", () => {
     );
     await nextTick();
     expect(wrapper.get('[role="menu"][aria-label="Account menu"]').exists()).toBe(true);
-    expect(document.activeElement).toBe(wrapper.get('button[aria-label="Theme"]').element);
+    expect(document.activeElement).toBe(wrapper.get('button[aria-label="Sign out"]').element);
 
     const reopenedSignOutButton = wrapper.get('button[aria-label="Sign out"]').element;
     reopenedSignOutButton.focus();

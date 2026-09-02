@@ -15,35 +15,16 @@
     >
       {{ action.shortLabel }}
     </button>
-    <span
-      class="gq-editor-toolbar__mode ml-auto text-[10px] uppercase tracking-wide"
-      aria-hidden="true"
-    >
-      {{ mode }}
-    </span>
-    <button
-      type="button"
-      class="rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-      aria-label="Open command palette"
-      title="Open command palette"
-      @click="emit('openPalette')"
-    >
-      Commands <kbd class="ml-1 rounded bg-gray-100 px-1 text-[10px] text-gray-600">⌘K</kbd>
-    </button>
   </nav>
 </template>
 
 <script setup lang="ts">
-import type { WorkbenchEditorMode, ToolbarAction } from "./types.js";
+import type { ToolbarAction } from "./types.js";
 
-defineProps<{
-  disabled: boolean;
-  mode: WorkbenchEditorMode;
-}>();
+defineProps<{ disabled: boolean }>();
 
 const emit = defineEmits<{
   action: [action: ToolbarAction];
-  openPalette: [];
 }>();
 
 const actions: ReadonlyArray<{ id: ToolbarAction; label: string; shortLabel: string }> = [

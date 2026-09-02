@@ -47,8 +47,8 @@ export const defaultTheme: ThemeTokens = {
     danger: "#a13d3d",
   },
   typography: {
-    bodyFont: "'Inter', 'Noto Sans TC', system-ui, sans-serif",
-    headingFont: '"Source Serif 4", Georgia, serif',
+    bodyFont: "'Google Sans Flex', 'Noto Sans TC', system-ui, sans-serif",
+    headingFont: '"Playfair Display", "Noto Serif TC", Georgia, serif',
     monoFont: "'JetBrains Mono', 'Fira Code', ui-monospace, monospace",
   },
   radius: {
@@ -81,8 +81,8 @@ export const defaultDarkTheme: ThemeTokens = {
     danger: "#f0a0a0",
   },
   typography: {
-    bodyFont: "'Inter', 'Noto Sans TC', system-ui, sans-serif",
-    headingFont: '"Source Serif 4", Georgia, serif',
+    bodyFont: "'Google Sans Flex', 'Noto Sans TC', system-ui, sans-serif",
+    headingFont: '"Playfair Display", "Noto Serif TC", Georgia, serif',
     monoFont: "'JetBrains Mono', 'Fira Code', ui-monospace, monospace",
   },
   radius: {
@@ -115,6 +115,6 @@ export const warmSepiaTheme: ThemeTokenOverrides = {
     danger: "#9b3f2f",
   },
   typography: {
-    headingFont: '"Source Serif 4", Georgia, serif',
+    headingFont: '"Playfair Display", "Noto Serif TC", Georgia, serif',
   },
 };

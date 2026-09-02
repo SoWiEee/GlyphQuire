@@ -85,10 +85,10 @@ describe("WorkbenchContext", () => {
     expect(context.snapshot().sessionState?.noteId).toBe("second");
     expect(firstSession.dispose).toHaveBeenCalledOnce();
 
-    context.setPanel("search");
-    expect(context.snapshot().toolPanel).toBe("search");
+    context.setPanel("assets");
+    expect(context.snapshot().toolPanel).toBe("assets");
     context.setPanel("history");
-    expect(context.snapshot().toolPanel).toBe("search");
+    expect(context.snapshot().toolPanel).toBe("assets");
     context.setPanel("context");
     expect(context.snapshot().contextRailOpen).toBe(true);
     context.setPanel("assets");

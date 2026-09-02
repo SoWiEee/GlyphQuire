@@ -45,31 +45,23 @@ export interface WorkbenchNote {
 /** The editor's source/visual/split mode control. */
 export type WorkbenchEditorMode = "source" | "visual" | "split";
 
+/** The primary work surfaces shown by the workbench page tabs. */
+export type WorkbenchPrimaryPage = "editor" | "search" | "shared" | "transfer";
+
+/** Secondary tools opened from the fixed Topbar Tools menu. */
+export type WorkbenchToolAction = "history" | "assets" | "custom-blocks" | "theme";
+
 /** Which contextual tool panel is open in the workbench. */
-export type WorkbenchToolPanel =
-  | "assets"
-  | "custom-blocks"
-  | "search"
-  | "transfer"
-  | "share"
-  | "history"
-  | "shared-links";
+export type WorkbenchToolPanel = "assets" | "custom-blocks" | "history";
 
 /** Which navigation or contextual tool surface is open. */
 export type WorkbenchPanel = "explorer" | "context" | WorkbenchToolPanel | null;
 
 /** Actions exposed by the context rail; outline selection is a separate event. */
-export type ContextAction =
-  | "outline"
-  | "history"
-  | "assets"
-  | "custom-blocks"
-  | "search"
-  | "transfer"
-  | "share";
+export type ContextAction = "outline" | "history" | "assets" | "custom-blocks";
 
 /** Account actions are forwarded to the authenticated host without side effects here. */
-export type WorkbenchAccountAction = "theme" | "sign-out";
+export type WorkbenchAccountAction = "sign-out";
 
 export interface OutlineEntry {
   id: string;

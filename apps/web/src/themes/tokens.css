@@ -10,8 +10,8 @@
   --gq-color-success: #31724d;
   --gq-color-warning: #8a5a16;
   --gq-color-danger: #a13d3d;
-  --gq-typography-body-font: "Inter", "Noto Sans TC", system-ui, sans-serif;
-  --gq-typography-heading-font: "Source Serif 4", Georgia, serif;
+  --gq-typography-body-font: "Google Sans Flex", "Noto Sans TC", system-ui, sans-serif;
+  --gq-typography-heading-font: "Playfair Display", "Noto Serif TC", Georgia, serif;
   --gq-typography-mono-font: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
   --gq-radius-sm: 0.25rem;
   --gq-radius-md: 0.5rem;

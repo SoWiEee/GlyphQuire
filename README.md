@@ -28,10 +28,12 @@
 
 <table>
   <tr>
-    <td align="center"><img src="docs/assets/readme/01-editor-modes.png" alt="Visual and Source editing modes" width="100%"><br><sub>Visual / Source editing</sub></td>
+    <td align="center"><img src="docs/assets/readme/01-editor-modes.png" alt="Workbench editor with page tabs and editing modes" width="100%"><br><sub>Workbench tabs and editor modes</sub></td>
     <td align="center"><img src="docs/assets/readme/02-semantic-blocks.png" alt="Semantic Markdown blocks" width="100%"><br><sub>Callout, Toggle, Tabs, Columns</sub></td>
+  </tr>
+  <tr>
     <td align="center"><img src="docs/assets/readme/03-search-transfer.png" alt="Search and import/export tools" width="100%"><br><sub>Search and transfer</sub></td>
-    <td align="center"><img src="docs/assets/readme/04-sharing-maintenance.png" alt="Read-only sharing and maintenance" width="100%"><br><sub>Sharing and maintenance</sub></td>
+    <td align="center"><img src="docs/assets/readme/04-sharing-maintenance.png" alt="Read-only sharing" width="100%"><br><sub>Read-only sharing</sub></td>
   </tr>
 </table>
 

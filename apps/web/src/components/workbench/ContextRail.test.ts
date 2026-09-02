@@ -12,7 +12,6 @@ const baseProps = {
   noteAvailable: true,
   outline: [],
   currentRevision: 2,
-  readOnly: false,
 };
 
 describe("ContextRail", () => {
@@ -43,7 +42,6 @@ describe("ContextRail", () => {
         noteAvailable: false,
         outline: [{ id: "h1", depth: 1 as const, label: "Research" }],
         currentRevision: null,
-        readOnly: true,
       },
     });
 

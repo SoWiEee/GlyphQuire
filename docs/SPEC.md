@@ -781,6 +781,15 @@ Built-in custom block 的呈現規則：
 
 Visual Mode 的 block controls 必須使用友善名稱並與 authored content 分離。Theme Editor 的 token 與 approved variant 變更必須即時反映在 editor，且所有狀態需維持 WCAG 2.2 AA 對比與可見 focus ring。P1 驗收以 Chrome 桌面畫面矩陣、鍵盤操作及 light/dark theme 人工檢視為主，不建立大量視覺 snapshot 測試。
 
+Workbench navigation uses one fixed Topbar and internal page tabs. The primary
+tabs are Editor, Search, Shared, and Transfer; only the active page is rendered
+in the workbench canvas. Secondary tools (History, Assets, Custom Blocks, and
+Theme) are opened from the Topbar Tools menu. Explorer and Context rail stay
+focused on note navigation and note-local context, and MUST NOT duplicate
+workspace-level page actions. The default Paper Canvas typography uses Playfair
+Display for serif headings and Google Sans Flex with Noto Sans TC for interface
+and body text.
+
 ---
 
 ## 14. Interactive Runtime

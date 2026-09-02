@@ -20,50 +20,16 @@
         </button>
       </li>
     </ul>
-
-    <div class="gq-explorer__actions grid gap-1 border-t px-3 py-3">
-      <p v-if="!workspaceAvailable" id="explorer-workspace-unavailable" class="sr-only">
-        Workspace actions are unavailable until an authenticated workspace is selected.
-      </p>
-      <button
-        type="button"
-        aria-label="Search notes"
-        :aria-describedby="workspaceAvailable ? undefined : 'explorer-workspace-unavailable'"
-        class="gq-explorer__action rounded px-2 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
-        :disabled="!workspaceAvailable"
-        @click="emit('search')"
-      >
-        Search notes
-      </button>
-      <button
-        type="button"
-        aria-label="Open shared links"
-        :aria-describedby="workspaceAvailable ? undefined : 'explorer-workspace-unavailable'"
-        class="gq-explorer__action rounded px-2 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
-        :disabled="!workspaceAvailable"
-        @click="emit('shared-links')"
-      >
-        Shared links
-      </button>
-    </div>
   </nav>
 </template>
 
 <script setup lang="ts">
 import type { WorkbenchNote } from "./types.js";
 
-withDefaults(
-  defineProps<{
-    notes: readonly WorkbenchNote[];
-    activeNoteId: string | null;
-    workspaceAvailable?: boolean;
-  }>(),
-  { workspaceAvailable: false },
-);
-
-const emit = defineEmits<{
-  select: [noteId: string];
-  search: [];
-  "shared-links": [];
+defineProps<{
+  notes: readonly WorkbenchNote[];
+  activeNoteId: string | null;
 }>();
+
+const emit = defineEmits<{ select: [noteId: string] }>();
 </script>

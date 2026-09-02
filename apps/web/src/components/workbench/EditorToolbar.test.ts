@@ -5,10 +5,10 @@ import { applyToolbarAction, BLOCK_COMMANDS } from "./markdown-format.js";
 
 describe("EditorToolbar", () => {
   it("exposes common actions with names and disables them when read-only", () => {
-    const wrapper = mount(EditorToolbar, { props: { disabled: true, mode: "source" } });
+    const wrapper = mount(EditorToolbar, { props: { disabled: true } });
 
     expect(wrapper.get('button[aria-label="Bold"]').attributes("disabled")).toBeDefined();
-    expect(wrapper.get('button[aria-label="Open command palette"]').isDisabled()).toBe(false);
+    expect(wrapper.find('button[aria-label="Open command palette"]').exists()).toBe(false);
   });
 
   it("formats selected inline ranges and inserts deterministic placeholders at a cursor", () => {

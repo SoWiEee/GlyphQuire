@@ -1,12 +1,15 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Theme System", () => {
+  async function openThemeEditor(page: import("@playwright/test").Page): Promise<void> {
+    await page.getByRole("button", { name: "Open tools menu" }).click();
+    await page.getByRole("menuitem", { name: "Open theme editor" }).click();
+  }
+
   test("theme editor panel opens and closes from TopBar", async ({ page }) => {
     await page.goto("/workspace");
 
-    const themeButton = page.getByRole("button", { name: "Open theme editor" });
-    await expect(themeButton).toBeVisible();
-    await themeButton.click();
+    await openThemeEditor(page);
 
     const panel = page.getByRole("dialog", { name: /theme/i });
     await expect(panel).toBeVisible();
@@ -18,7 +21,7 @@ test.describe("Theme System", () => {
   test("theme editor panel closes via backdrop click", async ({ page }) => {
     await page.goto("/workspace");
 
-    await page.getByRole("button", { name: "Open theme editor" }).click();
+    await openThemeEditor(page);
     const panel = page.getByRole("dialog", { name: /theme/i });
     await expect(panel).toBeVisible();
 
@@ -28,7 +31,7 @@ test.describe("Theme System", () => {
 
   test("dark mode toggle updates isDark state", async ({ page }) => {
     await page.goto("/workspace");
-    await page.getByRole("button", { name: "Open theme editor" }).click();
+    await openThemeEditor(page);
 
     const darkCheckbox = page.getByRole("checkbox", { name: /dark/i });
     await expect(darkCheckbox).toBeVisible();

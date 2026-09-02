@@ -8,7 +8,6 @@ describe("ExplorerPane", () => {
       props: {
         notes: [{ id: "field-notes", title: "Field notes", markdown: "# Notes" }],
         activeNoteId: "field-notes",
-        workspaceAvailable: true,
       },
     });
 
@@ -17,27 +16,12 @@ describe("ExplorerPane", () => {
     expect(activeNote.attributes("data-active")).toBe("true");
   });
 
-  it("exposes workspace search and shared links as explicit Explorer actions", async () => {
+  it("keeps the explorer focused on note navigation", () => {
     const wrapper = mount(ExplorerPane, {
-      props: { notes: [], activeNoteId: null, workspaceAvailable: true },
+      props: { notes: [], activeNoteId: null },
     });
 
-    await wrapper.get('button[aria-label="Search notes"]').trigger("click");
-    await wrapper.get('button[aria-label="Open shared links"]').trigger("click");
-
-    expect(wrapper.emitted("search")).toHaveLength(1);
-    expect(wrapper.emitted("shared-links")).toHaveLength(1);
-  });
-
-  it("disables workspace actions when no workspace is available", () => {
-    const wrapper = mount(ExplorerPane, {
-      props: { notes: [], activeNoteId: null, workspaceAvailable: false },
-    });
-
-    for (const label of ["Search notes", "Open shared links"]) {
-      const button = wrapper.get(`button[aria-label="${label}"]`);
-      expect(button.isDisabled()).toBe(true);
-      expect(button.attributes("aria-describedby")).toBeTruthy();
-    }
+    expect(wrapper.find('[aria-label="Search notes"]').exists()).toBe(false);
+    expect(wrapper.find('[aria-label="Open shared links"]').exists()).toBe(false);
   });
 });

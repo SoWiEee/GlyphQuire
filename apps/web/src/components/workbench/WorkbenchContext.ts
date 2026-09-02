@@ -498,7 +498,6 @@ export function createWorkbenchContext(options: WorkbenchContextOptions = {}): W
       const revision = state.sessionState?.baseRevision;
       if (!state.noteId || !validRevision(revision)) return;
     }
-    if (panel === "share" && (!state.noteId || state.sessionState?.readOnly)) return;
     state.toolPanel = panel;
     state.contextRailOpen = false;
     state.panel = panel;

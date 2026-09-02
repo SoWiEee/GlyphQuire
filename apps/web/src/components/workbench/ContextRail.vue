@@ -64,9 +64,6 @@
         <p v-if="!noteAvailable" id="context-rail-note-unavailable" class="sr-only">
           Note tools are unavailable until a note is open.
         </p>
-        <p v-if="readOnly" id="context-rail-read-only" class="sr-only">
-          Sharing is unavailable while this note is read-only.
-        </p>
         <p
           v-if="workspaceAvailable && noteAvailable && (!currentRevision || currentRevision <= 0)"
           id="context-rail-history-unavailable"
@@ -104,47 +101,12 @@
         </button>
         <button
           type="button"
-          aria-label="Search notes"
-          :aria-describedby="workspaceAvailable ? undefined : 'context-rail-workspace-unavailable'"
-          :disabled="!workspaceAvailable"
-          @click="emit('action', 'search')"
-        >
-          Search
-        </button>
-        <button
-          type="button"
           aria-label="Manage custom blocks"
           :aria-describedby="workspaceAvailable ? undefined : 'context-rail-workspace-unavailable'"
           :disabled="!workspaceAvailable"
           @click="emit('action', 'custom-blocks')"
         >
           Custom Blocks
-        </button>
-        <button
-          type="button"
-          aria-label="Import or export"
-          :aria-describedby="workspaceAvailable ? undefined : 'context-rail-workspace-unavailable'"
-          :disabled="!workspaceAvailable"
-          @click="emit('action', 'transfer')"
-        >
-          Transfer
-        </button>
-        <button
-          type="button"
-          aria-label="Create read-only share link"
-          :aria-describedby="
-            !workspaceAvailable
-              ? 'context-rail-workspace-unavailable'
-              : !noteAvailable
-                ? 'context-rail-note-unavailable'
-                : readOnly
-                  ? 'context-rail-read-only'
-                  : undefined
-          "
-          :disabled="!workspaceAvailable || !noteAvailable || readOnly"
-          @click="emit('action', 'share')"
-        >
-          Share
         </button>
       </nav>
     </aside>
@@ -165,7 +127,6 @@ const props = defineProps<{
   noteAvailable: boolean;
   outline: readonly OutlineEntry[];
   currentRevision: number | null;
-  readOnly: boolean;
 }>();
 
 const emit = defineEmits<{

@@ -29,8 +29,8 @@ const emit = defineEmits<{
 const typographyKeys: (keyof ThemeTokens["typography"])[] = ["bodyFont", "headingFont", "monoFont"];
 
 const fontOptions = [
-  "'Inter', 'Noto Sans TC', system-ui, sans-serif",
-  "'Georgia', 'Noto Serif TC', serif",
+  "'Google Sans Flex', 'Noto Sans TC', system-ui, sans-serif",
+  "'Playfair Display', 'Noto Serif TC', serif",
   "'JetBrains Mono', 'Fira Code', ui-monospace, monospace",
   "system-ui, sans-serif",
 ];

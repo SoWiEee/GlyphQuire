@@ -21,7 +21,7 @@ describe("defaultTheme", () => {
   });
 
   it("uses a serif display face and an AA-compliant Indigo accent", () => {
-    expect(defaultTheme.typography.headingFont).toMatch(/Georgia|Source Serif|serif/i);
+    expect(defaultTheme.typography.headingFont).toMatch(/Playfair Display|serif/i);
     expect(defaultTheme.color.accent).toBe("#4f5f9f");
   });
 
@@ -39,7 +39,9 @@ describe("defaultTheme", () => {
       warning: "#8a5a16",
       danger: "#a13d3d",
     });
-    expect(defaultTheme.typography.headingFont).toBe('"Source Serif 4", Georgia, serif');
+    expect(defaultTheme.typography.headingFont).toBe(
+      '"Playfair Display", "Noto Serif TC", Georgia, serif',
+    );
   });
 
   it("has all required typography token keys", () => {
@@ -89,7 +91,9 @@ describe("defaultDarkTheme", () => {
       warning: "#f0c477",
       danger: "#f0a0a0",
     });
-    expect(defaultDarkTheme.typography.headingFont).toBe('"Source Serif 4", Georgia, serif');
+    expect(defaultDarkTheme.typography.headingFont).toBe(
+      '"Playfair Display", "Noto Serif TC", Georgia, serif',
+    );
   });
 });
 
@@ -110,6 +114,6 @@ describe("warmSepiaTheme", () => {
         danger: expect.any(String),
       }),
     );
-    expect(warmSepiaTheme.typography?.headingFont).toMatch(/Georgia|Source Serif|serif/i);
+    expect(warmSepiaTheme.typography?.headingFont).toMatch(/Playfair Display|serif/i);
   });
 });

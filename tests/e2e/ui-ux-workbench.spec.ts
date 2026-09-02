@@ -93,7 +93,7 @@ test.describe("Workbench UI acceptance", () => {
         await expect(toolbar.getByRole("button", { name: label })).toBeDisabled();
       }
 
-      await expect(page.getByRole("button", { name: "Open shared links" })).toBeDisabled();
+      await expect(page.getByRole("tab", { name: "Shared", exact: true })).toBeDisabled();
       await expect(page.getByRole("button", { name: "Open account menu" })).toHaveCount(0);
 
       const status = page.locator('[data-status="unavailable"]').last();

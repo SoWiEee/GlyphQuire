@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 async function openTool(page: Page, label: string): Promise<void> {
   await page.locator("header").getByRole("button", { name: "Open command palette" }).click();
@@ -20,6 +20,14 @@ async function expectDialogAxeClean(page: Page, label: string): Promise<void> {
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 }
 
+async function openPage(page: Page, label: "Search" | "Shared" | "Transfer"): Promise<Locator> {
+  await page.getByRole("tab", { name: label, exact: true }).click();
+  const pageId = label.toLowerCase();
+  const surface = page.locator(`#workbench-page-${pageId}`);
+  await expect(surface).toBeVisible();
+  return surface;
+}
+
 test.describe("Workspace tools keyboard and axe acceptance", () => {
   test.beforeEach(async ({ page }) => {
     // The public workspace route is intentionally unauthenticated. The local
@@ -28,16 +36,21 @@ test.describe("Workspace tools keyboard and axe acceptance", () => {
     await page.goto("/__readme-demo?scene=modes");
   });
 
-  test("all workspace tools panels have no scoped WCAG A/AA axe violations", async ({ page }) => {
-    for (const [command, dialog] of [
-      ["Manage assets", "Asset manager"],
-      ["Search notes", "Search notes"],
-      ["Import or export", "Import and export"],
-      ["Create read-only share link", "Share link"],
-    ] as const) {
-      await openTool(page, command);
-      await expectDialogAxeClean(page, dialog);
-      await page.getByRole("button", { name: "Close tools" }).click();
+  test("workspace tools and primary pages have no scoped WCAG A/AA axe violations", async ({
+    page,
+  }) => {
+    await openTool(page, "Manage assets");
+    await expectDialogAxeClean(page, "Asset manager");
+    await page.getByRole("button", { name: "Close tools" }).click();
+
+    for (const label of ["Search", "Transfer", "Shared"] as const) {
+      const surface = await openPage(page, label);
+      const results = await new AxeBuilder({ page })
+        .include(`#workbench-page-${label.toLowerCase()}`)
+        .withTags(["wcag2a", "wcag2aa"])
+        .analyze();
+      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+      await expect(surface).toBeVisible();
     }
   });
 
@@ -56,11 +69,10 @@ test.describe("Workspace tools keyboard and axe acceptance", () => {
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
 
-    const searchDialog = page.getByRole("dialog", { name: "Search notes" });
-    await expect(searchDialog).toBeVisible();
-    await expect(searchDialog.getByRole("button", { name: "Close tools" })).toBeFocused();
+    const searchPage = page.locator("#workbench-page-search");
+    await expect(searchPage).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(searchDialog).toBeHidden();
+    await expect(page.getByRole("dialog", { name: "Command palette" })).toBeHidden();
     await expect(paletteButton).toBeFocused();
   });
 

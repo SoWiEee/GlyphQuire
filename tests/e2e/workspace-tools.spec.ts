@@ -26,6 +26,11 @@ async function openTool(page: Page, label: string): Promise<void> {
   await page.keyboard.press("Enter");
 }
 
+async function openPage(page: Page, label: "Search" | "Shared" | "Transfer"): Promise<void> {
+  await page.getByRole("tab", { name: label, exact: true }).click();
+  await expect(page.locator(`#workbench-page-${label.toLowerCase()}`)).toBeVisible();
+}
+
 test.describe("Workspace tools browser acceptance adapter", () => {
   test("drives upload, search, import/export, share, revoke, and anonymous 404", async ({
     page,
@@ -165,16 +170,19 @@ test.describe("Workspace tools browser acceptance adapter", () => {
     );
     await expect(assets).toHaveCount(0);
 
-    await openTool(page, "Search notes");
-    const search = page.getByRole("dialog", { name: "Search notes" });
+    await openPage(page, "Search");
+    const search = page.locator("#workbench-page-search").getByRole("region", {
+      name: "Search notes",
+    });
     await search.getByRole("searchbox", { name: "Search notes" }).fill("needle");
     await search.getByRole("button", { name: "Run search" }).click();
     await expect(search.getByText("Safe plain-text snippet")).toBeVisible();
     await expect(search.locator("img,script")).toHaveCount(0);
-    await search.getByRole("button", { name: "Close tools" }).click();
 
-    await openTool(page, "Import or export");
-    const transfer = page.getByRole("dialog", { name: "Import and export" });
+    await openPage(page, "Transfer");
+    const transfer = page.locator("#workbench-page-transfer").getByRole("region", {
+      name: "Import and export",
+    });
     await transfer.getByLabel("Import Markdown or ZIP").setInputFiles({
       name: "bounded.md",
       mimeType: "text/markdown",
@@ -184,10 +192,11 @@ test.describe("Workspace tools browser acceptance adapter", () => {
     await expect(transfer.getByText("Import complete")).toBeVisible();
     await transfer.getByRole("button", { name: "Export workspace", exact: true }).click();
     await expect(transfer.getByText("Markdown export ready")).toBeVisible();
-    await transfer.getByRole("button", { name: "Close tools" }).click();
 
-    await openTool(page, "Create read-only share link");
-    const share = page.getByRole("dialog", { name: "Share link" });
+    await openPage(page, "Shared");
+    const share = page.locator("#workbench-page-shared").getByRole("region", {
+      name: "Share link",
+    });
     await share.getByRole("button", { name: "Create share link" }).click();
     await expect(share.getByRole("link", { name: "Read-only share link" })).toHaveAttribute(
       "rel",
@@ -230,8 +239,10 @@ test.describe("Workspace tools browser acceptance adapter", () => {
     // Keep the permission-denial flow on the same authenticated fixture while
     // replacing only its API responses with the denied projection.
     await page.goto("/__readme-demo?scene=modes");
-    await openTool(page, "Search notes");
-    const search = page.getByRole("dialog", { name: "Search notes" });
+    await openPage(page, "Search");
+    const search = page.locator("#workbench-page-search").getByRole("region", {
+      name: "Search notes",
+    });
     await search.getByRole("searchbox", { name: "Search notes" }).fill("denied");
     await search.getByRole("button", { name: "Run search" }).click();
     await expect(search.getByRole("alert")).toHaveText(

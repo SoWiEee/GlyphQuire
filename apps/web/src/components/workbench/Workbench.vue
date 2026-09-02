@@ -6,136 +6,210 @@
         class="min-w-0 flex-1 border-b-0"
         :note-title="activeNote?.title ?? null"
         :mode="mode"
+        :active-page="activePage"
         :workspace-name="effectiveWorkspaceName"
         :account-label="effectiveAccountLabel"
-        @update:mode="onModeChange"
-        @open-palette="openPalette"
-        @open-theme-editor="themeStore.openEditor()"
-        @account-action="onAccountAction"
-        @toolbar-action="onToolbarAction"
-      />
-    </div>
-
-    <EditorToolbar
-      :disabled="toolbarDisabled"
-      :mode="mode"
-      @action="onToolbarAction"
-      @open-palette="openPalette"
-    />
-
-    <div class="gq-workbench-body flex min-h-0 flex-1">
-      <div
-        id="gq-explorer-pane"
-        class="gq-explorer-slot"
-        :class="{ 'gq-explorer-slot--open': explorerOpen }"
-      >
-        <ExplorerPane
-          :notes="notes"
-          :active-note-id="activeNoteId"
-          :workspace-available="workspaceAvailable"
-          @select="openNote"
-          @search="() => openToolPanel('search')"
-          @shared-links="onSharedLinks"
-        />
-      </div>
-
-      <div class="gq-editor-column flex min-w-0 flex-1 flex-col">
-        <div
-          class="gq-workbench-panel-toggles flex items-center gap-2 border-b border-gray-200 px-3 py-2"
-        >
-          <button
-            type="button"
-            class="gq-workbench-panel-toggle rounded border border-gray-300 px-2 py-1 text-xs text-gray-700"
-            aria-label="Open explorer"
-            aria-controls="gq-explorer-pane"
-            :aria-expanded="explorerOpen"
-            @click="workbenchContext.setPanel('explorer')"
-          >
-            Explorer
-          </button>
-          <button
-            type="button"
-            class="gq-workbench-panel-toggle rounded border border-gray-300 px-2 py-1 text-xs text-gray-700"
-            aria-label="Open context tools"
-            aria-controls="context-rail"
-            :aria-expanded="contextRailOpen"
-            @click="workbenchContext.setPanel('context')"
-          >
-            Context
-          </button>
-        </div>
-        <EditorTabs
-          :tabs="openTabs"
-          :active-tab-id="activeNoteId"
-          @select="openNote"
-          @close="workbenchContext.closeNote"
-        />
-
-        <SaveStateBanner
-          v-if="showSaveStateBanner"
-          :state="saveState"
-          :message="saveStateMessage"
-          :can-retry="canRetrySave"
-          :can-open-conflict="canOpenConflict"
-          @retry="retrySave"
-          @open-conflict="openConflict"
-        />
-
-        <div
-          class="min-h-0 flex-1"
-          role="tabpanel"
-          :aria-label="activeNote ? `${activeNote.title} editor` : 'Editor'"
-        >
-          <SourceEditor
-            v-if="mode === 'source' && activeNote"
-            ref="sourceEditorRef"
-            :key="activeNote.id"
-            :markdown="activeMarkdown"
-            :read-only="sourceReadOnly"
-            @update:markdown="onMarkdownChange"
-            @slash-command="onSlashCommand"
-          />
-          <VisualEditor
-            v-else-if="mode === 'visual' && activeNote"
-            ref="visualEditorRef"
-            :key="activeNote.id"
-            :markdown="visualMarkdown"
-            :read-only="visualReadOnly"
-            @update:markdown="onVisualMarkdownChange"
-            @slash-command="onSlashCommand"
-          />
-          <SplitEditor
-            v-else-if="mode === 'split' && activeNote"
-            ref="splitEditorRef"
-            :key="activeNote.id"
-            :source-markdown="activeMarkdown"
-            :source-read-only="sourceReadOnly"
-            :visual-markdown="visualMarkdown"
-            :visual-read-only="visualReadOnly"
-            @update:source-markdown="onMarkdownChange"
-            @update:visual-markdown="onVisualMarkdownChange"
-            @slash-command="onSlashCommand"
-          />
-          <div v-else class="flex h-full items-center justify-center text-sm text-gray-400">
-            Open a note from the Explorer to start editing.
-          </div>
-        </div>
-      </div>
-
-      <ContextRail
-        :open="contextRailOpen"
-        :compact="compactScreen"
-        :note-title="activeNote?.title ?? null"
         :workspace-available="workspaceAvailable"
-        :note-available="Boolean(activeNote)"
-        :outline="outline"
-        :current-revision="baseRevision"
-        :read-only="sessionState?.readOnly ?? true"
-        @close="workbenchContext.setPanel(null)"
-        @action="onContextAction"
-        @select-outline="onSelectOutline"
+        @update:mode="onModeChange"
+        @update:page="onPrimaryPageChange"
+        @open-palette="openPalette"
+        @tool-action="onTopBarToolAction"
+        @account-action="onAccountAction"
       />
     </div>
+
+    <main class="gq-workbench-main min-h-0 flex-1" :aria-label="primaryPageCopy.label">
+      <div
+        v-if="activePage === 'editor'"
+        id="workbench-page-editor"
+        role="tabpanel"
+        aria-label="Editor"
+        class="gq-editor-page flex min-h-0 h-full flex-col"
+      >
+        <EditorToolbar :disabled="toolbarDisabled" @action="onToolbarAction" />
+        <div class="gq-workbench-body flex min-h-0 flex-1">
+          <div
+            id="gq-explorer-pane"
+            class="gq-explorer-slot"
+            :class="{ 'gq-explorer-slot--open': explorerOpen }"
+          >
+            <ExplorerPane :notes="notes" :active-note-id="activeNoteId" @select="openNote" />
+          </div>
+
+          <div class="gq-editor-column flex min-w-0 flex-1 flex-col">
+            <div
+              class="gq-workbench-panel-toggles flex items-center gap-2 border-b border-gray-200 px-3 py-2"
+            >
+              <button
+                type="button"
+                class="gq-workbench-panel-toggle rounded border border-gray-300 px-2 py-1 text-xs text-gray-700"
+                aria-label="Open explorer"
+                aria-controls="gq-explorer-pane"
+                :aria-expanded="explorerOpen"
+                @click="workbenchContext.setPanel('explorer')"
+              >
+                Explorer
+              </button>
+              <button
+                type="button"
+                class="gq-workbench-panel-toggle rounded border border-gray-300 px-2 py-1 text-xs text-gray-700"
+                aria-label="Open context tools"
+                aria-controls="context-rail"
+                :aria-expanded="contextRailOpen"
+                @click="workbenchContext.setPanel('context')"
+              >
+                Context
+              </button>
+            </div>
+            <EditorTabs
+              :tabs="openTabs"
+              :active-tab-id="activeNoteId"
+              @select="openNote"
+              @close="workbenchContext.closeNote"
+            />
+
+            <SaveStateBanner
+              v-if="showSaveStateBanner"
+              :state="saveState"
+              :message="saveStateMessage"
+              :can-retry="canRetrySave"
+              :can-open-conflict="canOpenConflict"
+              @retry="retrySave"
+              @open-conflict="openConflict"
+            />
+
+            <div
+              class="min-h-0 flex-1"
+              role="tabpanel"
+              :aria-label="activeNote ? `${activeNote.title} editor` : 'Editor'"
+            >
+              <SourceEditor
+                v-if="mode === 'source' && activeNote"
+                ref="sourceEditorRef"
+                :key="activeNote.id"
+                :markdown="activeMarkdown"
+                :read-only="sourceReadOnly"
+                @update:markdown="onMarkdownChange"
+                @slash-command="onSlashCommand"
+              />
+              <VisualEditor
+                v-else-if="mode === 'visual' && activeNote"
+                ref="visualEditorRef"
+                :key="activeNote.id"
+                :markdown="visualMarkdown"
+                :read-only="visualReadOnly"
+                @update:markdown="onVisualMarkdownChange"
+                @slash-command="onSlashCommand"
+              />
+              <SplitEditor
+                v-else-if="mode === 'split' && activeNote"
+                ref="splitEditorRef"
+                :key="activeNote.id"
+                :source-markdown="activeMarkdown"
+                :source-read-only="sourceReadOnly"
+                :visual-markdown="visualMarkdown"
+                :visual-read-only="visualReadOnly"
+                @update:source-markdown="onMarkdownChange"
+                @update:visual-markdown="onVisualMarkdownChange"
+                @slash-command="onSlashCommand"
+              />
+              <div v-else class="flex h-full items-center justify-center text-sm text-gray-400">
+                Open a note from the Explorer to start editing.
+              </div>
+            </div>
+          </div>
+
+          <ContextRail
+            :open="contextRailOpen"
+            :compact="compactScreen"
+            :note-title="activeNote?.title ?? null"
+            :workspace-available="workspaceAvailable"
+            :note-available="Boolean(activeNote)"
+            :outline="outline"
+            :current-revision="baseRevision"
+            @close="workbenchContext.setPanel(null)"
+            @action="onContextAction"
+            @select-outline="onSelectOutline"
+          />
+        </div>
+      </div>
+
+      <section
+        v-else-if="activePage === 'search'"
+        id="workbench-page-search"
+        role="tabpanel"
+        class="gq-primary-page"
+        aria-labelledby="workbench-page-search-title"
+      >
+        <header class="gq-primary-page__header">
+          <p class="gq-primary-page__eyebrow">Workspace</p>
+          <h1 id="workbench-page-search-title" class="gq-primary-page__title">Search notes</h1>
+          <p class="gq-primary-page__description">
+            Find notes across the current workspace without leaving your writing session.
+          </p>
+        </header>
+        <SearchPalette
+          v-if="currentWorkspaceId"
+          :workspace-id="currentWorkspaceId"
+          @select-note="selectSearchResult"
+        />
+        <p v-else class="gq-primary-page__unavailable" role="status">
+          Search is unavailable until an authenticated workspace is selected.
+        </p>
+      </section>
+
+      <section
+        v-else-if="activePage === 'shared'"
+        id="workbench-page-shared"
+        role="tabpanel"
+        class="gq-primary-page"
+        aria-labelledby="workbench-page-shared-title"
+      >
+        <header class="gq-primary-page__header">
+          <p class="gq-primary-page__eyebrow">Workspace</p>
+          <h1 id="workbench-page-shared-title" class="gq-primary-page__title">Shared links</h1>
+          <p class="gq-primary-page__description">
+            Create a read-only link for the active note and manage links already shared.
+          </p>
+        </header>
+        <div v-if="currentWorkspaceId" class="gq-primary-page__grid">
+          <ShareLinkDialog v-if="currentNoteId" :note-id="currentNoteId" />
+          <p v-else class="gq-primary-page__unavailable" role="status">
+            Open a note to create a read-only share link.
+          </p>
+          <SharedLinksPanel
+            :links="workspaceToolsStore.shareLinks"
+            @open="onSharedLinkOpen"
+            @revoke="onSharedLinkRevoke"
+          />
+        </div>
+        <p v-else class="gq-primary-page__unavailable" role="status">
+          Sharing is unavailable until an authenticated workspace is selected.
+        </p>
+      </section>
+
+      <section
+        v-else
+        id="workbench-page-transfer"
+        role="tabpanel"
+        class="gq-primary-page"
+        aria-labelledby="workbench-page-transfer-title"
+      >
+        <header class="gq-primary-page__header">
+          <p class="gq-primary-page__eyebrow">Workspace</p>
+          <h1 id="workbench-page-transfer-title" class="gq-primary-page__title">
+            Import &amp; export
+          </h1>
+          <p class="gq-primary-page__description">
+            Move Markdown and workspace archives in or out while keeping job status visible.
+          </p>
+        </header>
+        <TransferDialog v-if="currentWorkspaceId" :workspace-id="currentWorkspaceId" />
+        <p v-else class="gq-primary-page__unavailable" role="status">
+          Transfer is unavailable until an authenticated workspace is selected.
+        </p>
+      </section>
+    </main>
 
     <StatusBar
       :note-title="activeNote?.title ?? null"
@@ -172,32 +246,11 @@
           :workspace-id="currentWorkspaceId"
           @reference="insertAssetReference"
         />
-        <SearchPalette
-          v-else-if="toolPanel === 'search'"
-          :workspace-id="currentWorkspaceId"
-          @select-note="selectSearchResult"
-        />
-        <TransferDialog
-          v-else-if="toolPanel === 'transfer'"
-          :workspace-id="currentWorkspaceId"
-          :note-id="currentNoteId ?? undefined"
-          :base-revision="baseRevision ?? undefined"
-        />
-        <ShareLinkDialog
-          v-else-if="toolPanel === 'share' && currentNoteId"
-          :note-id="currentNoteId"
-        />
         <VersionHistory
           v-else-if="toolPanel === 'history' && currentNoteId"
           :note-id="currentNoteId"
           :current-revision="baseRevision"
           @restored="onHistoryRestored"
-        />
-        <SharedLinksPanel
-          v-else-if="toolPanel === 'shared-links'"
-          :links="workspaceToolsStore.shareLinks"
-          @open="onSharedLinkOpen"
-          @revoke="onSharedLinkRevoke"
         />
         <CustomBlocksPanel
           v-else-if="toolPanel === 'custom-blocks'"
@@ -257,6 +310,8 @@ import type {
   OutlineEntry,
   WorkbenchAccountAction,
   WorkbenchEditorMode,
+  WorkbenchPrimaryPage,
+  WorkbenchToolAction,
   WorkbenchNote,
   WorkbenchToolPanel,
   WorkbenchSessionFactory,
@@ -327,16 +382,8 @@ const toolPanelLabel = computed(() => {
   switch (toolPanel.value) {
     case "assets":
       return "Asset manager";
-    case "search":
-      return "Search notes";
-    case "transfer":
-      return "Import and export";
-    case "share":
-      return "Share link";
     case "history":
       return "Version history";
-    case "shared-links":
-      return "Shared links";
     case "custom-blocks":
       return "Custom Blocks";
     default:
@@ -392,6 +439,19 @@ const slashRequest = shallowRef<
 const workspaceAvailable = computed(() => currentWorkspaceId.value !== null);
 const effectiveWorkspaceName = computed(() => workbenchState.workspaceName ?? props.workspaceName);
 const effectiveAccountLabel = computed(() => workbenchState.accountLabel ?? props.accountLabel);
+const activePage = ref<WorkbenchPrimaryPage>("editor");
+const primaryPageCopy = computed(() => {
+  switch (activePage.value) {
+    case "search":
+      return { label: "Search notes" };
+    case "shared":
+      return { label: "Shared links" };
+    case "transfer":
+      return { label: "Import and export" };
+    default:
+      return { label: "Editor" };
+  }
+});
 
 const activeConflictContext = computed<WorkbenchConflictContext | undefined>(() => {
   const context = workbenchState.sessionContext;
@@ -562,6 +622,21 @@ function onModeChange(nextMode: WorkbenchEditorMode): void {
   void workbenchContext.setMode(nextMode);
 }
 
+function onPrimaryPageChange(page: WorkbenchPrimaryPage): void {
+  if (page !== "editor" && !workspaceAvailable.value) return;
+  activePage.value = page;
+  closeToolPanel();
+}
+
+function onTopBarToolAction(action: WorkbenchToolAction): void {
+  if (action === "theme") {
+    themeStore.openEditor();
+    return;
+  }
+  if (!workspaceAvailable.value) return;
+  openToolPanel(action);
+}
+
 function onAccountAction(action: WorkbenchAccountAction): void {
   emit("account-action", action);
 }
@@ -570,13 +645,9 @@ function onContextAction(action: Exclude<ContextAction, "outline">): void {
   workbenchContext.setPanel(action);
 }
 
-function onSharedLinks(): void {
-  openToolPanel("shared-links");
-}
-
 function onSharedLinkOpen(noteId: string): void {
   if (notes.value.some((note) => note.id === noteId)) openNote(noteId);
-  closeToolPanel();
+  activePage.value = "editor";
 }
 
 async function onSharedLinkRevoke(linkId: string): Promise<void> {
@@ -680,7 +751,7 @@ function insertCustomBlock(markdown: string): void {
 
 function selectSearchResult(noteId: string): void {
   if (notes.value.some((note) => note.id === noteId)) openNote(noteId);
-  closeToolPanel();
+  activePage.value = "editor";
 }
 
 async function onHistoryRestored(result: NoteResult): Promise<void> {
@@ -751,28 +822,28 @@ const commands = computed<WorkbenchCommand[]>(() => {
         run: () => openToolPanel("custom-blocks"),
       },
       {
-        id: "tools-search",
+        id: "page-search",
         label: "Search notes",
         hint: "Workspace",
         category: "workspace",
-        run: () => openToolPanel("search"),
+        run: () => onPrimaryPageChange("search"),
       },
       {
-        id: "tools-transfer",
+        id: "page-transfer",
         label: "Import or export",
         hint: "Workspace",
         category: "workspace",
-        run: () => openToolPanel("transfer"),
+        run: () => onPrimaryPageChange("transfer"),
       },
     );
   }
   if (currentWorkspaceId.value && currentNoteId.value) {
     result.push({
-      id: "tools-share",
+      id: "page-shared",
       label: "Create read-only share link",
       hint: "Note",
       category: "note",
-      run: () => openToolPanel("share"),
+      run: () => onPrimaryPageChange("shared"),
     });
   }
   return result;

@@ -10,10 +10,10 @@ import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 
 const images = [
-  ["docs/assets/readme/01-editor-modes.png", "Visual / Source editing"],
+  ["docs/assets/readme/01-editor-modes.png", "Workbench tabs and editor modes"],
   ["docs/assets/readme/02-semantic-blocks.png", "Callout, Toggle, Tabs, Columns"],
   ["docs/assets/readme/03-search-transfer.png", "Search and transfer"],
-  ["docs/assets/readme/04-sharing-maintenance.png", "Sharing and maintenance"],
+  ["docs/assets/readme/04-sharing-maintenance.png", "Read-only sharing"],
 ] as const;
 
 const unsafeElementPattern = /<(?:embed|form|iframe|object|script|style|svg)\b/iu;
@@ -171,10 +171,8 @@ for (const viewport of [
           return (
             imageRect.left >= mainRect.left &&
             imageRect.right <= mainRect.right &&
-            imageRect.top >= 0 &&
             imageRect.left >= 0 &&
-            imageRect.right <= window.innerWidth &&
-            imageRect.bottom <= window.innerHeight
+            imageRect.right <= window.innerWidth
           );
         }),
       ).toBe(true);
