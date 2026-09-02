@@ -50,10 +50,12 @@ function assertNoHostileElements(page: Page) {
   // Scoped to the mounted app root: the document `<head>`/`<body>` also
   // carries Vite's own bootstrap `<script type="module">` tags (the app
   // entrypoint and, in dev, the HMR client), which are legitimate and
-  // unrelated to anything rendered from note/command content.
+  // unrelated to anything rendered from note/command content. Lucide icons
+  // are also legitimate app-owned SVGs; only SVGs outside the icon component
+  // are hostile-content candidates here.
   return expect(
     page.locator(
-      "#app script, #app svg, #app iframe, #app object, #app embed, #app [onerror], #app [onload], #app [onclick], #app [onmouseover]",
+      "#app script, #app svg:not(.gq-icon), #app iframe, #app object, #app embed, #app [onerror], #app [onload], #app [onclick], #app [onmouseover]",
     ),
   ).toHaveCount(0);
 }

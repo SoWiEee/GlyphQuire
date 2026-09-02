@@ -98,7 +98,9 @@ test.describe("Workbench UI acceptance", () => {
 
       const status = page.locator('[data-status="unavailable"]').last();
       await expect(status).toContainText("Unavailable");
-      await expect(status.locator('[data-status-icon="unavailable"]')).toHaveText("×");
+      const unavailableIcon = status.locator('[data-status-icon="unavailable"] svg.gq-icon');
+      await expect(unavailableIcon).toHaveCount(1);
+      await expect(unavailableIcon).toHaveAttribute("aria-hidden", "true");
       const statusColor = await status
         .locator('[data-status-icon="unavailable"]')
         .evaluate((element) => {
