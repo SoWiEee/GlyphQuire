@@ -14,6 +14,7 @@ export * from "./themes/schemas.js";
 export * from "./themes/types.js";
 export * from "./jobs/schemas.js";
 export * from "./jobs/types.js";
+export * from "./me/schemas.js";
 export * from "./assets/schemas.js";
 export * from "./assets/types.js";
 export * from "./search/schemas.js";
