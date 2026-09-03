@@ -1,10 +1,11 @@
 import { canonicalUuidSchema } from "@glyphquire/api-contract";
 import { z } from "zod";
+import { coordinationUserIdSchema } from "./userIdSchema.js";
 
 /** The complete tenant/note identity for one advisory cross-tab channel. */
 export const noteScopeSchema = z
   .object({
-    userId: canonicalUuidSchema,
+    userId: coordinationUserIdSchema,
     workspaceId: canonicalUuidSchema,
     noteId: canonicalUuidSchema,
   })

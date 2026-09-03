@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { BroadcastTabChannel, tabChannelName } from "./TabChannel.js";
+import { BroadcastTabChannel, noteScopeSchema, tabChannelName } from "./TabChannel.js";
 import type { BroadcastChannelLike, NoteScope } from "./TabChannel.js";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -95,5 +95,15 @@ describe("BroadcastTabChannel", () => {
     rawChannel.emit({ tabId: TAB_B, scope: SCOPE, payload: { kind: "logout" } });
     expect(listener).toHaveBeenCalledOnce();
     channel.close();
+  });
+
+  it("accepts an opaque, non-UUID userId (real better-auth ids are not UUIDs)", () => {
+    const opaqueScope = { ...SCOPE, userId: "usr_2N4kQb8fVxErq7wZ" };
+    expect(() => noteScopeSchema.parse(opaqueScope)).not.toThrow();
+  });
+
+  it("still rejects a userId containing a colon", () => {
+    const badScope = { ...SCOPE, userId: "evil:user" };
+    expect(() => noteScopeSchema.parse(badScope)).toThrow();
   });
 });
