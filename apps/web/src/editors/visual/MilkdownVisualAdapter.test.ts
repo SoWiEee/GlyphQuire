@@ -165,6 +165,32 @@ describe("MilkdownVisualAdapter", () => {
     expect(adapter.getMarkdown()).toContain("- Hello");
   });
 
+  it("applies visual toolbar formatting for strikethrough and inline code marks", async () => {
+    const markdown = ["---", "glyphquire-spec: 1", "---", "", "Hello", ""].join("\n");
+    const { adapter } = await mountedAdapter(markdown);
+    cleanups.push(() => adapter.destroy());
+    const view = proseMirrorView(adapter);
+
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1, 6)));
+    expect(adapter.applyVisualToolbarAction("strikethrough")).toBe(true);
+    expect(adapter.getMarkdown()).toContain("~~Hello~~");
+
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1, 6)));
+    expect(adapter.applyVisualToolbarAction("code")).toBe(true);
+    expect(adapter.getMarkdown()).toContain("`Hello`");
+  });
+
+  it("uses a native block transaction for the blockquote toolbar action", async () => {
+    const markdown = ["---", "glyphquire-spec: 1", "---", "", "Hello", ""].join("\n");
+    const { adapter } = await mountedAdapter(markdown);
+    cleanups.push(() => adapter.destroy());
+    const view = proseMirrorView(adapter);
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 1, 6)));
+
+    expect(adapter.applyVisualToolbarAction("blockquote")).toBe(true);
+    expect(adapter.getMarkdown()).toContain("> Hello");
+  });
+
   it("detects an empty-paragraph slash and replaces its native range", async () => {
     const markdown = ["---", "glyphquire-spec: 1", "---", "", "", ""].join("\n");
     const { adapter } = await mountedAdapter(markdown);

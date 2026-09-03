@@ -27,7 +27,15 @@ export interface WorkbenchConflictRecovery extends WorkbenchConflictContext {
 }
 
 /** The small set of actions kept visible in the balanced editor toolbar. */
-export type ToolbarAction = "bold" | "italic" | "heading" | "bulletList" | "link";
+export type ToolbarAction =
+  | "bold"
+  | "italic"
+  | "strikethrough"
+  | "code"
+  | "heading"
+  | "bulletList"
+  | "blockquote"
+  | "link";
 
 /** A surface handle owned by the active Source, Visual, or Split pane. */
 export interface WorkbenchEditorHandle {

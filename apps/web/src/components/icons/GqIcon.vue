@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronsRight,
   CircleAlert,
+  Code,
   Columns3,
   Download,
   FileText,
@@ -18,11 +19,13 @@ import {
   LoaderCircle,
   Palette,
   Play,
+  Quote,
   RotateCcw,
   Search,
   Settings,
   Square,
   StickyNote,
+  Strikethrough,
   Upload,
   X,
 } from "@lucide/vue";
@@ -70,6 +73,9 @@ const iconComponents: Record<IconName, Component> = {
   "heading-2": Heading2,
   list: List,
   "file-text": FileText,
+  strikethrough: Strikethrough,
+  code: Code,
+  quote: Quote,
 };
 
 const accessibleLabel = props.label?.trim();

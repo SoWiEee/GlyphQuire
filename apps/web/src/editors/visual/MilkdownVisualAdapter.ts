@@ -196,8 +196,23 @@ export class MilkdownVisualAdapter implements EditorAdapter {
     const schema = state.schema;
     let transaction = state.tr;
 
-    if (action === "bold" || action === "italic" || action === "link") {
-      const markName = action === "bold" ? "strong" : action === "italic" ? "emphasis" : "link";
+    if (
+      action === "bold" ||
+      action === "italic" ||
+      action === "strikethrough" ||
+      action === "code" ||
+      action === "link"
+    ) {
+      const markName =
+        action === "bold"
+          ? "strong"
+          : action === "italic"
+            ? "emphasis"
+            : action === "strikethrough"
+              ? "strike_through"
+              : action === "code"
+                ? "inlineCode"
+                : "link";
       const markType = schema.marks[markName];
       if (!markType) return false;
       const attrs = action === "link" ? { href: "https://example.com" } : undefined;
@@ -228,6 +243,31 @@ export class MilkdownVisualAdapter implements EditorAdapter {
         dispatched = true;
         view.dispatch(next);
       });
+      if (dispatched) this.publishCurrentProjection();
+      return Boolean(ran && dispatched);
+    }
+
+    if (action === "blockquote") {
+      const blockquote = schema.nodes.blockquote;
+      if (!blockquote) return false;
+      let dispatched = false;
+      const resolvedFrom = state.doc.resolve(from);
+      let inBlockquote = false;
+      for (let d = resolvedFrom.depth; d > 0; d--) {
+        if (resolvedFrom.node(d).type === blockquote) {
+          inBlockquote = true;
+          break;
+        }
+      }
+      const ran = inBlockquote
+        ? lift(state, (next) => {
+            dispatched = true;
+            view.dispatch(next);
+          })
+        : wrapIn(blockquote)(state, (next) => {
+            dispatched = true;
+            view.dispatch(next);
+          });
       if (dispatched) this.publishCurrentProjection();
       return Boolean(ran && dispatched);
     }

@@ -17,9 +17,19 @@ function formatRange(value: string, action: ToolbarAction): string {
       ? value.slice(1, -1)
       : `*${value || "text"}*`;
   }
+  if (action === "strikethrough") {
+    return value.startsWith("~~") && value.endsWith("~~")
+      ? value.slice(2, -2)
+      : `~~${value || "text"}~~`;
+  }
+  if (action === "code") {
+    return value.startsWith("`") && value.endsWith("`")
+      ? value.slice(1, -1)
+      : `\`${value || "text"}\``;
+  }
   if (action === "link")
     return value ? `[${value}](https://example.com)` : "[link](https://example.com)";
-  const prefix = action === "heading" ? "## " : "- ";
+  const prefix = action === "heading" ? "## " : action === "blockquote" ? "> " : "- ";
   return value
     .split("\n")
     .map((line) => (line.startsWith(prefix) ? line.slice(prefix.length) : `${prefix}${line}`))
@@ -48,7 +58,7 @@ export function applyToolbarAction(
   const range = selection ?? { anchor: markdown.length, head: markdown.length };
   const selectedFrom = Math.min(range.anchor, range.head);
   const selectedTo = Math.max(range.anchor, range.head);
-  const lineAction = action === "heading" || action === "bulletList";
+  const lineAction = action === "heading" || action === "bulletList" || action === "blockquote";
   if (!lineAction) {
     const replacement = formatRange(markdown.slice(selectedFrom, selectedTo), action);
     return {

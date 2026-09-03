@@ -37,6 +37,9 @@ describe("iconNameSchema", () => {
       "heading-2",
       "list",
       "file-text",
+      "strikethrough",
+      "code",
+      "quote",
     ]);
 
     for (const name of CUSTOM_BLOCK_ICON_NAMES) {

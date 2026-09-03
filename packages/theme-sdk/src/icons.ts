@@ -27,6 +27,9 @@ export const CUSTOM_BLOCK_ICON_NAMES = [
   "heading-2",
   "list",
   "file-text",
+  "strikethrough",
+  "code",
+  "quote",
 ] as const;
 
 export const iconNameSchema = z.enum(CUSTOM_BLOCK_ICON_NAMES);
