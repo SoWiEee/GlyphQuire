@@ -42,8 +42,39 @@ describe("SplitEditor", () => {
     });
 
     expect(wrapper.get('[data-testid="split-editor"]').classes()).toContain("gq-split-editor");
-    expect(wrapper.get('[aria-label="Source pane"]').classes()).toContain("gq-editor-pane");
-    expect(wrapper.get('[aria-label="Visual pane"]').classes()).toContain("gq-editor-pane");
+    expect(wrapper.get('[aria-label="Source pane, editing"]').classes()).toContain(
+      "gq-editor-pane",
+    );
+    expect(wrapper.get('[aria-label="Visual pane, read-only preview"]').classes()).toContain(
+      "gq-editor-pane",
+    );
+  });
+
+  it("shows an editing indicator on the writable pane and a preview badge on the read-only pane", () => {
+    const wrapper = mount(SplitEditor, {
+      props,
+      global: { stubs: { SourceEditor: SourcePane, VisualEditor: VisualPane } },
+    });
+
+    expect(wrapper.get('[data-testid="source-pane-status"]').text()).toContain("Editing");
+    expect(wrapper.get('[data-testid="visual-pane-status"]').text()).toContain("Preview");
+  });
+
+  it("reactively flips the indicators when readOnly props swap", async () => {
+    const wrapper = mount(SplitEditor, {
+      props,
+      global: { stubs: { SourceEditor: SourcePane, VisualEditor: VisualPane } },
+    });
+
+    expect(wrapper.get('[data-testid="source-pane-status"]').text()).toContain("Editing");
+    expect(wrapper.get('[data-testid="visual-pane-status"]').text()).toContain("Preview");
+
+    await wrapper.setProps({ sourceReadOnly: true, visualReadOnly: false });
+
+    expect(wrapper.get('[data-testid="source-pane-status"]').text()).toContain("Preview");
+    expect(wrapper.get('[data-testid="visual-pane-status"]').text()).toContain("Editing");
+    expect(wrapper.get('[aria-label="Source pane, read-only preview"]')).toBeTruthy();
+    expect(wrapper.get('[aria-label="Visual pane, editing"]')).toBeTruthy();
   });
 
   it("delegates toolbar and replacement actions to the writable pane", () => {

@@ -2,9 +2,29 @@
   <div class="gq-split-editor flex h-full min-h-0 w-full" data-testid="split-editor">
     <div
       class="gq-editor-pane gq-editor-pane--source min-w-0 flex-1 overflow-auto border-r"
+      :class="{ 'gq-editor-pane--readonly': sourceReadOnly }"
       role="group"
-      aria-label="Source pane"
+      :aria-label="sourceReadOnly ? 'Source pane, read-only preview' : 'Source pane, editing'"
     >
+      <div class="gq-editor-pane__header" data-testid="source-pane-header">
+        <span class="gq-editor-pane__name">Source</span>
+        <span
+          v-if="!sourceReadOnly"
+          class="gq-editor-pane__status gq-editor-pane__status--editing"
+          data-testid="source-pane-status"
+        >
+          <span class="gq-editor-pane__status-dot" aria-hidden="true"></span>
+          Editing
+        </span>
+        <span
+          v-else
+          class="gq-editor-pane__status gq-editor-pane__status--readonly"
+          data-testid="source-pane-status"
+        >
+          <GqIcon name="info" size="sm" decorative />
+          Preview
+        </span>
+      </div>
       <SourceEditor
         ref="sourceEditorRef"
         :markdown="sourceMarkdown"
@@ -16,9 +36,29 @@
     </div>
     <div
       class="gq-editor-pane gq-editor-pane--visual min-w-0 flex-1 overflow-auto"
+      :class="{ 'gq-editor-pane--readonly': visualReadOnly }"
       role="group"
-      aria-label="Visual pane"
+      :aria-label="visualReadOnly ? 'Visual pane, read-only preview' : 'Visual pane, editing'"
     >
+      <div class="gq-editor-pane__header" data-testid="visual-pane-header">
+        <span class="gq-editor-pane__name">Visual</span>
+        <span
+          v-if="!visualReadOnly"
+          class="gq-editor-pane__status gq-editor-pane__status--editing"
+          data-testid="visual-pane-status"
+        >
+          <span class="gq-editor-pane__status-dot" aria-hidden="true"></span>
+          Editing
+        </span>
+        <span
+          v-else
+          class="gq-editor-pane__status gq-editor-pane__status--readonly"
+          data-testid="visual-pane-status"
+        >
+          <GqIcon name="info" size="sm" decorative />
+          Preview
+        </span>
+      </div>
       <VisualEditor
         ref="visualEditorRef"
         :markdown="visualMarkdown"
@@ -34,6 +74,7 @@
 <script setup lang="ts">
 import SourceEditor from "../source/SourceEditor.vue";
 import VisualEditor from "../visual/VisualEditor.vue";
+import GqIcon from "../icons/GqIcon.vue";
 import { ref } from "vue";
 import type { ToolbarAction, WorkbenchEditorHandle } from "../workbench/types.js";
 
