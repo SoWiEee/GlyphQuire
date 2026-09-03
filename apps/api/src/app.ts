@@ -74,6 +74,7 @@ import {
   type UserPreferenceService,
 } from "./modules/preferences/UserPreferenceService.js";
 import { createUserPreferenceRoutes } from "./routes/v1/preferences.js";
+import { createMeRoutes } from "./routes/v1/me.js";
 import {
   CustomBlockServiceImpl,
   type CustomBlockService,
@@ -432,6 +433,7 @@ export function createAppRuntime(input: Env | EnvInput, dependencies: AppDepende
   app.route("/api/v1", createVersionRoutes(noteService));
   app.route("/api/v1", createThemeRoutes(themeService));
   app.route("/api/v1", createUserPreferenceRoutes(userPreferenceService));
+  app.route("/api/v1", createMeRoutes(workspaceService));
   app.route("/api/v1", createCustomBlockRoutes(customBlockService));
   app.route("/api/v1", createSearchRoutes(searchService, operatorAuthorizer));
   if (assetService) app.route("/api/v1", createAssetRoutes(assetService));
