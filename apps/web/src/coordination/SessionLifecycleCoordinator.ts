@@ -1,6 +1,7 @@
 import { canonicalUuidSchema } from "@glyphquire/api-contract";
 import { z } from "zod";
 import { BroadcastTabChannel, noteScopeSchema, sameNoteScope } from "./TabChannel.js";
+import { coordinationUserIdSchema } from "./userIdSchema.js";
 import type { NoteScope, TabChannel, TabEnvelope } from "./TabChannel.js";
 import type { DraftStore } from "../persistence/DraftStore.js";
 
@@ -8,7 +9,7 @@ export const SESSION_CONTROL_NOTE_ID = "00000000-0000-4000-8000-000000000000";
 
 export const liveBrowserSessionSchema = z
   .object({
-    userId: canonicalUuidSchema,
+    userId: coordinationUserIdSchema,
     expiresAt: z.number().int().safe().positive(),
     workspaceIds: z
       .array(canonicalUuidSchema)

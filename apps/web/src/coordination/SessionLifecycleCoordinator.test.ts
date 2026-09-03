@@ -112,7 +112,7 @@ describe("BrowserSessionLifecycleCoordinator", () => {
       () =>
         new BrowserSessionLifecycleCoordinator({
           initialSession: {
-            userId: "not-a-uuid",
+            userId: "evil:user",
             expiresAt: 10_000,
             workspaceIds: [WORKSPACE_A],
           },
@@ -135,6 +135,22 @@ describe("BrowserSessionLifecycleCoordinator", () => {
           channelFactory: isolatedChannelFactory(),
         }),
     ).toThrow();
+  });
+
+  it("accepts an opaque, non-UUID userId as a live session identity", () => {
+    expect(
+      () =>
+        new BrowserSessionLifecycleCoordinator({
+          initialSession: {
+            userId: "usr_2N4kQb8fVxErq7wZ",
+            expiresAt: 10_000,
+            workspaceIds: [WORKSPACE_A],
+          },
+          draftStore: { clearForUser: async () => undefined },
+          clock: { now: () => 1_000 },
+          channelFactory: isolatedChannelFactory(),
+        }),
+    ).not.toThrow();
   });
 
   it("clears and locks locally and broadcasts inbound logout even when network logout rejects", async () => {
