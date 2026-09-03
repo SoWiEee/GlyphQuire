@@ -4,7 +4,7 @@ import { useSessionStore } from "./session.js";
 import type { AuthGateway, AuthIdentity, AuthResult } from "../auth/AuthGateway.js";
 import { MeUnauthorizedError, type MeGateway } from "../api/MeClient.js";
 
-const identity: AuthIdentity = { userId: "usr_1", email: "a@b.co" };
+const identity: AuthIdentity = { userId: "usr_1", email: "a@b.co", expiresAt: 1893456000000 };
 const workspaceId = "22222222-2222-4222-8222-222222222222";
 
 class FakeAuth implements AuthGateway {
@@ -62,6 +62,7 @@ describe("useSessionStore", () => {
     expect(store.userId).toBe("usr_1");
     expect(store.email).toBe("a@b.co");
     expect(store.personalWorkspaceId).toBe(workspaceId);
+    expect(store.sessionExpiresAt).toBe(1893456000000);
   });
 
   it("signIn success authenticates and bootstraps the workspace", async () => {

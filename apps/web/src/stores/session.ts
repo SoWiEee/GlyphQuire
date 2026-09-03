@@ -11,6 +11,7 @@ export const useSessionStore = defineStore("session", () => {
   const userId = ref<string | null>(null);
   const personalWorkspaceId = ref<string | null>(null);
   const email = ref<string | null>(null);
+  const sessionExpiresAt = ref<number | null>(null);
   const error = ref<string | null>(null);
   const pending = ref(false);
 
@@ -34,6 +35,7 @@ export const useSessionStore = defineStore("session", () => {
     userId.value = null;
     personalWorkspaceId.value = null;
     email.value = null;
+    sessionExpiresAt.value = null;
   }
 
   // Never rejects. `currentIdentity()` (a network call) is inside the try so a
@@ -53,6 +55,7 @@ export const useSessionStore = defineStore("session", () => {
       userId.value = identity.userId;
       email.value = identity.email;
       personalWorkspaceId.value = meResult.personalWorkspaceId;
+      sessionExpiresAt.value = identity.expiresAt;
       status.value = "authenticated";
     } catch (cause) {
       clearIdentity();
@@ -131,6 +134,7 @@ export const useSessionStore = defineStore("session", () => {
     userId,
     personalWorkspaceId,
     email,
+    sessionExpiresAt,
     error,
     pending,
     configure,

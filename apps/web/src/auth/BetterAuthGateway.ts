@@ -12,6 +12,19 @@ function errorMessage(error: unknown): string {
   return typeof message === "string" && message.length > 0 ? message : "Authentication failed";
 }
 
+function toEpochMs(value: unknown): number | null {
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    return Number.isFinite(ms) ? ms : null;
+  }
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const ms = Date.parse(value);
+    return Number.isNaN(ms) ? null : ms;
+  }
+  return null;
+}
+
 export class BetterAuthGateway implements AuthGateway {
   constructor(private readonly client: BetterAuthClient) {}
 
@@ -32,8 +45,11 @@ export class BetterAuthGateway implements AuthGateway {
   async currentIdentity(): Promise<AuthIdentity | null> {
     const { data } = await this.client.getSession();
     const user = data?.user;
-    if (!user?.id || typeof user.email !== "string") return null;
-    return { userId: user.id, email: user.email };
+    const expiresAt = toEpochMs(data?.session?.expiresAt);
+    if (!user?.id || typeof user.email !== "string" || expiresAt === null || expiresAt <= 0) {
+      return null;
+    }
+    return { userId: user.id, email: user.email, expiresAt };
   }
 }
 

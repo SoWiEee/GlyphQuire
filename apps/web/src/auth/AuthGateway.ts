@@ -1,6 +1,7 @@
 export interface AuthIdentity {
   readonly userId: string;
   readonly email: string;
+  readonly expiresAt: number;
 }
 
 export interface AuthResult {
