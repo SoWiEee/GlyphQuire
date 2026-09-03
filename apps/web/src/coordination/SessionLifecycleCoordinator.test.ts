@@ -191,6 +191,29 @@ describe("BrowserSessionLifecycleCoordinator", () => {
     coordinatorB.dispose();
   });
 
+  it("surfaces a local draft-clearing failure instead of silently marking the user as cleaned up", async () => {
+    const clearForUserError = new Error("IndexedDB unavailable");
+    const clearForUser = vi.fn(async () => {
+      throw clearForUserError;
+    });
+    const coordinator = new BrowserSessionLifecycleCoordinator({
+      initialSession: liveSession(),
+      draftStore: { clearForUser },
+      clock: { now: () => 1_000 },
+      channelFactory: isolatedChannelFactory(),
+    });
+    const lockPriorAccount = vi.fn(async () => undefined);
+    coordinator.registerEditor(scope(), lockPriorAccount);
+
+    await expect(coordinator.logout(async () => undefined)).rejects.toThrow(AggregateError);
+
+    expect(clearForUser).toHaveBeenCalledWith(USER_A);
+    // The prior account's lock is still cleared even though the draft clear failed
+    // (independent failure modes are both attempted and both reported).
+    expect(lockPriorAccount).toHaveBeenCalledOnce();
+    coordinator.dispose();
+  });
+
   it("finishes clearing and locking the prior account before authorizing the new account", async () => {
     let finishClear: (() => void) | undefined;
     const clearForUser = vi.fn(

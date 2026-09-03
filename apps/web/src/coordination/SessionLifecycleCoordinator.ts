@@ -251,7 +251,12 @@ export class BrowserSessionLifecycleCoordinator implements EditorSessionLifecycl
       [...this.editors.values()].some((editor) => editor.scope.userId === userId);
     if (!hasMatchingState) return;
 
-    this.endedUsers.add(userId);
+    // `endedUsers` is marked only once local cleanup fully succeeds (see below) —
+    // NOT here — so a failed clearForUser (quota exceeded, IndexedDB unavailable,
+    // private browsing) never permanently forecloses this instance from retrying
+    // this user's local cleanup. Session state below is cleared eagerly regardless,
+    // since the new account must be authorized promptly whether or not the old
+    // account's local drafts finish clearing.
     if (this.currentSession?.userId === userId) {
       this.currentSession = undefined;
       this.clearExpiryTimer();
@@ -280,6 +285,7 @@ export class BrowserSessionLifecycleCoordinator implements EditorSessionLifecycl
     if (failures.length > 0) {
       throw new AggregateError(failures, "Local session clearing failed");
     }
+    this.endedUsers.add(userId);
   }
 
   private enqueueTransition(operation: () => Promise<void>): Promise<void> {
