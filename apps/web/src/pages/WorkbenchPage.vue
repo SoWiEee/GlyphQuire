@@ -26,6 +26,7 @@
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { canonicalUuidSchema } from "@glyphquire/api-contract";
+import { coordinationUserIdSchema } from "../coordination/userIdSchema.js";
 import Workbench from "../components/workbench/Workbench.vue";
 import ConflictWorkspace from "../components/conflict/ConflictWorkspace.vue";
 import { NoteClient } from "../api/NoteClient.js";
@@ -69,7 +70,7 @@ function onConflictDismissed(): void {
 function onConflictRecovery(
   entry: Omit<ActiveConflict, "localBaseRevision"> & { localBaseRevision: number | null },
 ): void {
-  if (!canonicalUuidSchema.safeParse(entry.userId).success) return;
+  if (!coordinationUserIdSchema.safeParse(entry.userId).success) return;
   if (!canonicalUuidSchema.safeParse(entry.workspaceId).success) return;
   if (!canonicalUuidSchema.safeParse(entry.noteId).success) return;
   conflictStore.report(entry);

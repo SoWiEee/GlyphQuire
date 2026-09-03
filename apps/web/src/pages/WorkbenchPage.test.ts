@@ -170,7 +170,7 @@ describe("WorkbenchPage", () => {
   it("does not mount recovery when the session context is not canonical", async () => {
     const sessionFactory: WorkbenchSessionFactory = vi.fn(async () => ({
       session: {} as EditorSession,
-      context: { userId: "not-a-uuid", workspaceId: CONFLICT_WORKSPACE_ID },
+      context: { userId: USER_ID, workspaceId: "not-a-uuid" },
     }));
     const wrapper = mount(WorkbenchPage, {
       props: { sessionFactory },
@@ -187,6 +187,29 @@ describe("WorkbenchPage", () => {
     await flushPromises();
 
     expect(wrapper.find('[aria-label="Resolve conflicting edits"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("mounts recovery with an opaque, non-UUID userId (real better-auth ids are not UUIDs)", async () => {
+    const sessionFactory: WorkbenchSessionFactory = vi.fn(async () => ({
+      session: {} as EditorSession,
+      context: { userId: "usr_2N4kQb8fVxErq7wZ", workspaceId: CONFLICT_WORKSPACE_ID },
+    }));
+    const wrapper = mount(WorkbenchPage, {
+      props: { sessionFactory },
+      global: {
+        plugins: [createPinia()],
+        stubs: {
+          Workbench: ConflictWorkbenchStub(),
+          ConflictWorkspace: ConflictWorkspaceStub(),
+        },
+      },
+    });
+
+    await wrapper.get('button[aria-label="Open conflict recovery"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find('[aria-label="Resolve conflicting edits"]').exists()).toBe(true);
     wrapper.unmount();
   });
 });
