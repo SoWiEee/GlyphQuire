@@ -36,6 +36,7 @@ import {
   useWorkbenchHostContext,
   type WorkbenchAccountAction,
 } from "../components/workbench/WorkbenchContext.js";
+import { useProductionWorkbenchHost } from "../providers/useProductionWorkbenchHost.js";
 import type { WorkbenchSessionFactory } from "../components/workbench/types.js";
 import type { ActiveConflict } from "../stores/conflict.js";
 
@@ -44,7 +45,8 @@ const props = defineProps<{
   onAccountAction?: (action: WorkbenchAccountAction) => void;
 }>();
 
-const hostContext = useWorkbenchHostContext();
+const productionHost = useProductionWorkbenchHost();
+const hostContext = productionHost ?? useWorkbenchHostContext();
 const sessionFactory = computed(() => props.sessionFactory ?? hostContext.sessionFactory);
 
 // Whatever surfaces a REVISION_CONFLICT from a live editing session (an
