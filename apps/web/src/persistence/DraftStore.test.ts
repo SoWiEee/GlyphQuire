@@ -65,6 +65,19 @@ describe("IndexedDbDraftStore", () => {
     expect(loaded).toEqual(record);
   });
 
+  it("accepts an opaque, non-UUID userId for put/get/clearForUser (real better-auth ids are not UUIDs)", async () => {
+    const opaqueUserId = "usr_2N4kQb8fVxErq7wZ";
+    const clock = fakeClock(1_000);
+    const store = new IndexedDbDraftStore({ clock });
+    const record = makeRecord({ userId: opaqueUserId, updatedAt: clock.now() });
+
+    await store.put(record);
+    const loaded = await store.get({ userId: opaqueUserId, workspaceId: WORKSPACE, noteId: NOTE_1 });
+
+    expect(loaded).toEqual(record);
+    await expect(store.clearForUser(opaqueUserId)).resolves.toBeUndefined();
+  });
+
   it("round-trips validated conflict state so reload cannot silently resubmit it", async () => {
     const clock = fakeClock(1_000);
     const store = new IndexedDbDraftStore({ clock });
@@ -126,7 +139,7 @@ describe("IndexedDbDraftStore", () => {
     const clock = fakeClock(1_000);
     const store = new IndexedDbDraftStore({ clock });
     const invalidRecord = makeRecord({
-      userId: "not-a-user-uuid",
+      userId: "evil:user",
       updatedAt: clock.now(),
     });
 

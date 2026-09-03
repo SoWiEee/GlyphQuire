@@ -5,6 +5,7 @@ import {
   revisionSchema,
 } from "@glyphquire/api-contract";
 import { z } from "zod";
+import { coordinationUserIdSchema } from "../coordination/userIdSchema.js";
 import { openDatabase, requestToPromise, runTransaction } from "./idb.js";
 import type { NoteConflict } from "@glyphquire/api-contract";
 import type { DatabaseConfig } from "./idb.js";
@@ -51,7 +52,7 @@ export const DRAFT_MAX_COUNT = 50;
 
 const draftKeySchema = z
   .object({
-    userId: canonicalUuidSchema,
+    userId: coordinationUserIdSchema,
     workspaceId: canonicalUuidSchema,
     noteId: canonicalUuidSchema,
   })
@@ -218,7 +219,7 @@ export class IndexedDbDraftStore implements DraftStore {
   }
 
   async clearForUser(userId: string): Promise<void> {
-    const validatedUserId = canonicalUuidSchema.parse(userId);
+    const validatedUserId = coordinationUserIdSchema.parse(userId);
     const db = await this.openDb();
     await runTransaction(db, [DRAFT_STORE_NAME], "readwrite", async (tx) => {
       const index = tx.objectStore(DRAFT_STORE_NAME).index(USER_ID_INDEX);
