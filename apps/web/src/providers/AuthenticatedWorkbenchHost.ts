@@ -1,4 +1,5 @@
 import { canonicalUuidSchema } from "@glyphquire/api-contract";
+import { coordinationUserIdSchema } from "../coordination/userIdSchema.js";
 import {
   provideWorkbenchHostContext,
   type WorkbenchAccountAction,
@@ -25,6 +26,14 @@ function assertCanonicalIdentity(value: string | undefined, label: string): stri
   return value;
 }
 
+/** `userId` is a better-auth user id — opaque text, not a UUID — unlike `workspaceId`. */
+function assertOpaqueUserIdentity(value: string | undefined, label: string): string {
+  if (!value || !coordinationUserIdSchema.safeParse(value).success) {
+    throw new Error(`Missing or invalid authenticated identity: ${label}`);
+  }
+  return value;
+}
+
 /**
  * Bridges a deployment's already-authenticated route into the workbench.
  * Authentication itself is intentionally outside this adapter: callers must
@@ -33,7 +42,7 @@ function assertCanonicalIdentity(value: string | undefined, label: string): stri
 export function provideAuthenticatedWorkbenchHost(
   options: AuthenticatedWorkbenchHostOptions,
 ): WorkbenchHostContext {
-  const userId = assertCanonicalIdentity(options.userId, "userId");
+  const userId = assertOpaqueUserIdentity(options.userId, "userId");
   const workspaceId = assertCanonicalIdentity(options.workspaceId, "workspaceId");
   if (!options.sessionFactory) {
     throw new Error("Authenticated workbench host requires a session factory");

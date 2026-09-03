@@ -20,16 +20,26 @@ const Probe = defineComponent({
 });
 
 describe("AuthenticatedWorkbenchHost", () => {
-  it("rejects missing or non-canonical identity before providing a host", () => {
+  it("rejects a non-canonical workspaceId before providing a host", () => {
     const invalid: AuthenticatedWorkbenchHostOptions = {
-      userId: "not-a-uuid",
-      workspaceId: WORKSPACE_ID,
+      userId: USER_ID,
+      workspaceId: "not-a-uuid",
       sessionFactory,
     };
 
     expect(() => provideAuthenticatedWorkbenchHost(invalid)).toThrow(
-      "canonical authenticated identity",
+      "canonical authenticated identity: workspaceId",
     );
+  });
+
+  it("rejects an invalid userId (empty or containing a colon) before providing a host", () => {
+    const invalid: AuthenticatedWorkbenchHostOptions = {
+      userId: "evil:user",
+      workspaceId: WORKSPACE_ID,
+      sessionFactory,
+    };
+
+    expect(() => provideAuthenticatedWorkbenchHost(invalid)).toThrow("identity: userId");
   });
 
   it("forwards authenticated context unchanged", () => {
