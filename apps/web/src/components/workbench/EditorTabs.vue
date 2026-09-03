@@ -16,6 +16,12 @@
         @keydown.space.prevent="emit('select', tab.id)"
       >
         <span class="max-w-[10rem] truncate">{{ tab.title }}</span>
+        <span
+          v-if="isDirty(tab.id)"
+          class="gq-editor-tabs__dirty-dot"
+          role="img"
+          aria-label="unsaved changes"
+        ></span>
       </button>
     </div>
     <div
@@ -42,13 +48,30 @@
 import GqIcon from "../icons/GqIcon.vue";
 import type { WorkbenchNote } from "./types.js";
 
-defineProps<{
+const props = defineProps<{
   tabs: WorkbenchNote[];
   activeTabId: string | null;
+  /** Tab ids with unsaved changes; only the active tab carries session state today. */
+  dirtyTabIds?: readonly string[];
 }>();
 
 const emit = defineEmits<{
   select: [noteId: string];
   close: [noteId: string];
 }>();
+
+function isDirty(tabId: string): boolean {
+  return props.dirtyTabIds?.includes(tabId) ?? false;
+}
 </script>
+
+<style scoped>
+.gq-editor-tabs__dirty-dot {
+  display: inline-block;
+  inline-size: 0.375rem;
+  block-size: 0.375rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--gq-status-warning);
+}
+</style>

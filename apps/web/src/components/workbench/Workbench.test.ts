@@ -224,6 +224,32 @@ describe("Workbench EditorSession composition", () => {
     wrapper.unmount();
   });
 
+  it("marks the active tab dirty in EditorTabs when the save state is dirty", async () => {
+    const authority = fakeSession();
+    const sessionFactory = vi.fn(async () => authority.session);
+    const wrapper = mount(Workbench, {
+      props: { initialNotes: notes, sessionFactory },
+      global: { stubs: { SourceEditor: SourceEditorStub } },
+    });
+    await flushPromises();
+
+    expect(wrapper.find(".gq-editor-tabs__dirty-dot").exists()).toBe(false);
+
+    authority.emit(state({ dirty: true, saveStatus: "dirty" }));
+    await nextTick();
+
+    const activeTab = wrapper.get('.gq-editor-tabs [role="tab"][aria-selected="true"]');
+    expect(activeTab.get(".gq-editor-tabs__dirty-dot").attributes("aria-label")).toBe(
+      "unsaved changes",
+    );
+
+    authority.emit(state({ saveStatus: "clean" }));
+    await nextTick();
+    expect(wrapper.find(".gq-editor-tabs__dirty-dot").exists()).toBe(false);
+
+    wrapper.unmount();
+  });
+
   it("emits conflict recovery with identity from a validated session handle", async () => {
     const authority = fakeSession(state({ saveStatus: "conflict", conflict: conflictFixture() }));
     const sessionFactory = vi.fn(async () => ({

@@ -64,6 +64,7 @@
             <EditorTabs
               :tabs="openTabs"
               :active-tab-id="activeNoteId"
+              :dirty-tab-ids="dirtyTabIds"
               @select="openNote"
               @close="workbenchContext.closeNote"
             />
@@ -474,6 +475,9 @@ function saveStateFromSession(state: EditorSessionState | undefined): WorkbenchS
 }
 
 const saveState = computed<WorkbenchSaveState>(() => saveStateFromSession(sessionState.value));
+const dirtyTabIds = computed<readonly string[]>(() =>
+  activeNoteId.value && saveState.value === "dirty" ? [activeNoteId.value] : [],
+);
 const saveStateDetail = computed<string | undefined>(() => {
   switch (saveState.value) {
     case "saving":
