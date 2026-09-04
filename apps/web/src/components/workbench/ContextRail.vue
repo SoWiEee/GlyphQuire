@@ -14,7 +14,7 @@
       :role="compact ? 'dialog' : undefined"
       :aria-modal="compact ? 'true' : undefined"
       :tabindex="compact ? -1 : undefined"
-      aria-label="Context tools"
+      aria-label="工具面板"
       id="context-rail"
       data-testid="context-rail"
       class="gq-context-rail"
@@ -23,7 +23,7 @@
       <header class="gq-context-rail__header">
         <div>
           <h2 class="gq-context-rail__heading text-xs font-semibold uppercase tracking-wide">
-            Context
+            工具
           </h2>
           <p v-if="noteTitle" class="gq-context-rail__note text-sm text-foreground">
             {{ noteTitle }}
@@ -32,7 +32,7 @@
         <button
           ref="closeRef"
           type="button"
-          aria-label="Close context tools"
+          aria-label="關閉工具面板"
           class="gq-context-rail__close rounded p-1 hover:bg-surface-muted hover:text-foreground"
           @click="emit('close')"
         >
@@ -40,7 +40,7 @@
         </button>
       </header>
 
-      <ol v-if="outline.length" aria-label="Document outline" class="gq-context-rail__outline">
+      <ol v-if="outline.length" aria-label="文件大綱" class="gq-context-rail__outline">
         <li
           v-for="entry in outline"
           :key="entry.id"
@@ -57,23 +57,23 @@
         </li>
       </ol>
 
-      <nav aria-label="Note tools" class="gq-context-rail__actions">
+      <nav aria-label="筆記工具" class="gq-context-rail__actions">
         <p v-if="!workspaceAvailable" id="context-rail-workspace-unavailable" class="sr-only">
-          Workspace tools are unavailable until an authenticated workspace is selected.
+          尚未選擇已驗證的工作區，工作區工具無法使用。
         </p>
         <p v-if="!noteAvailable" id="context-rail-note-unavailable" class="sr-only">
-          Note tools are unavailable until a note is open.
+          尚未開啟筆記，筆記工具無法使用。
         </p>
         <p
           v-if="workspaceAvailable && noteAvailable && (!currentRevision || currentRevision <= 0)"
           id="context-rail-history-unavailable"
           class="sr-only"
         >
-          Version history is unavailable until a positive current revision is known.
+          尚無有效的目前版本，版本歷史無法使用。
         </p>
         <button
           type="button"
-          aria-label="Open version history"
+          aria-label="開啟版本歷史"
           :aria-describedby="
             !workspaceAvailable
               ? 'context-rail-workspace-unavailable'
@@ -88,25 +88,25 @@
           "
           @click="emit('action', 'history')"
         >
-          History
+          歷史
         </button>
         <button
           type="button"
-          aria-label="Manage assets"
+          aria-label="管理素材"
           :aria-describedby="workspaceAvailable ? undefined : 'context-rail-workspace-unavailable'"
           :disabled="!workspaceAvailable"
           @click="emit('action', 'assets')"
         >
-          Assets
+          素材
         </button>
         <button
           type="button"
-          aria-label="Manage custom blocks"
+          aria-label="管理自訂區塊"
           :aria-describedby="workspaceAvailable ? undefined : 'context-rail-workspace-unavailable'"
           :disabled="!workspaceAvailable"
           @click="emit('action', 'custom-blocks')"
         >
-          Custom Blocks
+          自訂區塊
         </button>
       </nav>
     </aside>

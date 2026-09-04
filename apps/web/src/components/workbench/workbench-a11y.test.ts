@@ -47,11 +47,11 @@ describe("Workbench accessibility smoke", () => {
     });
     await flushPromises();
 
-    await wrapper.get('[aria-label="Open command palette"]').trigger("click");
+    await wrapper.get('[aria-label="開啟命令面板"]').trigger("click");
     await nextTick();
-    expect(document.activeElement?.getAttribute("aria-label")).toBe("Filter commands");
-    await wrapper.get('[aria-label="Filter commands"]').trigger("keydown", { key: "Escape" });
-    expect(wrapper.find('[role="dialog"][aria-label="Command palette"]').exists()).toBe(false);
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("篩選命令");
+    await wrapper.get('[aria-label="篩選命令"]').trigger("keydown", { key: "Escape" });
+    expect(wrapper.find('[role="dialog"][aria-label="命令面板"]').exists()).toBe(false);
 
     wrapper.unmount();
   });
@@ -66,35 +66,35 @@ describe("Workbench accessibility smoke", () => {
     expect(wrapper.get('button[role="tab"][aria-label="Shared"]').isDisabled()).toBe(true);
 
     const removeKeyboardActivationShim = installButtonKeyboardActivationShim();
-    const accountButton = wrapper.get('button[aria-label="Open account menu"]').element;
+    const accountButton = wrapper.get('button[aria-label="開啟帳號選單"]').element;
     accountButton.focus();
     expect(document.activeElement).toBe(accountButton);
     accountButton.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
     );
     await nextTick();
-    expect(wrapper.get('[role="menu"][aria-label="Account menu"]').exists()).toBe(true);
-    expect(document.activeElement).toBe(wrapper.get('button[aria-label="Sign out"]').element);
+    expect(wrapper.get('[role="menu"][aria-label="帳號選單"]').exists()).toBe(true);
+    expect(document.activeElement).toBe(wrapper.get('button[aria-label="登出"]').element);
 
-    await wrapper.get('button[aria-label="Close menu"]').trigger("click");
+    await wrapper.get('button[aria-label="關閉選單"]').trigger("click");
     await nextTick();
-    expect(wrapper.find('[role="menu"][aria-label="Account menu"]').exists()).toBe(false);
+    expect(wrapper.find('[role="menu"][aria-label="帳號選單"]').exists()).toBe(false);
     expect(document.activeElement).toBe(accountButton);
 
     accountButton.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
     );
     await nextTick();
-    expect(document.activeElement).toBe(wrapper.get('button[aria-label="Sign out"]').element);
+    expect(document.activeElement).toBe(wrapper.get('button[aria-label="登出"]').element);
 
-    const signOutButton = wrapper.get('button[aria-label="Sign out"]').element;
+    const signOutButton = wrapper.get('button[aria-label="登出"]').element;
     signOutButton.focus();
     expect(document.activeElement).toBe(signOutButton);
     signOutButton.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
     );
     await nextTick();
-    expect(wrapper.find('[role="menu"][aria-label="Account menu"]').exists()).toBe(false);
+    expect(wrapper.find('[role="menu"][aria-label="帳號選單"]').exists()).toBe(false);
     expect(document.activeElement).toBe(accountButton);
 
     accountButton.focus();
@@ -102,10 +102,10 @@ describe("Workbench accessibility smoke", () => {
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
     );
     await nextTick();
-    expect(wrapper.get('[role="menu"][aria-label="Account menu"]').exists()).toBe(true);
-    expect(document.activeElement).toBe(wrapper.get('button[aria-label="Sign out"]').element);
+    expect(wrapper.get('[role="menu"][aria-label="帳號選單"]').exists()).toBe(true);
+    expect(document.activeElement).toBe(wrapper.get('button[aria-label="登出"]').element);
 
-    const reopenedSignOutButton = wrapper.get('button[aria-label="Sign out"]').element;
+    const reopenedSignOutButton = wrapper.get('button[aria-label="登出"]').element;
     reopenedSignOutButton.focus();
     expect(document.activeElement).toBe(reopenedSignOutButton);
     reopenedSignOutButton.dispatchEvent(

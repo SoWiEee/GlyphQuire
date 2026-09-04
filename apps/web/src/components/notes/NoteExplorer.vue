@@ -1,37 +1,37 @@
 <template>
   <nav
     class="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface-muted"
-    aria-label="Notes explorer"
+    aria-label="筆記側欄"
   >
     <div class="flex items-center justify-between px-3 pt-3 pb-2">
-      <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">Notes</h2>
+      <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">筆記</h2>
       <button
         type="button"
         class="rounded px-1.5 py-0.5 text-xs font-medium text-muted hover:bg-surface-muted"
         @click="startCreate"
       >
         <GqIcon name="sticky-note" size="sm" />
-        <span>New</span>
+        <span>新增</span>
       </button>
     </div>
 
     <form v-if="creating" class="px-3 pb-2" @submit.prevent="submitCreate">
-      <label for="note-explorer-create-title" class="sr-only">New note title</label>
+      <label for="note-explorer-create-title" class="sr-only">筆記標題</label>
       <input
         id="note-explorer-create-title"
         ref="createInputRef"
         v-model="createTitle"
         type="text"
         class="w-full rounded border border-border px-2 py-1 text-sm"
-        placeholder="Note title"
+        placeholder="筆記標題"
         @keydown.escape="cancelCreate"
       />
       <div class="mt-1 flex gap-2">
         <button type="submit" class="rounded bg-accent px-2 py-1 text-xs font-medium text-accent-contrast">
-          Create
+          建立
         </button>
         <button type="button" class="rounded px-2 py-1 text-xs text-muted" @click="cancelCreate">
-          Cancel
+          取消
         </button>
       </div>
     </form>
@@ -39,24 +39,24 @@
     <p v-if="store.error" role="alert" class="px-3 pb-2 text-xs text-danger">{{ store.error }}</p>
 
     <div class="px-3 pb-2">
-      <label for="note-explorer-filter" class="sr-only">Filter notes</label>
+      <label for="note-explorer-filter" class="sr-only">搜尋筆記</label>
       <input
         id="note-explorer-filter"
         v-model="query"
         type="text"
-        aria-label="Filter notes"
-        placeholder="Search notes"
+        aria-label="搜尋筆記"
+        placeholder="搜尋筆記"
         class="w-full rounded border border-border px-2 py-1 text-sm"
       />
     </div>
 
     <nav
       v-if="!query.trim() && recentNotes.length > 0"
-      aria-label="Recent notes"
+      aria-label="最近的筆記"
       class="pb-2"
     >
       <h3 class="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wide text-muted">
-        Recent
+        最近
       </h3>
       <ul>
         <li v-for="note in recentNotes" :key="`recent-${note.id}`">
@@ -71,7 +71,7 @@
       </ul>
     </nav>
 
-    <ul class="pb-2" aria-label="Active notes">
+    <ul class="pb-2" aria-label="使用中的筆記">
       <li v-for="note in filteredActiveNotes" :key="note.id">
         <form
           v-if="renamingId === note.id"
@@ -79,7 +79,7 @@
           @submit.prevent="submitRename(note.id)"
         >
           <label :for="`note-explorer-rename-${note.id}`" class="sr-only"
-            >Rename "{{ note.title }}"</label
+            >重新命名「{{ note.title }}」</label
           >
           <input
             :id="`note-explorer-rename-${note.id}`"
@@ -89,13 +89,13 @@
             class="w-full rounded border border-border px-2 py-1 text-sm"
             @keydown.escape="cancelRename"
           />
-          <button type="submit" class="shrink-0 text-xs text-muted" aria-label="Save name">
+          <button type="submit" class="shrink-0 text-xs text-muted" aria-label="儲存名稱">
             <GqIcon name="check" size="sm" />
           </button>
           <button
             type="button"
             class="shrink-0 text-xs text-muted"
-            aria-label="Cancel rename"
+            aria-label="取消重新命名"
             @click="cancelRename"
           >
             <GqIcon name="x" size="sm" />
@@ -119,18 +119,18 @@
           <button
             type="button"
             class="shrink-0 rounded px-1.5 py-1 text-xs text-muted opacity-0 hover:bg-surface-muted group-hover:opacity-100 focus-visible:opacity-100"
-            :aria-label="`Rename &quot;${note.title}&quot;`"
+            :aria-label="`重新命名「${note.title}」`"
             @click="startRename(note.id, note.title)"
           >
-            Rename
+            重新命名
           </button>
           <button
             type="button"
             class="shrink-0 rounded px-1.5 py-1 text-xs text-muted opacity-0 hover:bg-surface-muted group-hover:opacity-100 focus-visible:opacity-100"
-            :aria-label="`Delete &quot;${note.title}&quot;`"
+            :aria-label="`刪除「${note.title}」`"
             @click="confirmDeleteId = note.id"
           >
-            Delete
+            刪除
           </button>
         </div>
       </li>
@@ -138,7 +138,7 @@
         v-if="filteredActiveNotes.length === 0 && !store.loading"
         class="px-3 py-2 text-xs text-muted"
       >
-        No notes yet.
+        尚無筆記
       </li>
     </ul>
 
@@ -149,35 +149,35 @@
       aria-controls="note-explorer-trash-list"
       @click="trashOpen = !trashOpen"
     >
-      <span>Trash ({{ store.trashedNotes.length }})</span>
+      <span>垃圾桶 ({{ store.trashedNotes.length }})</span>
       <GqIcon :name="trashOpen ? 'chevron-down' : 'chevrons-right'" size="sm" aria-hidden="true" />
     </button>
-    <ul v-if="trashOpen" id="note-explorer-trash-list" class="pb-3" aria-label="Deleted notes">
+    <ul v-if="trashOpen" id="note-explorer-trash-list" class="pb-3" aria-label="已刪除的筆記">
       <li
         v-for="note in store.trashedNotes"
         :key="note.id"
         class="flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-muted"
       >
-        <span class="truncate" :title="`Deleted ${note.deletedAt}`">{{ note.title }}</span>
+        <span class="truncate" :title="`已刪除 ${note.deletedAt}`">{{ note.title }}</span>
         <button
           type="button"
           class="shrink-0 text-xs font-medium text-foreground underline"
           @click="confirmRestoreId = note.id"
         >
-          Restore
+          還原
         </button>
       </li>
       <li v-if="store.trashedNotes.length === 0" class="px-3 py-1.5 text-xs text-muted">
-        Trash is empty.
+        垃圾桶是空的
       </li>
     </ul>
   </nav>
 
   <ConfirmDialog
     v-if="deleteTarget"
-    :title="`Delete &quot;${deleteTarget.title}&quot;?`"
-    description="It will move to Trash and can be restored later."
-    confirm-label="Delete"
+    :title="`刪除「${deleteTarget.title}」？`"
+    description="這將移到垃圾桶，之後可以還原。"
+    confirm-label="刪除"
     destructive
     @confirm="onConfirmDelete"
     @cancel="confirmDeleteId = null"
@@ -185,12 +185,12 @@
 
   <ConfirmDialog
     v-if="restoreTarget"
-    :title="`Restore &quot;${restoreTarget.title}&quot;?`"
-    confirm-label="Restore"
+    :title="`還原「${restoreTarget.title}」？`"
+    confirm-label="還原"
     @confirm="onConfirmRestore"
     @cancel="confirmRestoreId = null"
   >
-    This restores revision {{ restoreTarget.revision }} of the note.
+    這將還原此筆記的版本 {{ restoreTarget.revision }}。
   </ConfirmDialog>
 </template>
 

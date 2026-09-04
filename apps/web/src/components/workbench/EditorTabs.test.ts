@@ -26,7 +26,7 @@ describe("EditorTabs", () => {
 
     const activeTab = wrapper.get('[role="tab"][aria-selected="true"]');
     const dot = activeTab.get(".gq-editor-tabs__dirty-dot");
-    expect(dot.attributes("aria-label")).toBe("unsaved changes");
+    expect(dot.attributes("aria-label")).toBe("未儲存的變更");
 
     const otherTab = wrapper
       .findAll('[role="tab"]')

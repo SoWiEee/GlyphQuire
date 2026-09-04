@@ -13,19 +13,19 @@
         v-if="showRetry"
         type="button"
         class="rounded border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-surface"
-        aria-label="Retry save"
+        aria-label="重試儲存"
         @click="emit('retry')"
       >
-        Retry save
+        重試儲存
       </button>
       <button
         v-if="showConflictRecovery"
         type="button"
         class="rounded border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-surface"
-        aria-label="Open conflict recovery"
+        aria-label="開啟衝突處理"
         @click="emit('openConflict')"
       >
-        Review conflict
+        檢視衝突
       </button>
     </div>
   </section>

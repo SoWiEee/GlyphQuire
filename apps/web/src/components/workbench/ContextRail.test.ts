@@ -18,7 +18,7 @@ describe("ContextRail", () => {
   it("renders a context rail only when requested and emits tool actions", async () => {
     const wrapper = mount(ContextRail, { props: baseProps });
 
-    await wrapper.get('button[aria-label="Open version history"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟版本歷史"]').trigger("click");
 
     expect(wrapper.emitted("action")?.[0]).toEqual(["history"]);
   });
@@ -29,7 +29,7 @@ describe("ContextRail", () => {
     });
 
     expect(wrapper.get('[data-testid="context-rail"]').attributes("aria-label")).toBe(
-      "Context tools",
+      "工具面板",
     );
   });
 
@@ -46,9 +46,9 @@ describe("ContextRail", () => {
     });
 
     expect(wrapper.get('[data-outline-entry-id="h1"]').text()).toContain("Research");
-    expect(wrapper.get('button[aria-label="Open version history"]').isDisabled()).toBe(true);
+    expect(wrapper.get('button[aria-label="開啟版本歷史"]').isDisabled()).toBe(true);
     expect(
-      wrapper.get('button[aria-label="Open version history"]').attributes("aria-describedby"),
+      wrapper.get('button[aria-label="開啟版本歷史"]').attributes("aria-describedby"),
     ).toBeTruthy();
   });
 
@@ -85,8 +85,8 @@ describe("ContextRail", () => {
       props: { noteTitle: "Field notes", mode: "source", accountLabel: "AL" },
     });
 
-    await wrapper.get('button[aria-label="Open account menu"]').trigger("click");
-    await wrapper.get('button[aria-label="Sign out"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟帳號選單"]').trigger("click");
+    await wrapper.get('button[aria-label="登出"]').trigger("click");
 
     expect(wrapper.emitted("account-action")?.[0]).toEqual(["sign-out"]);
   });

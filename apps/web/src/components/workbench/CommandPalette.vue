@@ -7,7 +7,7 @@
       ref="dialogRef"
       role="dialog"
       aria-modal="true"
-      aria-label="Command palette"
+      aria-label="命令面板"
       class="w-full max-w-md rounded-lg bg-surface shadow-xl"
       @keydown="onDialogKeydown"
     >
@@ -16,15 +16,15 @@
         v-model="query"
         type="text"
         class="w-full rounded-t-lg border-b border-border px-4 py-3 text-sm"
-        placeholder="Type a command…"
-        aria-label="Filter commands"
+        placeholder="輸入命令…"
+        aria-label="篩選命令"
         aria-controls="command-palette-options"
         :aria-activedescendant="activeDescendant"
       />
       <ul
         id="command-palette-options"
         role="listbox"
-        aria-label="Commands"
+        aria-label="命令"
         class="max-h-64 overflow-y-auto py-1"
       >
         <li
@@ -49,7 +49,7 @@
           role="status"
           class="px-4 py-2 text-sm text-muted"
         >
-          No matching commands.
+          沒有符合的命令
         </li>
       </ul>
     </div>

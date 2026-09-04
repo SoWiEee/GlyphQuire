@@ -1,6 +1,6 @@
 <template>
   <div class="gq-editor-tabs flex items-center overflow-x-auto border-b border-border bg-surface">
-    <div role="tablist" aria-label="Open notes" class="gq-editor-tabs__list flex items-center">
+    <div role="tablist" aria-label="已開啟的筆記" class="gq-editor-tabs__list flex items-center">
       <button
         v-for="tab in tabs"
         :key="tab.id"
@@ -20,7 +20,7 @@
           v-if="isDirty(tab.id)"
           class="gq-editor-tabs__dirty-dot"
           role="img"
-          aria-label="unsaved changes"
+          aria-label="未儲存的變更"
         ></span>
       </button>
     </div>
@@ -32,14 +32,14 @@
       <button
         type="button"
         class="gq-editor-tabs__close mr-1 rounded px-1 focus-visible:opacity-100"
-        :aria-label="`Close ${tab.title}`"
+        :aria-label="`關閉 ${tab.title}`"
         @click.stop="emit('close', tab.id)"
       >
         <GqIcon name="x" size="sm" />
       </button>
     </div>
     <p v-if="tabs.length === 0" class="gq-editor-empty px-3 py-1.5 text-sm">
-      No notes open — pick one from the Explorer.
+      尚未開啟筆記 —— 從側欄挑一個
     </p>
   </div>
 </template>

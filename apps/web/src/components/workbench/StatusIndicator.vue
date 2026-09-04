@@ -32,14 +32,14 @@ const props = defineProps<{
 }>();
 
 const STATUS_COPY: Record<WorkbenchSaveState, { label: string; icon: IconName }> = {
-  saved: { label: "Saved", icon: "check" },
-  saving: { label: "Saving", icon: "loader-circle" },
-  dirty: { label: "Unsaved changes", icon: "circle-alert" },
-  offline: { label: "Offline", icon: "info" },
-  error: { label: "Save failed", icon: "circle-alert" },
-  conflict: { label: "Conflict", icon: "circle-alert" },
-  "read-only": { label: "Read-only", icon: "info" },
-  unavailable: { label: "Unavailable", icon: "circle-alert" },
+  saved: { label: "已儲存", icon: "check" },
+  saving: { label: "儲存中", icon: "loader-circle" },
+  dirty: { label: "未儲存的變更", icon: "circle-alert" },
+  offline: { label: "離線", icon: "info" },
+  error: { label: "儲存失敗", icon: "circle-alert" },
+  conflict: { label: "衝突", icon: "circle-alert" },
+  "read-only": { label: "唯讀", icon: "info" },
+  unavailable: { label: "無法使用", icon: "circle-alert" },
 };
 
 const statusCopy = computed(() => STATUS_COPY[props.state]);

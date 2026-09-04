@@ -49,22 +49,22 @@
               <button
                 type="button"
                 class="gq-workbench-panel-toggle rounded border border-border px-2 py-1 text-xs text-foreground"
-                aria-label="Open explorer"
+                aria-label="開啟側欄"
                 aria-controls="gq-explorer-pane"
                 :aria-expanded="explorerOpen"
                 @click="workbenchContext.setPanel('explorer')"
               >
-                Explorer
+                側欄
               </button>
               <button
                 type="button"
                 class="gq-workbench-panel-toggle rounded border border-border px-2 py-1 text-xs text-foreground"
-                aria-label="Open context tools"
+                aria-label="開啟工具面板"
                 aria-controls="context-rail"
                 :aria-expanded="contextRailOpen"
                 @click="workbenchContext.setPanel('context')"
               >
-                Context
+                工具
               </button>
             </div>
             <EditorTabs
@@ -121,7 +121,7 @@
                 @slash-command="onSlashCommand"
               />
               <div v-else class="flex h-full items-center justify-center text-sm text-muted">
-                Open a note from the Explorer to start editing.
+                從側欄開啟一則筆記開始編輯。
               </div>
             </div>
           </div>
@@ -161,7 +161,7 @@
           @select-note="selectSearchResult"
         />
         <p v-else class="gq-primary-page__unavailable" role="status">
-          Search is unavailable until an authenticated workspace is selected.
+          尚未選擇已驗證的工作區，搜尋功能無法使用。
         </p>
       </section>
 
@@ -182,7 +182,7 @@
         <div v-if="currentWorkspaceId" class="gq-primary-page__grid">
           <ShareLinkDialog v-if="currentNoteId" :note-id="currentNoteId" />
           <p v-else class="gq-primary-page__unavailable" role="status">
-            Open a note to create a read-only share link.
+            開啟一則筆記以建立唯讀分享連結。
           </p>
           <SharedLinksPanel
             :links="workspaceToolsStore.shareLinks"
@@ -191,7 +191,7 @@
           />
         </div>
         <p v-else class="gq-primary-page__unavailable" role="status">
-          Sharing is unavailable until an authenticated workspace is selected.
+          尚未選擇已驗證的工作區，分享功能無法使用。
         </p>
       </section>
 
@@ -213,7 +213,7 @@
         </header>
         <TransferDialog v-if="currentWorkspaceId" :workspace-id="currentWorkspaceId" />
         <p v-else class="gq-primary-page__unavailable" role="status">
-          Transfer is unavailable until an authenticated workspace is selected.
+          尚未選擇已驗證的工作區，匯入匯出功能無法使用。
         </p>
       </section>
     </main>
@@ -243,10 +243,10 @@
           ref="toolPanelCloseRef"
           type="button"
           class="mb-3 rounded border border-border px-2 py-1 text-sm"
-          aria-label="Close tools"
+          aria-label="關閉工具"
           @click="closeToolPanel"
         >
-          Close tools
+          關閉工具
         </button>
         <AssetManager
           v-if="toolPanel === 'assets'"
@@ -415,13 +415,13 @@ let toolPanelTrap: FocusTrapHandle | undefined;
 const toolPanelLabel = computed(() => {
   switch (toolPanel.value) {
     case "assets":
-      return "Asset manager";
+      return "素材管理";
     case "history":
-      return "Version history";
+      return "版本歷史";
     case "custom-blocks":
-      return "Custom Blocks";
+      return "自訂區塊";
     default:
-      return "Tools";
+      return "工具";
   }
 });
 let releaseVisualAssetResolver: (() => void) | undefined;
@@ -514,11 +514,11 @@ const dirtyTabIds = computed<readonly string[]>(() =>
 const saveStateDetail = computed<string | undefined>(() => {
   switch (saveState.value) {
     case "saving":
-      return "Syncing now";
+      return "正在同步";
     case "dirty":
-      return "Waiting to save";
+      return "等待儲存";
     case "read-only":
-      return "Editing disabled";
+      return "已停用編輯";
     default:
       return undefined;
   }
@@ -526,13 +526,13 @@ const saveStateDetail = computed<string | undefined>(() => {
 const saveStateMessage = computed(() => {
   switch (saveState.value) {
     case "offline":
-      return "Changes are queued locally. We'll retry when the connection returns.";
+      return "變更已在本機排隊，連線恢復後會自動重試。";
     case "error":
-      return "We couldn't save your changes. Try again.";
+      return "無法儲存您的變更，請再試一次。";
     case "conflict":
-      return "Another version was saved. Review the conflicting edits to continue.";
+      return "已有另一個版本被儲存，請檢視衝突的編輯內容以繼續。";
     case "unavailable":
-      return "This note is unavailable for editing right now.";
+      return "此筆記目前無法編輯。";
     default:
       return "";
   }
@@ -724,7 +724,7 @@ function closePalette(): void {
     });
     return;
   }
-  const paletteButton = topBarRef.value?.$el?.querySelector('[aria-label="Open command palette"]');
+  const paletteButton = topBarRef.value?.$el?.querySelector('[aria-label="開啟命令面板"]');
   if (paletteButton instanceof HTMLElement) paletteButton.focus();
 }
 
@@ -820,15 +820,15 @@ const commands = computed<WorkbenchCommand[]>(() => {
   const result: WorkbenchCommand[] = [
     {
       id: "toggle-mode",
-      label: mode.value === "source" ? "Switch to Visual mode" : "Switch to Source mode",
-      hint: "Mode",
+      label: mode.value === "source" ? "切換到視覺模式" : "切換到原始碼模式",
+      hint: "模式",
       category: "format",
       run: toggleMode,
     },
     ...notes.value.map((note): WorkbenchCommand => ({
       id: `open-${note.id}`,
-      label: `Open "${note.title}"`,
-      hint: "Note",
+      label: `開啟「${note.title}」`,
+      hint: "筆記",
       category: "note",
       run: () => openNote(note.id),
     })),
@@ -836,8 +836,8 @@ const commands = computed<WorkbenchCommand[]>(() => {
   if (activeNoteId.value) {
     result.push({
       id: "close-active-tab",
-      label: `Close "${activeNote.value?.title ?? ""}"`,
-      hint: "Tab",
+      label: `關閉「${activeNote.value?.title ?? ""}」`,
+      hint: "分頁",
       category: "note",
       run: () => workbenchContext.closeNote(activeNoteId.value as string),
     });
@@ -846,29 +846,29 @@ const commands = computed<WorkbenchCommand[]>(() => {
     result.push(
       {
         id: "tools-assets",
-        label: "Manage assets",
-        hint: "Workspace",
+        label: "管理素材",
+        hint: "工作區",
         category: "workspace",
         run: () => openToolPanel("assets"),
       },
       {
         id: "tools-custom-blocks",
-        label: "Manage Custom Blocks",
-        hint: "Workspace",
+        label: "管理自訂區塊",
+        hint: "工作區",
         category: "workspace",
         run: () => openToolPanel("custom-blocks"),
       },
       {
         id: "page-search",
-        label: "Search notes",
-        hint: "Workspace",
+        label: "搜尋筆記",
+        hint: "工作區",
         category: "workspace",
         run: () => onPrimaryPageChange("search"),
       },
       {
         id: "page-transfer",
-        label: "Import or export",
-        hint: "Workspace",
+        label: "匯入或匯出",
+        hint: "工作區",
         category: "workspace",
         run: () => onPrimaryPageChange("transfer"),
       },
@@ -877,8 +877,8 @@ const commands = computed<WorkbenchCommand[]>(() => {
   if (currentWorkspaceId.value && currentNoteId.value) {
     result.push({
       id: "page-shared",
-      label: "Create read-only share link",
-      hint: "Note",
+      label: "建立唯讀分享連結",
+      hint: "筆記",
       category: "note",
       run: () => onPrimaryPageChange("shared"),
     });

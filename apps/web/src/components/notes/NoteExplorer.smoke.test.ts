@@ -51,7 +51,7 @@ describe("NoteExplorer smoke test", () => {
     expect(wrapper.text()).toContain("First note");
 
     // Rename.
-    await wrapper.get('button[aria-label^="Rename"]').trigger("click");
+    await wrapper.get('button[aria-label^="重新命名"]').trigger("click");
     await flushPromises();
     await wrapper.get<HTMLInputElement>(`#note-explorer-rename-${NOTE_ID}`).setValue("Renamed");
     await wrapper.get("form").trigger("submit.prevent");
@@ -62,7 +62,7 @@ describe("NoteExplorer smoke test", () => {
     );
 
     // Delete (soft) with confirmation.
-    await wrapper.get('button[aria-label^="Delete"]').trigger("click");
+    await wrapper.get('button[aria-label^="刪除"]').trigger("click");
     await flushPromises();
     await wrapper.get('[role="alertdialog"] button.bg-danger').trigger("click");
     await flushPromises();
@@ -71,13 +71,13 @@ describe("NoteExplorer smoke test", () => {
     expect(store.activeNotes).toHaveLength(0);
 
     // Restore from Trash with confirmation showing the target revision.
-    const trashToggle = wrapper.findAll("button").find((b) => b.text().startsWith("Trash"));
+    const trashToggle = wrapper.findAll("button").find((b) => b.text().startsWith("垃圾桶"));
     await trashToggle!.trigger("click");
     await flushPromises();
-    const restoreTrigger = wrapper.findAll("button").find((b) => b.text() === "Restore");
+    const restoreTrigger = wrapper.findAll("button").find((b) => b.text() === "還原");
     await restoreTrigger!.trigger("click");
     await flushPromises();
-    expect(wrapper.text()).toContain("revision 2");
+    expect(wrapper.text()).toContain("版本 2");
     await wrapper.get('[role="alertdialog"] button.bg-accent').trigger("click");
     await flushPromises();
     expect(restoreNote).toHaveBeenCalled();
@@ -104,7 +104,7 @@ describe("NoteExplorer smoke test", () => {
     });
     const wrapper = mount(NoteExplorer, { props: { workspaceId: WORKSPACE_ID } });
     await flushPromises();
-    await wrapper.get('input[aria-label="Filter notes"]').setValue("meeting");
+    await wrapper.get('input[aria-label="搜尋筆記"]').setValue("meeting");
     expect(wrapper.text()).toContain("Meeting notes");
     expect(wrapper.text()).not.toContain("Grocery list");
   });
@@ -131,7 +131,7 @@ describe("NoteExplorer smoke test", () => {
     const wrapper = mount(NoteExplorer, { props: { workspaceId: WORKSPACE_ID } });
     await flushPromises();
 
-    const recent = wrapper.get('[aria-label="Recent notes"]');
+    const recent = wrapper.get('[aria-label="最近的筆記"]');
     const recentTitles = recent.findAll("button").map((button) => button.text());
     // Most-recent first.
     expect(recentTitles[0]).toContain("Newer note");
@@ -141,7 +141,7 @@ describe("NoteExplorer smoke test", () => {
     expect(wrapper.emitted("open")?.[0]).toEqual(["66666666-6666-4666-8666-666666666666"]);
 
     // Recent hides while filtering.
-    await wrapper.get('input[aria-label="Filter notes"]').setValue("older");
-    expect(wrapper.find('[aria-label="Recent notes"]').exists()).toBe(false);
+    await wrapper.get('input[aria-label="搜尋筆記"]').setValue("older");
+    expect(wrapper.find('[aria-label="最近的筆記"]').exists()).toBe(false);
   });
 });

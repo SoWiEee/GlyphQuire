@@ -7,24 +7,24 @@ describe("EditorToolbar", () => {
   it("exposes common actions with names and disables them when read-only", () => {
     const wrapper = mount(EditorToolbar, { props: { disabled: true } });
 
-    expect(wrapper.get('button[aria-label="Bold (⌘B)"]').attributes("disabled")).toBeDefined();
+    expect(wrapper.get('button[aria-label="粗體 (⌘B)"]').attributes("disabled")).toBeDefined();
     expect(wrapper.find('button[aria-label="Open command palette"]').exists()).toBe(false);
   });
 
   it("exposes the new strikethrough, code, and blockquote actions with keyboard hints", () => {
     const wrapper = mount(EditorToolbar, { props: { disabled: false } });
 
-    expect(wrapper.find('button[aria-label="Strikethrough (⌘⇧X)"]').exists()).toBe(true);
-    expect(wrapper.find('button[aria-label="Inline code (⌘E)"]').exists()).toBe(true);
-    expect(wrapper.find('button[aria-label="Blockquote (⌘⇧.)"]').exists()).toBe(true);
+    expect(wrapper.find('button[aria-label="刪除線 (⌘⇧X)"]').exists()).toBe(true);
+    expect(wrapper.find('button[aria-label="行內程式碼 (⌘E)"]').exists()).toBe(true);
+    expect(wrapper.find('button[aria-label="引用 (⌘⇧.)"]').exists()).toBe(true);
   });
 
   it("emits the corresponding action id when a new button is clicked", async () => {
     const wrapper = mount(EditorToolbar, { props: { disabled: false } });
 
-    await wrapper.get('button[aria-label="Strikethrough (⌘⇧X)"]').trigger("click");
-    await wrapper.get('button[aria-label="Inline code (⌘E)"]').trigger("click");
-    await wrapper.get('button[aria-label="Blockquote (⌘⇧.)"]').trigger("click");
+    await wrapper.get('button[aria-label="刪除線 (⌘⇧X)"]').trigger("click");
+    await wrapper.get('button[aria-label="行內程式碼 (⌘E)"]').trigger("click");
+    await wrapper.get('button[aria-label="引用 (⌘⇧.)"]').trigger("click");
 
     expect(wrapper.emitted("action")).toEqual([["strikethrough"], ["code"], ["blockquote"]]);
   });
