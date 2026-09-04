@@ -33,7 +33,13 @@
             class="gq-explorer-slot"
             :class="{ 'gq-explorer-slot--open': explorerOpen }"
           >
-            <ExplorerPane :notes="notes" :active-note-id="activeNoteId" @select="openNote" />
+            <NoteExplorer
+              v-if="productionNotes && currentWorkspaceId"
+              :workspace-id="currentWorkspaceId"
+              :active-note-id="activeNoteId"
+              @open="openNote"
+            />
+            <ExplorerPane v-else :notes="notes" :active-note-id="activeNoteId" @select="openNote" />
           </div>
 
           <div class="gq-editor-column flex min-w-0 flex-1 flex-col">
@@ -286,6 +292,7 @@ import ContextRail from "./ContextRail.vue";
 import EditorToolbar from "./EditorToolbar.vue";
 import EditorTabs from "./EditorTabs.vue";
 import ExplorerPane from "./ExplorerPane.vue";
+import NoteExplorer from "../notes/NoteExplorer.vue";
 import SaveStateBanner from "./SaveStateBanner.vue";
 import StatusBar from "./StatusBar.vue";
 import TopBar from "./TopBar.vue";
@@ -303,6 +310,7 @@ import VersionHistory from "../history/VersionHistory.vue";
 import { useThemeStore } from "../../stores/theme.js";
 import { useCustomBlocksStore } from "../../stores/custom-blocks.js";
 import { useWorkspaceToolsStore } from "../../stores/workspace-tools.js";
+import { useNotesStore } from "../../stores/notes.js";
 import type { NoteResult } from "@glyphquire/api-contract";
 import type { EditorSessionState } from "../../editors/editor-session.types.js";
 import type {
@@ -354,7 +362,7 @@ const emit = defineEmits<{
 }>();
 
 const workbenchContext = createWorkbenchContext({
-  initialNotes: props.initialNotes,
+  initialNotes: props.initialNotes ?? (props.workspaceId ? [] : undefined),
   sessionFactory: props.sessionFactory,
   workspaceId: props.workspaceId,
   noteId: props.noteId,
@@ -371,6 +379,31 @@ const activeNote = computed(() => workbenchState.activeNote);
 const activeNoteId = computed(() => workbenchState.activeNoteId);
 const currentWorkspaceId = computed(() => workbenchState.workspaceId);
 const currentNoteId = computed(() => workbenchState.noteId);
+
+const notesStore = useNotesStore();
+const productionNotes = computed(
+  () => props.initialNotes === undefined && currentWorkspaceId.value !== null,
+);
+
+function toWorkbenchNote(summary: { id: string; title: string }): WorkbenchNote {
+  return { id: summary.id, title: summary.title, markdown: "" };
+}
+
+watch(
+  [productionNotes, currentWorkspaceId],
+  ([isProduction, workspaceId]) => {
+    if (isProduction && workspaceId) void notesStore.loadWorkspace(workspaceId);
+  },
+  { immediate: true },
+);
+
+watch(
+  () => (productionNotes.value ? notesStore.activeNotes : null),
+  (activeNotes) => {
+    if (activeNotes) workbenchContext.syncNotes(activeNotes.map(toWorkbenchNote));
+  },
+  { immediate: true, deep: true },
+);
 const baseRevision = computed<number | null>(() => {
   const revision = workbenchState.sessionState?.baseRevision;
   return Number.isInteger(revision) && (revision ?? 0) > 0 ? revision! : null;

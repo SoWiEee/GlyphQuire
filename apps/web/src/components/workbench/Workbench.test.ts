@@ -16,6 +16,7 @@ import type {
 } from "../../editors/editor-session.types.js";
 import type { WorkbenchModeAdapterShim } from "../../editors/WorkbenchModeAdapterShim.js";
 import type { NoteResult } from "@glyphquire/api-contract";
+import { useNotesStore } from "../../stores/notes.js";
 
 const NOTE_ID = "44444444-4444-4444-8444-444444444444";
 const OTHER_NOTE_ID = "55555555-5555-4555-8555-555555555555";
@@ -865,6 +866,43 @@ describe("Workbench EditorSession composition", () => {
     expect(pendingReplacement.edit).toHaveBeenLastCalledWith("# Active replacement edit");
     expect(current.edit).not.toHaveBeenCalled();
 
+    wrapper.unmount();
+  });
+
+  it("shows real notes and opens one when authenticated (production mode)", async () => {
+    const NOTE_A = "44444444-4444-4444-8444-444444444444";
+    const realNote: NoteResult = {
+      id: NOTE_A,
+      workspaceId: WORKSPACE_ID,
+      title: "Real note",
+      revision: 3,
+      visibility: "private",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+      deletedAt: null,
+      contentMarkdown: "",
+      schemaVersion: 1,
+    };
+    const notesStore = useNotesStore();
+    notesStore.configure({
+      listNotes: vi.fn(async () => ({ items: [realNote], nextCursor: null })),
+      createNote: vi.fn(),
+      renameNote: vi.fn(),
+      deleteNote: vi.fn(),
+      restoreNote: vi.fn(),
+    });
+    const authority = fakeSession();
+    const sessionFactory = vi.fn(async () => authority.session);
+    const wrapper = mount(Workbench, { props: { sessionFactory, workspaceId: WORKSPACE_ID } });
+    await flushPromises();
+    expect(wrapper.text()).toContain("Real note");
+    const openButton = wrapper
+      .findAll('nav[aria-label="Notes explorer"] button')
+      .find((button) => button.text().includes("Real note"));
+    if (!openButton) throw new Error("expected a NoteExplorer open button for the real note");
+    await openButton.trigger("click");
+    await flushPromises();
+    expect(sessionFactory).toHaveBeenCalled();
     wrapper.unmount();
   });
 });
