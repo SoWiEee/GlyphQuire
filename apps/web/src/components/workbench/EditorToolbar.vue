@@ -19,7 +19,7 @@
         :title="action.label"
         @click="emit('action', action.id)"
       >
-        <GqIcon :name="action.icon" :label="action.label" :decorative="false" />
+        <GqIcon :name="action.icon" decorative />
       </button>
     </template>
   </nav>

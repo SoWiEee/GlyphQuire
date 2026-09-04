@@ -6,12 +6,15 @@
         <label for="name" class="block text-sm font-medium text-foreground">名稱</label>
         <input
           id="name"
+          ref="nameRef"
           v-model="name"
           type="text"
           autocomplete="name"
           required
           class="mt-1 block w-full rounded-md border border-border px-3 py-2"
           placeholder="你的名字"
+          :aria-invalid="session.error ? 'true' : undefined"
+          :aria-describedby="session.error ? 'register-error' : undefined"
         />
       </div>
       <div>
@@ -24,6 +27,8 @@
           required
           class="mt-1 block w-full rounded-md border border-border px-3 py-2"
           placeholder="you@example.com"
+          :aria-invalid="session.error ? 'true' : undefined"
+          :aria-describedby="session.error ? 'register-error' : undefined"
         />
       </div>
       <div>
@@ -35,9 +40,13 @@
           autocomplete="new-password"
           required
           class="mt-1 block w-full rounded-md border border-border px-3 py-2"
+          :aria-invalid="session.error ? 'true' : undefined"
+          :aria-describedby="session.error ? 'register-error' : undefined"
         />
       </div>
-      <p v-if="session.error" role="alert" class="text-sm text-danger">{{ session.error }}</p>
+      <p v-if="session.error" id="register-error" role="alert" class="text-sm text-danger">
+        {{ session.error }}
+      </p>
       <button
         type="submit"
         :disabled="session.pending"
@@ -63,11 +72,14 @@ const router = useRouter();
 const name = ref("");
 const email = ref("");
 const password = ref("");
+const nameRef = ref<HTMLInputElement | null>(null);
 
 async function onSubmit(): Promise<void> {
   const ok = await session.signUp(email.value, password.value, name.value);
   if (ok && session.personalWorkspaceId) {
     await router.push(`/workspace/${session.personalWorkspaceId}`);
+  } else {
+    nameRef.value?.focus();
   }
 }
 </script>

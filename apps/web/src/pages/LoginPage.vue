@@ -6,12 +6,15 @@
         <label for="email" class="block text-sm font-medium text-foreground">Email</label>
         <input
           id="email"
+          ref="emailRef"
           v-model="email"
           type="email"
           autocomplete="email"
           required
           class="mt-1 block w-full rounded-md border border-border px-3 py-2"
           placeholder="you@example.com"
+          :aria-invalid="session.error ? 'true' : undefined"
+          :aria-describedby="session.error ? 'login-error' : undefined"
         />
       </div>
       <div>
@@ -23,9 +26,13 @@
           autocomplete="current-password"
           required
           class="mt-1 block w-full rounded-md border border-border px-3 py-2"
+          :aria-invalid="session.error ? 'true' : undefined"
+          :aria-describedby="session.error ? 'login-error' : undefined"
         />
       </div>
-      <p v-if="session.error" role="alert" class="text-sm text-danger">{{ session.error }}</p>
+      <p v-if="session.error" id="login-error" role="alert" class="text-sm text-danger">
+        {{ session.error }}
+      </p>
       <button
         type="submit"
         :disabled="session.pending"
@@ -50,11 +57,14 @@ const session = useSessionStore();
 const router = useRouter();
 const email = ref("");
 const password = ref("");
+const emailRef = ref<HTMLInputElement | null>(null);
 
 async function onSubmit(): Promise<void> {
   const ok = await session.signIn(email.value, password.value);
   if (ok && session.personalWorkspaceId) {
     await router.push(`/workspace/${session.personalWorkspaceId}`);
+  } else {
+    emailRef.value?.focus();
   }
 }
 </script>

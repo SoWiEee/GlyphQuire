@@ -51,7 +51,7 @@
     </div>
 
     <nav
-      v-if="!query.trim() && recentNotes.length > 0"
+      v-if="!query.trim() && store.activeNotes.length > RECENT_LIMIT && recentNotes.length > 0"
       aria-label="最近的筆記"
       class="pb-2"
     >
