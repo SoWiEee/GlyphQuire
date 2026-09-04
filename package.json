@@ -13,12 +13,12 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "test:integration": "pnpm --filter @glyphquire/api test:integration && pnpm --filter @glyphquire/queue test:integration",
-    "test:integration:release": "vitest run --config /dev/null tests/integration/release-checklist.test.ts tests/integration/release-deployment.test.ts tests/integration/release-preflight-route.test.ts tests/integration/release-backup-restore.test.ts tests/integration/release-screen-reader-evidence.test.ts tests/integration/release-gate.test.ts",
+    "test:integration:release": "vitest run --config tests/integration/vitest.config.ts tests/integration/release-checklist.test.ts tests/integration/release-deployment.test.ts tests/integration/release-preflight-route.test.ts tests/integration/release-backup-restore.test.ts tests/integration/release-screen-reader-evidence.test.ts tests/integration/release-gate.test.ts",
     "test:integration:release-observability": "bash infra/observability/release-observability-test.sh",
     "test:release": "bash infra/release/release-gate.sh",
     "test:cross-package": "vitest run --config vitest.config.ts",
     "test:e2e": "playwright test",
-    "test:operations:alerting": "vitest run --config /dev/null tests/integration/operations-alerting.test.ts",
+    "test:operations:alerting": "vitest run --config tests/integration/vitest.config.ts tests/integration/operations-alerting.test.ts",
     "test:load:autosave": "tsx tests/load/autosave-conflict.ts",
     "test:load:workspace": "tsx tests/load/workspace-load.ts",
     "test:load:release-environment": "tsx tests/load/release-environment.ts",
@@ -58,7 +58,7 @@
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
     "unified": "11.0.5",
-    "vitest": "^2.1.0",
+    "vitest": "^5.0.0",
     "vue": "^3.5.0"
   }
 }
