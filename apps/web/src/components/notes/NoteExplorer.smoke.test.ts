@@ -108,4 +108,40 @@ describe("NoteExplorer smoke test", () => {
     expect(wrapper.text()).toContain("Meeting notes");
     expect(wrapper.text()).not.toContain("Grocery list");
   });
+
+  it("shows the most-recently-updated notes in a Recent section and opens one", async () => {
+    const store = useNotesStore();
+    const older = note({
+      id: "55555555-5555-4555-8555-555555555555",
+      title: "Older note",
+      updatedAt: "2026-08-01T00:00:00.000Z",
+    });
+    const newer = note({
+      id: "66666666-6666-4666-8666-666666666666",
+      title: "Newer note",
+      updatedAt: "2026-08-20T00:00:00.000Z",
+    });
+    store.configure({
+      listNotes: vi.fn(async () => ({ items: [older, newer], nextCursor: null })),
+      createNote: vi.fn(),
+      renameNote: vi.fn(),
+      deleteNote: vi.fn(),
+      restoreNote: vi.fn(),
+    });
+    const wrapper = mount(NoteExplorer, { props: { workspaceId: WORKSPACE_ID } });
+    await flushPromises();
+
+    const recent = wrapper.get('[aria-label="Recent notes"]');
+    const recentTitles = recent.findAll("button").map((button) => button.text());
+    // Most-recent first.
+    expect(recentTitles[0]).toContain("Newer note");
+    expect(recentTitles).toContain("Older note");
+
+    await recent.findAll("button")[0]!.trigger("click");
+    expect(wrapper.emitted("open")?.[0]).toEqual(["66666666-6666-4666-8666-666666666666"]);
+
+    // Recent hides while filtering.
+    await wrapper.get('input[aria-label="Filter notes"]').setValue("older");
+    expect(wrapper.find('[aria-label="Recent notes"]').exists()).toBe(false);
+  });
 });

@@ -50,6 +50,27 @@
       />
     </div>
 
+    <nav
+      v-if="!query.trim() && recentNotes.length > 0"
+      aria-label="Recent notes"
+      class="pb-2"
+    >
+      <h3 class="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+        Recent
+      </h3>
+      <ul>
+        <li v-for="note in recentNotes" :key="`recent-${note.id}`">
+          <button
+            type="button"
+            class="flex w-full items-center truncate px-3 py-1 text-left text-sm text-gray-700 hover:bg-gray-100"
+            @click="emit('open', note.id)"
+          >
+            <span class="truncate">{{ note.title }}</span>
+          </button>
+        </li>
+      </ul>
+    </nav>
+
     <ul class="pb-2" aria-label="Active notes">
       <li v-for="note in filteredActiveNotes" :key="note.id">
         <form
@@ -208,6 +229,13 @@ const filteredActiveNotes = computed(() => {
   if (!needle) return store.activeNotes;
   return store.activeNotes.filter((note) => note.title.toLowerCase().includes(needle));
 });
+
+const RECENT_LIMIT = 5;
+const recentNotes = computed(() =>
+  [...store.activeNotes]
+    .sort((first, second) => second.updatedAt.localeCompare(first.updatedAt))
+    .slice(0, RECENT_LIMIT),
+);
 
 const deleteTarget = computed(
   () => store.items.find((note) => note.id === confirmDeleteId.value) ?? null,
