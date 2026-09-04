@@ -1,1 +1,15 @@
 @import "tailwindcss";
+
+@theme {
+  --color-canvas: var(--gq-color-background);
+  --color-surface: var(--gq-color-surface);
+  --color-surface-muted: var(--gq-color-surface-muted);
+  --color-foreground: var(--gq-color-foreground);
+  --color-muted: var(--gq-color-muted);
+  --color-accent: var(--gq-color-accent);
+  --color-accent-contrast: var(--gq-color-accent-contrast);
+  --color-border: var(--gq-color-border);
+  --color-success: var(--gq-color-success);
+  --color-warning: var(--gq-color-warning);
+  --color-danger: var(--gq-color-danger);
+}

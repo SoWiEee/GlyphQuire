@@ -1,19 +1,19 @@
 <template>
   <fieldset class="space-y-2">
-    <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500">Colors</legend>
+    <legend class="text-xs font-semibold uppercase tracking-wide text-muted">Colors</legend>
     <div v-for="key in colorKeys" :key="key" class="flex items-center gap-2">
-      <label :for="`color-${key}`" class="w-24 text-xs text-gray-600">{{ key }}</label>
+      <label :for="`color-${key}`" class="w-24 text-xs text-muted">{{ key }}</label>
       <input
         :id="`color-${key}`"
         type="color"
         :value="colors[key]"
-        class="h-6 w-8 cursor-pointer rounded border border-gray-300"
+        class="h-6 w-8 cursor-pointer rounded border border-border"
         @input="emit('update:color', key, ($event.target as HTMLInputElement).value)"
       />
       <input
         type="text"
         :value="colors[key]"
-        class="w-20 rounded border border-gray-300 px-1.5 py-0.5 text-xs"
+        class="w-20 rounded border border-border px-1.5 py-0.5 text-xs"
         @change="emit('update:color', key, ($event.target as HTMLInputElement).value)"
       />
     </div>

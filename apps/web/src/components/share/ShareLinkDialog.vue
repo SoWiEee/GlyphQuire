@@ -1,27 +1,27 @@
 <template>
-  <section aria-label="Share link" class="space-y-3 rounded border border-gray-200 p-4">
-    <h2 class="text-sm font-semibold text-gray-900">Read-only sharing</h2>
-    <label class="block text-sm text-gray-700">
+  <section aria-label="Share link" class="space-y-3 rounded border border-border p-4">
+    <h2 class="text-sm font-semibold text-foreground">Read-only sharing</h2>
+    <label class="block text-sm text-foreground">
       Optional expiry
       <input
         v-model="expiresAtLocal"
         type="datetime-local"
         aria-label="Share link expiry"
-        class="mt-1 block rounded border border-gray-300 px-2 py-1 text-sm"
+        class="mt-1 block rounded border border-border px-2 py-1 text-sm"
       />
     </label>
     <button
       type="button"
       aria-label="Create share link"
       :disabled="store.busy"
-      class="rounded bg-gray-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+      class="rounded bg-accent px-3 py-2 text-sm text-accent-contrast disabled:opacity-50"
       @click="createLink"
     >
       Create share link
     </button>
 
     <ul v-if="noteLinks.length" aria-label="Active share links" class="space-y-2 text-sm">
-      <li v-for="link in noteLinks" :key="link.id" class="rounded bg-gray-50 p-2">
+      <li v-for="link in noteLinks" :key="link.id" class="rounded bg-surface-muted p-2">
         <a
           :href="link.url"
           aria-label="Read-only share link"
@@ -34,15 +34,15 @@
         <button
           type="button"
           aria-label="Revoke share link"
-          class="ml-3 text-red-700 underline"
+          class="ml-3 text-danger underline"
           @click="revoke(link.id)"
         >
           Revoke
         </button>
       </li>
     </ul>
-    <p v-if="inputError" role="alert" class="text-sm text-red-700">{{ inputError }}</p>
-    <p v-else-if="store.error" role="alert" class="text-sm text-red-700">{{ store.error }}</p>
+    <p v-if="inputError" role="alert" class="text-sm text-danger">{{ inputError }}</p>
+    <p v-else-if="store.error" role="alert" class="text-sm text-danger">{{ store.error }}</p>
     <p aria-live="polite" class="sr-only">{{ status }}</p>
   </section>
 </template>

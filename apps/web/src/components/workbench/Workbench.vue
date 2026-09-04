@@ -1,6 +1,6 @@
 <template>
   <div class="gq-workbench-shell flex h-screen flex-col">
-    <div class="flex items-center border-b border-gray-200 bg-white">
+    <div class="flex items-center border-b border-border bg-surface">
       <TopBar
         ref="topBarRef"
         class="min-w-0 flex-1 border-b-0"
@@ -44,11 +44,11 @@
 
           <div class="gq-editor-column flex min-w-0 flex-1 flex-col">
             <div
-              class="gq-workbench-panel-toggles flex items-center gap-2 border-b border-gray-200 px-3 py-2"
+              class="gq-workbench-panel-toggles flex items-center gap-2 border-b border-border px-3 py-2"
             >
               <button
                 type="button"
-                class="gq-workbench-panel-toggle rounded border border-gray-300 px-2 py-1 text-xs text-gray-700"
+                class="gq-workbench-panel-toggle rounded border border-border px-2 py-1 text-xs text-foreground"
                 aria-label="Open explorer"
                 aria-controls="gq-explorer-pane"
                 :aria-expanded="explorerOpen"
@@ -58,7 +58,7 @@
               </button>
               <button
                 type="button"
-                class="gq-workbench-panel-toggle rounded border border-gray-300 px-2 py-1 text-xs text-gray-700"
+                class="gq-workbench-panel-toggle rounded border border-border px-2 py-1 text-xs text-foreground"
                 aria-label="Open context tools"
                 aria-controls="context-rail"
                 :aria-expanded="contextRailOpen"
@@ -120,7 +120,7 @@
                 @update:visual-markdown="onVisualMarkdownChange"
                 @slash-command="onSlashCommand"
               />
-              <div v-else class="flex h-full items-center justify-center text-sm text-gray-400">
+              <div v-else class="flex h-full items-center justify-center text-sm text-muted">
                 Open a note from the Explorer to start editing.
               </div>
             </div>
@@ -237,12 +237,12 @@
         role="dialog"
         aria-modal="true"
         :aria-label="toolPanelLabel"
-        class="max-h-[80vh] w-full max-w-2xl overflow-auto rounded-lg bg-white p-4 shadow-xl"
+        class="max-h-[80vh] w-full max-w-2xl overflow-auto rounded-lg bg-surface p-4 shadow-xl"
       >
         <button
           ref="toolPanelCloseRef"
           type="button"
-          class="mb-3 rounded border border-gray-300 px-2 py-1 text-sm"
+          class="mb-3 rounded border border-border px-2 py-1 text-sm"
           aria-label="Close tools"
           @click="closeToolPanel"
         >

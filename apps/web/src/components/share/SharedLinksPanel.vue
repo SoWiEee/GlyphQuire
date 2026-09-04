@@ -1,19 +1,19 @@
 <template>
   <section aria-label="Shared links" class="space-y-3">
     <header>
-      <h2 class="text-sm font-semibold text-gray-900">Shared links</h2>
-      <p class="text-xs text-gray-500">Read-only links cached during this authenticated session.</p>
+      <h2 class="text-sm font-semibold text-foreground">Shared links</h2>
+      <p class="text-xs text-muted">Read-only links cached during this authenticated session.</p>
     </header>
 
     <ul v-if="links.length" aria-label="Cached shared links" class="space-y-2">
       <li
         v-for="link in links"
         :key="link.id"
-        class="flex items-center justify-between gap-3 rounded border border-gray-200 p-2"
+        class="flex items-center justify-between gap-3 rounded border border-border p-2"
       >
         <div class="min-w-0">
-          <p class="truncate text-sm text-gray-800">{{ link.noteId }}</p>
-          <p class="text-xs text-gray-500">
+          <p class="truncate text-sm text-foreground">{{ link.noteId }}</p>
+          <p class="text-xs text-muted">
             {{ link.expiresAt ? `Expires ${link.expiresAt}` : "No expiry" }}
           </p>
         </div>
@@ -21,7 +21,7 @@
           <button
             type="button"
             aria-label="Open shared note"
-            class="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+            class="rounded border border-border px-2 py-1 text-xs text-foreground hover:bg-surface-muted"
             @click="emit('open', link.noteId)"
           >
             Open note
@@ -37,7 +37,7 @@
         </div>
       </li>
     </ul>
-    <p v-else data-testid="shared-links-empty" class="text-sm text-gray-500">No shared links.</p>
+    <p v-else data-testid="shared-links-empty" class="text-sm text-muted">No shared links.</p>
   </section>
 </template>
 

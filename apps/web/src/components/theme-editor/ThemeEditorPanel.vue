@@ -8,14 +8,14 @@
         role="dialog"
         aria-modal="true"
         aria-label="Theme editor"
-        class="relative z-10 flex h-full w-80 flex-col overflow-y-auto border-l border-gray-200 bg-white shadow-xl"
+        class="relative z-10 flex h-full w-80 flex-col overflow-y-auto border-l border-border bg-surface shadow-xl"
         tabindex="-1"
       >
-        <header class="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-          <h2 class="text-sm font-semibold text-gray-900">Theme Editor</h2>
+        <header class="flex items-center justify-between border-b border-border px-4 py-3">
+          <h2 class="text-sm font-semibold text-foreground">Theme Editor</h2>
           <button
             type="button"
-            class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            class="rounded p-1 text-muted hover:bg-surface-muted hover:text-muted"
             aria-label="Close theme editor"
             @click="emit('close')"
           >
@@ -48,7 +48,7 @@
         </div>
 
         <div class="px-4 pb-3">
-          <p v-if="themeStore.error" class="mb-2 text-xs text-red-600" role="alert">
+          <p v-if="themeStore.error" class="mb-2 text-xs text-danger" role="alert">
             {{ themeStore.error }}
           </p>
           <ThemeActions

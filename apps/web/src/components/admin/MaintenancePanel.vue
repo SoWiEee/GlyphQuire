@@ -1,18 +1,18 @@
 <template>
   <section
     aria-label="Administrative maintenance"
-    class="space-y-4 rounded border border-gray-200 p-4"
+    class="space-y-4 rounded border border-border p-4"
   >
-    <h2 class="text-sm font-semibold text-gray-900">Maintenance</h2>
+    <h2 class="text-sm font-semibold text-foreground">Maintenance</h2>
 
-    <p v-if="loadingCapabilities" class="text-sm text-gray-600">Checking maintenance access…</p>
-    <p v-if="error" role="alert" class="text-sm text-red-700">{{ error }}</p>
+    <p v-if="loadingCapabilities" class="text-sm text-muted">Checking maintenance access…</p>
+    <p v-if="error" role="alert" class="text-sm text-danger">{{ error }}</p>
     <p aria-live="polite" class="sr-only">{{ status }}</p>
 
     <template v-if="authorized && !loadingCapabilities">
       <section v-if="hasCapability('search.rebuild')" aria-label="Search rebuild" class="space-y-2">
-        <h3 class="text-sm font-medium text-gray-900">Search index rebuild</h3>
-        <label class="block text-sm text-gray-700">
+        <h3 class="text-sm font-medium text-foreground">Search index rebuild</h3>
+        <label class="block text-sm text-foreground">
           Batch size
           <input
             v-model="searchBatchSize"
@@ -22,14 +22,14 @@
             step="1"
             inputmode="numeric"
             aria-label="Search rebuild batch size"
-            class="ml-2 w-20 rounded border border-gray-300 px-2 py-1"
+            class="ml-2 w-20 rounded border border-border px-2 py-1"
           />
         </label>
         <button
           type="button"
           aria-label="Start search rebuild"
           :disabled="busy"
-          class="rounded bg-gray-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+          class="rounded bg-accent px-3 py-2 text-sm text-accent-contrast disabled:opacity-50"
           @click="startSearchRebuild"
         >
           Rebuild search index
@@ -37,8 +37,8 @@
       </section>
 
       <section v-if="hasCapability('asset.cleanup')" aria-label="Asset cleanup" class="space-y-2">
-        <h3 class="text-sm font-medium text-gray-900">Asset cleanup</h3>
-        <label class="block text-sm text-gray-700">
+        <h3 class="text-sm font-medium text-foreground">Asset cleanup</h3>
+        <label class="block text-sm text-foreground">
           Batch size
           <input
             v-model="assetBatchSize"
@@ -48,14 +48,14 @@
             step="1"
             inputmode="numeric"
             aria-label="Asset cleanup batch size"
-            class="ml-2 w-20 rounded border border-gray-300 px-2 py-1"
+            class="ml-2 w-20 rounded border border-border px-2 py-1"
           />
         </label>
         <button
           type="button"
           aria-label="Run asset cleanup"
           :disabled="busy"
-          class="rounded bg-gray-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+          class="rounded bg-accent px-3 py-2 text-sm text-accent-contrast disabled:opacity-50"
           @click="runAssetCleanup"
         >
           Run asset cleanup
@@ -67,7 +67,7 @@
         type="button"
         aria-label="Refresh maintenance diagnostics"
         :disabled="busy"
-        class="rounded border border-gray-300 px-3 py-2 text-sm text-gray-800 disabled:opacity-50"
+        class="rounded border border-border px-3 py-2 text-sm text-foreground disabled:opacity-50"
         @click="refreshDiagnostics"
       >
         Refresh diagnostics
@@ -78,20 +78,20 @@
         aria-label="Dead-letter jobs"
         class="space-y-2"
       >
-        <h3 class="text-sm font-medium text-gray-900">Dead-letter jobs</h3>
-        <p v-if="deadLetters.length === 0" class="text-sm text-gray-600">No dead-letter jobs.</p>
+        <h3 class="text-sm font-medium text-foreground">Dead-letter jobs</h3>
+        <p v-if="deadLetters.length === 0" class="text-sm text-muted">No dead-letter jobs.</p>
         <ul v-else class="space-y-2 text-sm">
           <li
             v-for="item in deadLetters"
             :key="item.id"
-            class="flex items-center justify-between gap-3 rounded bg-gray-50 p-2"
+            class="flex items-center justify-between gap-3 rounded bg-surface-muted p-2"
           >
             <span class="text-sm">A maintenance task needs attention.</span>
             <button
               type="button"
               aria-label="Replay dead-letter job"
               :disabled="busy"
-              class="rounded border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+              class="rounded border border-border px-2 py-1 text-xs disabled:opacity-50"
               @click="replayDeadLetter(item.id)"
             >
               Replay
@@ -103,7 +103,7 @@
           type="button"
           aria-label="Next dead-letter page"
           :disabled="busy"
-          class="rounded border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+          class="rounded border border-border px-2 py-1 text-xs disabled:opacity-50"
           @click="loadNextDeadLetters"
         >
           Next page
@@ -115,12 +115,12 @@
         aria-label="Backup verification"
         class="space-y-2"
       >
-        <h3 class="text-sm font-medium text-gray-900">Backup verification</h3>
-        <p v-if="backupVerifications.length === 0" class="text-sm text-gray-600">
+        <h3 class="text-sm font-medium text-foreground">Backup verification</h3>
+        <p v-if="backupVerifications.length === 0" class="text-sm text-muted">
           No backup verification jobs.
         </p>
         <ul v-else class="space-y-2 text-sm">
-          <li v-for="item in backupVerifications" :key="item.jobId" class="rounded bg-gray-50 p-2">
+          <li v-for="item in backupVerifications" :key="item.jobId" class="rounded bg-surface-muted p-2">
             <span class="block">{{ backupStatusLabel(item.status, item.errorCode) }}</span>
           </li>
         </ul>
@@ -129,7 +129,7 @@
           type="button"
           aria-label="Next backup verification page"
           :disabled="busy"
-          class="rounded border border-gray-300 px-2 py-1 text-xs disabled:opacity-50"
+          class="rounded border border-border px-2 py-1 text-xs disabled:opacity-50"
           @click="loadNextBackups"
         >
           Next page

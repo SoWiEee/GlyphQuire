@@ -1,13 +1,13 @@
 <template>
   <nav
-    class="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-gray-200 bg-gray-50"
+    class="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-border bg-surface-muted"
     aria-label="Notes explorer"
   >
     <div class="flex items-center justify-between px-3 pt-3 pb-2">
-      <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Notes</h2>
+      <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">Notes</h2>
       <button
         type="button"
-        class="rounded px-1.5 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+        class="rounded px-1.5 py-0.5 text-xs font-medium text-muted hover:bg-surface-muted"
         @click="startCreate"
       >
         <GqIcon name="sticky-note" size="sm" />
@@ -22,21 +22,21 @@
         ref="createInputRef"
         v-model="createTitle"
         type="text"
-        class="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+        class="w-full rounded border border-border px-2 py-1 text-sm"
         placeholder="Note title"
         @keydown.escape="cancelCreate"
       />
       <div class="mt-1 flex gap-2">
-        <button type="submit" class="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white">
+        <button type="submit" class="rounded bg-accent px-2 py-1 text-xs font-medium text-accent-contrast">
           Create
         </button>
-        <button type="button" class="rounded px-2 py-1 text-xs text-gray-600" @click="cancelCreate">
+        <button type="button" class="rounded px-2 py-1 text-xs text-muted" @click="cancelCreate">
           Cancel
         </button>
       </div>
     </form>
 
-    <p v-if="store.error" role="alert" class="px-3 pb-2 text-xs text-red-600">{{ store.error }}</p>
+    <p v-if="store.error" role="alert" class="px-3 pb-2 text-xs text-danger">{{ store.error }}</p>
 
     <div class="px-3 pb-2">
       <label for="note-explorer-filter" class="sr-only">Filter notes</label>
@@ -46,7 +46,7 @@
         type="text"
         aria-label="Filter notes"
         placeholder="Search notes"
-        class="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+        class="w-full rounded border border-border px-2 py-1 text-sm"
       />
     </div>
 
@@ -55,14 +55,14 @@
       aria-label="Recent notes"
       class="pb-2"
     >
-      <h3 class="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+      <h3 class="px-3 pt-1 pb-1 text-xs font-semibold uppercase tracking-wide text-muted">
         Recent
       </h3>
       <ul>
         <li v-for="note in recentNotes" :key="`recent-${note.id}`">
           <button
             type="button"
-            class="flex w-full items-center truncate px-3 py-1 text-left text-sm text-gray-700 hover:bg-gray-100"
+            class="flex w-full items-center truncate px-3 py-1 text-left text-sm text-foreground hover:bg-surface-muted"
             @click="emit('open', note.id)"
           >
             <span class="truncate">{{ note.title }}</span>
@@ -86,15 +86,15 @@
             ref="renameInputRef"
             v-model="renameTitle"
             type="text"
-            class="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+            class="w-full rounded border border-border px-2 py-1 text-sm"
             @keydown.escape="cancelRename"
           />
-          <button type="submit" class="shrink-0 text-xs text-gray-600" aria-label="Save name">
+          <button type="submit" class="shrink-0 text-xs text-muted" aria-label="Save name">
             <GqIcon name="check" size="sm" />
           </button>
           <button
             type="button"
-            class="shrink-0 text-xs text-gray-400"
+            class="shrink-0 text-xs text-muted"
             aria-label="Cancel rename"
             @click="cancelRename"
           >
@@ -107,8 +107,8 @@
             class="flex flex-1 items-center gap-1.5 truncate rounded px-2 py-1.5 text-left text-sm"
             :class="
               note.id === activeNoteId
-                ? 'bg-gray-200 font-medium text-gray-900'
-                : 'text-gray-700 hover:bg-gray-100'
+                ? 'bg-surface-muted font-medium text-foreground'
+                : 'text-foreground hover:bg-surface-muted'
             "
             :aria-current="note.id === activeNoteId ? 'true' : undefined"
             @click="emit('open', note.id)"
@@ -118,7 +118,7 @@
           </button>
           <button
             type="button"
-            class="shrink-0 rounded px-1.5 py-1 text-xs text-gray-400 opacity-0 hover:bg-gray-200 group-hover:opacity-100 focus-visible:opacity-100"
+            class="shrink-0 rounded px-1.5 py-1 text-xs text-muted opacity-0 hover:bg-surface-muted group-hover:opacity-100 focus-visible:opacity-100"
             :aria-label="`Rename &quot;${note.title}&quot;`"
             @click="startRename(note.id, note.title)"
           >
@@ -126,7 +126,7 @@
           </button>
           <button
             type="button"
-            class="shrink-0 rounded px-1.5 py-1 text-xs text-gray-400 opacity-0 hover:bg-gray-200 group-hover:opacity-100 focus-visible:opacity-100"
+            class="shrink-0 rounded px-1.5 py-1 text-xs text-muted opacity-0 hover:bg-surface-muted group-hover:opacity-100 focus-visible:opacity-100"
             :aria-label="`Delete &quot;${note.title}&quot;`"
             @click="confirmDeleteId = note.id"
           >
@@ -136,7 +136,7 @@
       </li>
       <li
         v-if="filteredActiveNotes.length === 0 && !store.loading"
-        class="px-3 py-2 text-xs text-gray-400"
+        class="px-3 py-2 text-xs text-muted"
       >
         No notes yet.
       </li>
@@ -144,7 +144,7 @@
 
     <button
       type="button"
-      class="flex items-center justify-between border-t border-gray-200 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 hover:bg-gray-100"
+      class="flex items-center justify-between border-t border-border px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted hover:bg-surface-muted"
       :aria-expanded="trashOpen"
       aria-controls="note-explorer-trash-list"
       @click="trashOpen = !trashOpen"
@@ -156,18 +156,18 @@
       <li
         v-for="note in store.trashedNotes"
         :key="note.id"
-        class="flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-gray-500"
+        class="flex items-center justify-between gap-2 px-3 py-1.5 text-sm text-muted"
       >
         <span class="truncate" :title="`Deleted ${note.deletedAt}`">{{ note.title }}</span>
         <button
           type="button"
-          class="shrink-0 text-xs font-medium text-gray-700 underline"
+          class="shrink-0 text-xs font-medium text-foreground underline"
           @click="confirmRestoreId = note.id"
         >
           Restore
         </button>
       </li>
-      <li v-if="store.trashedNotes.length === 0" class="px-3 py-1.5 text-xs text-gray-400">
+      <li v-if="store.trashedNotes.length === 0" class="px-3 py-1.5 text-xs text-muted">
         Trash is empty.
       </li>
     </ul>

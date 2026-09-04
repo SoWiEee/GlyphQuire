@@ -1,13 +1,13 @@
 <template>
   <div class="space-y-4">
     <details open>
-      <summary class="cursor-pointer text-xs font-semibold text-gray-700">Colors</summary>
+      <summary class="cursor-pointer text-xs font-semibold text-foreground">Colors</summary>
       <div class="mt-2">
         <ColorTokenGroup :colors="colors" @update:color="(k, v) => emit('update:color', k, v)" />
       </div>
     </details>
     <details>
-      <summary class="cursor-pointer text-xs font-semibold text-gray-700">Typography</summary>
+      <summary class="cursor-pointer text-xs font-semibold text-foreground">Typography</summary>
       <div class="mt-2">
         <TypographyTokenGroup
           :typography="typography"
@@ -16,13 +16,13 @@
       </div>
     </details>
     <details>
-      <summary class="cursor-pointer text-xs font-semibold text-gray-700">Radius</summary>
+      <summary class="cursor-pointer text-xs font-semibold text-foreground">Radius</summary>
       <div class="mt-2">
         <RadiusTokenGroup :radius="radius" @update:radius="(k, v) => emit('update:radius', k, v)" />
       </div>
     </details>
     <details>
-      <summary class="cursor-pointer text-xs font-semibold text-gray-700">Spacing</summary>
+      <summary class="cursor-pointer text-xs font-semibold text-foreground">Spacing</summary>
       <div class="mt-2">
         <SpacingTokenGroup
           :spacing="spacing"

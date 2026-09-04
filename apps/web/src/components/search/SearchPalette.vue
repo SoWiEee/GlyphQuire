@@ -1,6 +1,6 @@
 <template>
-  <section aria-label="Search notes" class="space-y-3 rounded border border-gray-200 p-4">
-    <h2 class="text-sm font-semibold text-gray-900">Search</h2>
+  <section aria-label="Search notes" class="space-y-3 rounded border border-border p-4">
+    <h2 class="text-sm font-semibold text-foreground">Search</h2>
     <form class="flex gap-2" @submit.prevent="runSearch">
       <input
         v-model="query"
@@ -8,13 +8,13 @@
         aria-label="Search notes"
         maxlength="512"
         autocomplete="off"
-        class="min-w-0 flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
+        class="min-w-0 flex-1 rounded border border-border px-3 py-2 text-sm"
       />
       <button
         type="button"
         aria-label="Run search"
         :disabled="!canSearch || store.busy"
-        class="rounded bg-gray-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+        class="rounded bg-accent px-3 py-2 text-sm text-accent-contrast disabled:opacity-50"
         @click="runSearch"
       >
         Search
@@ -26,16 +26,16 @@
         <button
           type="button"
           aria-label="Open search result"
-          class="w-full rounded border border-gray-200 p-2 text-left"
+          class="w-full rounded border border-border p-2 text-left"
           @click="emit('select-note', result.noteId)"
         >
-          <span class="block text-sm font-medium text-gray-900">{{ result.title }}</span>
-          <span class="block text-xs text-gray-700">{{ result.snippet }}</span>
+          <span class="block text-sm font-medium text-foreground">{{ result.title }}</span>
+          <span class="block text-xs text-foreground">{{ result.snippet }}</span>
         </button>
       </li>
     </ul>
-    <p v-else-if="searched && !store.error" class="text-sm text-gray-600">No matching notes.</p>
-    <p v-if="store.error" role="alert" class="text-sm text-red-700">{{ store.error }}</p>
+    <p v-else-if="searched && !store.error" class="text-sm text-muted">No matching notes.</p>
+    <p v-if="store.error" role="alert" class="text-sm text-danger">{{ store.error }}</p>
   </section>
 </template>
 

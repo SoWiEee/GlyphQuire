@@ -1,8 +1,8 @@
 <template>
   <fieldset class="space-y-2">
-    <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500">Radius</legend>
+    <legend class="text-xs font-semibold uppercase tracking-wide text-muted">Radius</legend>
     <div v-for="key in radiusKeys" :key="key" class="flex items-center gap-2">
-      <label :for="`radius-${key}`" class="w-24 text-xs text-gray-600">{{ key }}</label>
+      <label :for="`radius-${key}`" class="w-24 text-xs text-muted">{{ key }}</label>
       <input
         :id="`radius-${key}`"
         type="range"
@@ -16,7 +16,7 @@
         class="flex-1"
         @input="emit('update:radius', key, ($event.target as HTMLInputElement).value + 'rem')"
       />
-      <span class="w-14 text-right text-xs text-gray-500">{{ radius[key] }}</span>
+      <span class="w-14 text-right text-xs text-muted">{{ radius[key] }}</span>
     </div>
   </fieldset>
 </template>

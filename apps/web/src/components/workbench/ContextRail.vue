@@ -25,7 +25,7 @@
           <h2 class="gq-context-rail__heading text-xs font-semibold uppercase tracking-wide">
             Context
           </h2>
-          <p v-if="noteTitle" class="gq-context-rail__note text-sm text-gray-700">
+          <p v-if="noteTitle" class="gq-context-rail__note text-sm text-foreground">
             {{ noteTitle }}
           </p>
         </div>
@@ -33,7 +33,7 @@
           ref="closeRef"
           type="button"
           aria-label="Close context tools"
-          class="gq-context-rail__close rounded p-1 hover:bg-gray-100 hover:text-gray-900"
+          class="gq-context-rail__close rounded p-1 hover:bg-surface-muted hover:text-foreground"
           @click="emit('close')"
         >
           <GqIcon name="x" size="sm" />
@@ -49,7 +49,7 @@
         >
           <button
             type="button"
-            class="w-full rounded px-2 py-1 text-left text-sm text-gray-700 hover:bg-gray-100"
+            class="w-full rounded px-2 py-1 text-left text-sm text-foreground hover:bg-surface-muted"
             @click="emit('selectOutline', entry.id)"
           >
             {{ entry.label }}

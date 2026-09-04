@@ -1,7 +1,7 @@
 <template>
-  <section aria-label="Import and export" class="space-y-4 rounded border border-gray-200 p-4">
+  <section aria-label="Import and export" class="space-y-4 rounded border border-border p-4">
     <header class="flex items-center justify-between">
-      <h2 class="text-sm font-semibold text-gray-900">Import and export</h2>
+      <h2 class="text-sm font-semibold text-foreground">Import and export</h2>
       <button
         v-if="closable"
         type="button"
@@ -13,7 +13,7 @@
     </header>
 
     <form class="space-y-2" @submit.prevent="startImport">
-      <label class="block text-sm text-gray-700">
+      <label class="block text-sm text-foreground">
         Import Markdown or ZIP
         <input
           type="file"
@@ -27,7 +27,7 @@
         type="button"
         aria-label="Start import"
         :disabled="!importFile || store.busy"
-        class="rounded bg-gray-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+        class="rounded bg-accent px-3 py-2 text-sm text-accent-contrast disabled:opacity-50"
         @click="startImport"
       >
         Start import
@@ -35,12 +35,12 @@
     </form>
 
     <form class="space-y-2" @submit.prevent="startExport">
-      <label class="block text-sm text-gray-700">
+      <label class="block text-sm text-foreground">
         Export format
         <select
           v-model="format"
           aria-label="Export format"
-          class="mt-1 block rounded border border-gray-300 px-2 py-1 text-sm"
+          class="mt-1 block rounded border border-border px-2 py-1 text-sm"
         >
           <option value="markdown">Markdown</option>
           <option value="zip">ZIP</option>
@@ -51,7 +51,7 @@
         type="button"
         aria-label="Export workspace"
         :disabled="store.busy"
-        class="rounded bg-gray-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+        class="rounded bg-accent px-3 py-2 text-sm text-accent-contrast disabled:opacity-50"
         @click="startExport"
       >
         Export workspace
@@ -59,13 +59,13 @@
     </form>
 
     <div class="space-y-2" aria-label="Additional export formats">
-      <p class="text-sm text-gray-700">Additional formats</p>
+      <p class="text-sm text-foreground">Additional formats</p>
       <div class="flex flex-wrap gap-2">
         <button
           type="button"
           aria-label="Export workspace as plain text"
           :disabled="store.busy"
-          class="rounded border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
+          class="rounded border border-border px-3 py-2 text-sm disabled:opacity-50"
           @click="startAdditionalExport('plain-text')"
         >
           Export plain text
@@ -74,7 +74,7 @@
           type="button"
           aria-label="Export workspace as AST JSON"
           :disabled="store.busy"
-          class="rounded border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
+          class="rounded border border-border px-3 py-2 text-sm disabled:opacity-50"
           @click="startAdditionalExport('ast-json')"
         >
           Export AST JSON
@@ -82,7 +82,7 @@
       </div>
     </div>
 
-    <div aria-live="polite" class="space-y-1 text-sm text-gray-700">
+    <div aria-live="polite" class="space-y-1 text-sm text-foreground">
       <p v-for="entry in importEntries" :key="entry.id">
         {{ importStatusLabel(entry.status) }}
         <span v-if="entry.progress.totalItems > 0">
@@ -116,7 +116,7 @@
       </button>
     </div>
 
-    <p v-if="store.error" role="alert" class="text-sm text-red-700">{{ store.error }}</p>
+    <p v-if="store.error" role="alert" class="text-sm text-danger">{{ store.error }}</p>
   </section>
 </template>
 

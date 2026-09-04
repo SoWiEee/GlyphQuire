@@ -1,5 +1,5 @@
 <template>
-  <div class="gq-editor-tabs flex items-center overflow-x-auto border-b border-gray-200 bg-white">
+  <div class="gq-editor-tabs flex items-center overflow-x-auto border-b border-border bg-surface">
     <div role="tablist" aria-label="Open notes" class="gq-editor-tabs__list flex items-center">
       <button
         v-for="tab in tabs"

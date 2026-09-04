@@ -64,7 +64,7 @@ describe("NoteExplorer smoke test", () => {
     // Delete (soft) with confirmation.
     await wrapper.get('button[aria-label^="Delete"]').trigger("click");
     await flushPromises();
-    await wrapper.get('[role="alertdialog"] button.bg-red-600').trigger("click");
+    await wrapper.get('[role="alertdialog"] button.bg-danger').trigger("click");
     await flushPromises();
     expect(deleteNote).toHaveBeenCalled();
     expect(store.trashedNotes).toHaveLength(1);
@@ -78,7 +78,7 @@ describe("NoteExplorer smoke test", () => {
     await restoreTrigger!.trigger("click");
     await flushPromises();
     expect(wrapper.text()).toContain("revision 2");
-    await wrapper.get('[role="alertdialog"] button.bg-gray-900').trigger("click");
+    await wrapper.get('[role="alertdialog"] button.bg-accent').trigger("click");
     await flushPromises();
     expect(restoreNote).toHaveBeenCalled();
     expect(store.activeNotes).toHaveLength(1);

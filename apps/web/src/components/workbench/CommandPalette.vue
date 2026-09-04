@@ -8,14 +8,14 @@
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
-      class="w-full max-w-md rounded-lg bg-white shadow-xl"
+      class="w-full max-w-md rounded-lg bg-surface shadow-xl"
       @keydown="onDialogKeydown"
     >
       <input
         ref="inputRef"
         v-model="query"
         type="text"
-        class="w-full rounded-t-lg border-b border-gray-200 px-4 py-3 text-sm"
+        class="w-full rounded-t-lg border-b border-border px-4 py-3 text-sm"
         placeholder="Type a command…"
         aria-label="Filter commands"
         aria-controls="command-palette-options"
@@ -34,20 +34,20 @@
           :id="`command-palette-option-${index}`"
           :aria-selected="index === highlightedIndex"
           class="cursor-pointer px-4 py-2 text-sm"
-          :class="index === highlightedIndex ? 'bg-gray-100 text-gray-900' : 'text-gray-700'"
+          :class="index === highlightedIndex ? 'bg-surface-muted text-foreground' : 'text-foreground'"
           @mouseenter="highlightedIndex = index"
           @click="run(command)"
         >
           <div class="flex items-center justify-between">
             <span>{{ command.label }}</span>
-            <span v-if="command.hint" class="text-xs text-gray-600">{{ command.hint }}</span>
+            <span v-if="command.hint" class="text-xs text-muted">{{ command.hint }}</span>
           </div>
         </li>
         <li
           v-if="filtered.length === 0"
           data-testid="command-palette-empty"
           role="status"
-          class="px-4 py-2 text-sm text-gray-600"
+          class="px-4 py-2 text-sm text-muted"
         >
           No matching commands.
         </li>

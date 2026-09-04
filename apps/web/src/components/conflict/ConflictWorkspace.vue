@@ -1,7 +1,7 @@
 <template>
   <div
     ref="containerRef"
-    class="fixed inset-0 z-50 flex flex-col bg-white motion-safe:transition-opacity motion-safe:duration-150"
+    class="fixed inset-0 z-50 flex flex-col bg-surface motion-safe:transition-opacity motion-safe:duration-150"
     role="dialog"
     aria-modal="true"
     aria-label="Resolve conflicting edits"
@@ -10,10 +10,10 @@
     <p class="sr-only" role="status" aria-live="polite">{{ statusMessage }}</p>
     <p class="sr-only" aria-live="polite">{{ copyFeedback }}</p>
 
-    <header class="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+    <header class="flex items-center justify-between border-b border-border px-4 py-3">
       <div>
-        <h1 class="text-sm font-semibold text-gray-900">Someone else saved changes to this note</h1>
-        <p class="text-xs text-gray-500">
+        <h1 class="text-sm font-semibold text-foreground">Someone else saved changes to this note</h1>
+        <p class="text-xs text-muted">
           Your edits were never sent — the server still has its own version. Merge the two below,
           then resubmit.
         </p>
@@ -37,11 +37,11 @@
 
     <section
       aria-label="Line differences between your version and the server version"
-      class="border-b border-gray-200"
+      class="border-b border-border"
     >
       <div class="flex items-center justify-between px-4 py-1.5">
-        <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500">What changed</h2>
-        <span class="text-xs text-gray-500">{{ diffSummary }}</span>
+        <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">What changed</h2>
+        <span class="text-xs text-muted">{{ diffSummary }}</span>
       </div>
       <div
         v-if="diffSegments"
@@ -57,7 +57,7 @@
           >{{ segment.text.length > 0 ? segment.text : " " }}
         </div>
       </div>
-      <p v-else class="px-4 pb-2 text-xs text-gray-500">
+      <p v-else class="px-4 pb-2 text-xs text-muted">
         This document is too large to highlight line by line — compare the two panes below directly.
       </p>
     </section>
@@ -65,26 +65,26 @@
     <div class="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-2">
       <section
         aria-labelledby="conflict-local-heading"
-        class="flex min-h-0 flex-col border-b border-gray-200 md:border-b-0 md:border-r"
+        class="flex min-h-0 flex-col border-b border-border md:border-b-0 md:border-r"
       >
         <div class="flex items-center justify-between px-3 py-2">
           <h2
             id="conflict-local-heading"
-            class="text-xs font-semibold uppercase tracking-wide text-gray-500"
+            class="text-xs font-semibold uppercase tracking-wide text-muted"
           >
             Your version (editable)
           </h2>
           <div class="flex gap-2">
             <button
               type="button"
-              class="rounded px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100"
+              class="rounded px-2 py-1 text-xs font-medium text-muted hover:bg-surface-muted"
               @click="copyText('Your version', mergedMarkdown)"
             >
               Copy
             </button>
             <button
               type="button"
-              class="rounded px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100"
+              class="rounded px-2 py-1 text-xs font-medium text-muted hover:bg-surface-muted"
               @click="useServerVersion"
             >
               Use server version
@@ -97,7 +97,7 @@
         <textarea
           id="conflict-local-textarea"
           ref="localTextareaRef"
-          class="min-h-0 flex-1 resize-none border-0 p-3 font-mono text-sm text-gray-900 outline-none"
+          class="min-h-0 flex-1 resize-none border-0 p-3 font-mono text-sm text-foreground outline-none"
           spellcheck="false"
           data-testid="local-pane"
           :value="mergedMarkdown"
@@ -109,19 +109,19 @@
         <div class="flex items-center justify-between px-3 py-2">
           <h2
             id="conflict-server-heading"
-            class="text-xs font-semibold uppercase tracking-wide text-gray-500"
+            class="text-xs font-semibold uppercase tracking-wide text-muted"
           >
             Server version (read-only)
           </h2>
           <button
             type="button"
-            class="rounded px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100"
+            class="rounded px-2 py-1 text-xs font-medium text-muted hover:bg-surface-muted"
             @click="copyText('Server version', currentConflict.serverMarkdown)"
           >
             Copy
           </button>
         </div>
-        <p class="px-3 pb-1 text-xs text-gray-500">
+        <p class="px-3 pb-1 text-xs text-muted">
           Revision {{ currentConflict.serverRevision }} · saved {{ formattedServerUpdatedAt
           }}<template v-if="currentConflict.lastEditedBy">
             by {{ currentConflict.lastEditedBy.displayName }}</template
@@ -137,15 +137,15 @@
           data-testid="server-pane"
           aria-readonly="true"
           tabindex="0"
-          class="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-sm text-gray-800"
+          class="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-sm text-foreground"
           >{{ currentConflict.serverMarkdown }}</pre>
       </section>
     </div>
 
-    <footer class="flex items-center justify-between border-t border-gray-200 px-4 py-3">
+    <footer class="flex items-center justify-between border-t border-border px-4 py-3">
       <button
         type="button"
-        class="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        class="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted"
         @click="onDismiss"
       >
         Keep working elsewhere
@@ -153,7 +153,7 @@
       <button
         ref="resubmitRef"
         type="button"
-        class="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+        class="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-contrast hover:opacity-90 disabled:opacity-50"
         :disabled="status === 'resubmitting'"
         data-testid="resubmit-button"
         @click="resubmit"
@@ -285,7 +285,7 @@ function diffLineClass(kind: DiffSegmentKind): string {
     case "server-only":
       return "bg-amber-50 text-amber-900";
     default:
-      return "text-gray-500";
+      return "text-muted";
   }
 }
 

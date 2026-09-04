@@ -1,6 +1,6 @@
 <template>
   <nav
-    class="gq-editor-toolbar flex items-center gap-1 border-b border-gray-200 px-3 py-1.5"
+    class="gq-editor-toolbar flex items-center gap-1 border-b border-border px-3 py-1.5"
     aria-label="Editor toolbar"
   >
     <template v-for="(group, groupIndex) in groups" :key="group.id">
@@ -13,7 +13,7 @@
         v-for="action in group.actions"
         :key="action.id"
         type="button"
-        class="rounded border border-transparent p-1.5 text-gray-700 hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        class="rounded border border-transparent p-1.5 text-foreground hover:border-border hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
         :aria-label="action.label"
         :disabled="disabled"
         :title="action.label"
