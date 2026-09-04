@@ -85,4 +85,27 @@ describe("NoteExplorer smoke test", () => {
 
     wrapper.unmount();
   });
+
+  it("filters the active notes list by title substring", async () => {
+    const store = useNotesStore();
+    const listNotes = vi.fn(async () => ({
+      items: [
+        note({ id: NOTE_ID, title: "Grocery list" }),
+        note({ id: "55555555-5555-4555-8555-555555555555", title: "Meeting notes" }),
+      ],
+      nextCursor: null,
+    }));
+    store.configure({
+      listNotes,
+      createNote: vi.fn(),
+      renameNote: vi.fn(),
+      deleteNote: vi.fn(),
+      restoreNote: vi.fn(),
+    });
+    const wrapper = mount(NoteExplorer, { props: { workspaceId: WORKSPACE_ID } });
+    await flushPromises();
+    await wrapper.get('input[aria-label="Filter notes"]').setValue("meeting");
+    expect(wrapper.text()).toContain("Meeting notes");
+    expect(wrapper.text()).not.toContain("Grocery list");
+  });
 });

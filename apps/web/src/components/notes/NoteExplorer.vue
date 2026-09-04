@@ -38,8 +38,20 @@
 
     <p v-if="store.error" role="alert" class="px-3 pb-2 text-xs text-red-600">{{ store.error }}</p>
 
+    <div class="px-3 pb-2">
+      <label for="note-explorer-filter" class="sr-only">Filter notes</label>
+      <input
+        id="note-explorer-filter"
+        v-model="query"
+        type="text"
+        aria-label="Filter notes"
+        placeholder="Search notes"
+        class="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+      />
+    </div>
+
     <ul class="pb-2" aria-label="Active notes">
-      <li v-for="note in store.activeNotes" :key="note.id">
+      <li v-for="note in filteredActiveNotes" :key="note.id">
         <form
           v-if="renamingId === note.id"
           class="flex items-center gap-1 px-2 py-1"
@@ -102,7 +114,7 @@
         </div>
       </li>
       <li
-        v-if="store.activeNotes.length === 0 && !store.loading"
+        v-if="filteredActiveNotes.length === 0 && !store.loading"
         class="px-3 py-2 text-xs text-gray-400"
       >
         No notes yet.
@@ -189,6 +201,13 @@ const renameInputRef = ref<HTMLInputElement[] | HTMLInputElement | null>(null);
 const trashOpen = ref(false);
 const confirmDeleteId = ref<string | null>(null);
 const confirmRestoreId = ref<string | null>(null);
+
+const query = ref("");
+const filteredActiveNotes = computed(() => {
+  const needle = query.value.trim().toLowerCase();
+  if (!needle) return store.activeNotes;
+  return store.activeNotes.filter((note) => note.title.toLowerCase().includes(needle));
+});
 
 const deleteTarget = computed(
   () => store.items.find((note) => note.id === confirmDeleteId.value) ?? null,
