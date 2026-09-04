@@ -108,6 +108,45 @@ describe("WorkbenchContext", () => {
     context.openNote("second");
     expect(context.snapshot().activeNoteId).toBe("first");
   });
+
+  it("syncNotes reconciles the note list, tabs, and active session", async () => {
+    const first: WorkbenchNote = { id: "first", title: "First", markdown: "# First" };
+    const second: WorkbenchNote = { id: "second", title: "Second", markdown: "# Second" };
+    const firstSession = createSession("first", "# Authoritative first");
+    const secondSession = createSession("second", "# Authoritative second");
+    const sessionFactory = vi.fn(async (note: Readonly<WorkbenchNote>) => {
+      const handle: WorkbenchSessionHandle =
+        note.id === "first" ? { session: firstSession } : { session: secondSession };
+      return handle;
+    });
+    const context = createWorkbenchContext({
+      initialNotes: [first, second],
+      sessionFactory,
+      workspaceId: "22222222-2222-4222-8222-222222222222",
+    });
+    await flushPromises();
+    context.openNote("second");
+    await flushPromises();
+    expect(context.snapshot().activeNoteId).toBe("second");
+
+    // A rename updates the title; the removed "first" is dropped from tabs;
+    // "second" (active) still exists so the session is untouched.
+    context.syncNotes([{ id: "second", title: "Second renamed", markdown: "" }]);
+    await flushPromises();
+    expect(context.snapshot().notes.map((n) => n.title)).toEqual(["Second renamed"]);
+    expect(context.snapshot().openTabs.map((n) => n.id)).toEqual(["second"]);
+    expect(context.snapshot().activeNoteId).toBe("second");
+    expect(secondSession.dispose).not.toHaveBeenCalled();
+
+    // Removing the active note re-activates the last surviving tab (none here → null).
+    context.syncNotes([{ id: "third", title: "Third", markdown: "" }]);
+    await flushPromises();
+    expect(context.snapshot().activeNoteId).toBeNull();
+    expect(context.snapshot().openTabs).toEqual([]);
+    expect(secondSession.dispose).toHaveBeenCalled();
+
+    await context.dispose();
+  });
 });
 
 function createSession(noteId: string, markdown: string): EditorSession {

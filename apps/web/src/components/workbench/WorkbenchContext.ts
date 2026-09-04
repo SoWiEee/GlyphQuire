@@ -92,6 +92,7 @@ export interface WorkbenchContextSnapshot {
 export interface WorkbenchContext {
   openNote(noteId: string, options?: WorkbenchOpenNoteOptions): void;
   closeNote(noteId: string): void;
+  syncNotes(notes: readonly WorkbenchNote[]): void;
   setPanel(panel: WorkbenchPanel): void;
   setMode(mode: WorkbenchEditorMode): Promise<void>;
   snapshot(): WorkbenchContextSnapshot;
@@ -474,6 +475,22 @@ export function createWorkbenchContext(options: WorkbenchContextOptions = {}): W
     void activateSession(state.activeNote);
   }
 
+  function syncNotes(nextNotes: readonly WorkbenchNote[]): void {
+    if (disposed) return;
+    const nextIds = new Set(nextNotes.map((note) => note.id));
+    state.notes = nextNotes.map((note) => ({ ...note }));
+    const activeRemoved = state.activeNoteId !== null && !nextIds.has(state.activeNoteId);
+    state.openTabs = state.openTabs.filter((tab) => nextIds.has(tab.id));
+    if (activeRemoved) {
+      state.activeNoteId =
+        state.openTabs.length > 0 ? state.openTabs[state.openTabs.length - 1]!.id : null;
+      refreshNoteProjection();
+      void activateSession(state.activeNote);
+    } else {
+      refreshNoteProjection();
+    }
+  }
+
   function setPanel(panel: WorkbenchPanel): void {
     if (disposed) return;
     if (panel === null) {
@@ -530,6 +547,7 @@ export function createWorkbenchContext(options: WorkbenchContextOptions = {}): W
   return {
     openNote,
     closeNote,
+    syncNotes,
     setPanel,
     setMode,
     snapshot(): WorkbenchContextSnapshot {
