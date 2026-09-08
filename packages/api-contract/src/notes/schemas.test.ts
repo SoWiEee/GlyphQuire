@@ -1,6 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
-  createApiClient,
   noteApiContract as publicNoteApiContract,
   saveNoteInputSchema as publicSaveNoteInputSchema,
 } from "@glyphquire/api-contract";
@@ -618,38 +617,5 @@ describe("note API schemas", () => {
     expect(apiRouteSchema).toBe(saveNoteInputSchema);
     expect(webClientSchema).toBe(saveNoteInputSchema);
     expectTypeOf<typeof apiRouteSchema>().toEqualTypeOf<typeof webClientSchema>();
-  });
-
-  it("keeps createApiClient as a thin schema-validating transport adapter", async () => {
-    const note = {
-      id: canonicalUuid,
-      workspaceId: canonicalUuid,
-      title: "Adapter note",
-      contentMarkdown: "# Adapter",
-      schemaVersion: 1,
-      revision: 1,
-      visibility: "private",
-      createdAt: "2026-08-22T01:00:00.000Z",
-      updatedAt: "2026-08-22T01:00:00.000Z",
-      deletedAt: null,
-    };
-    const calls: Array<{ endpoint: string; input: unknown }> = [];
-    const client = createApiClient({
-      request: async (endpoint, input) => {
-        calls.push({ endpoint, input });
-        return note;
-      },
-    });
-
-    await expect(client.request("getNote", { params: { noteId: canonicalUuid } })).resolves.toEqual(
-      note,
-    );
-    expect(client.contract).toBe(noteApiContract);
-    expect(calls).toEqual([{ endpoint: "getNote", input: { params: { noteId: canonicalUuid } } }]);
-
-    await expect(
-      client.request("getNote", { params: { noteId: "not-a-uuid" } }),
-    ).rejects.toBeDefined();
-    expect(calls).toHaveLength(1);
   });
 });

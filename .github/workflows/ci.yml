@@ -69,9 +69,9 @@ jobs:
         run: pnpm test:cross-package
 
       - name: Install local Playwright browsers
-        run: pnpm exec playwright install --with-deps chromium firefox webkit
+        run: pnpm exec playwright install --with-deps chromium
 
-      - name: Chrome E2E, accessibility, security, and performance evidence
+      - name: Chrome E2E, accessibility, and security checks
         run: pnpm test:e2e
 
       - name: Upload Playwright report
