@@ -92,6 +92,6 @@ capture_has_pair || fail "RECEIVER_CAPTURE_MISSING_MATCHED_RECOVERY"
 
 OPERATIONS_ALERT_EVIDENCE_FILE="$OPERATIONS_EVIDENCE" \
 RELEASE_ALERT_EVIDENCE_FILE="$CAPTURE_PATH" \
-  pnpm exec vitest run --config /dev/null tests/integration/operations-alerting.test.ts tests/integration/release-observability.test.ts
+  pnpm exec vitest run --config tests/integration/vitest.config.ts tests/integration/operations-alerting.test.ts tests/integration/release-observability.test.ts
 
 printf 'RELEASE_OBSERVABILITY_PASSED:receiver_capture_validated\n'
