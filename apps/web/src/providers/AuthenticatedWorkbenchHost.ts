@@ -76,6 +76,3 @@ export function provideAuthenticatedWorkbenchHost(
   provideWorkbenchHostContext(context);
   return context;
 }
-
-/** Alias kept for route adapters that prefer a verb describing construction. */
-export const createAuthenticatedWorkbenchHost = provideAuthenticatedWorkbenchHost;

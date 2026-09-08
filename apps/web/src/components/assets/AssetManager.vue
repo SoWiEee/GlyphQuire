@@ -1,7 +1,7 @@
 <template>
-  <section aria-label="Asset manager" class="space-y-3 rounded border border-gray-200 p-4">
-    <h2 class="text-sm font-semibold text-gray-900">Assets</h2>
-    <label class="block text-sm text-gray-700">
+  <section aria-label="Asset manager" class="space-y-3 rounded border border-border p-4">
+    <h2 class="text-sm font-semibold text-foreground">Assets</h2>
+    <label class="block text-sm text-foreground">
       Asset file
       <input
         type="file"
@@ -15,14 +15,14 @@
       type="button"
       aria-label="Upload asset"
       :disabled="!file || store.busy"
-      class="rounded bg-gray-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+      class="rounded bg-accent px-3 py-2 text-sm text-accent-contrast disabled:opacity-50"
       @click="upload"
     >
       Upload asset
     </button>
 
     <ul v-if="workspaceAssets.length" aria-label="Uploaded assets" class="space-y-2 text-sm">
-      <li v-for="asset in workspaceAssets" :key="asset.id" class="rounded bg-gray-50 p-2">
+      <li v-for="asset in workspaceAssets" :key="asset.id" class="rounded bg-surface-muted p-2">
         <span>{{ asset.originalName }}</span>
         <button
           type="button"
@@ -34,8 +34,8 @@
         </button>
       </li>
     </ul>
-    <p v-if="selectionError" role="alert" class="text-sm text-red-700">{{ selectionError }}</p>
-    <p v-else-if="store.error" role="alert" class="text-sm text-red-700">{{ store.error }}</p>
+    <p v-if="selectionError" role="alert" class="text-sm text-danger">{{ selectionError }}</p>
+    <p v-else-if="store.error" role="alert" class="text-sm text-danger">{{ store.error }}</p>
     <p aria-live="polite" class="sr-only">{{ status }}</p>
   </section>
 </template>

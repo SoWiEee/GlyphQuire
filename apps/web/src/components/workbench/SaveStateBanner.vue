@@ -1,6 +1,6 @@
 <template>
   <section
-    class="flex items-center justify-between gap-3 border-b border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-700"
+    class="flex items-center justify-between gap-3 border-b border-border bg-surface-muted px-4 py-2 text-sm text-foreground"
     :data-save-state="state"
     :role="isAlert ? 'alert' : undefined"
   >
@@ -12,20 +12,20 @@
       <button
         v-if="showRetry"
         type="button"
-        class="rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-white"
-        aria-label="Retry save"
+        class="rounded border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-surface"
+        aria-label="重試儲存"
         @click="emit('retry')"
       >
-        Retry save
+        重試儲存
       </button>
       <button
         v-if="showConflictRecovery"
         type="button"
-        class="rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-white"
-        aria-label="Open conflict recovery"
+        class="rounded border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-surface"
+        aria-label="開啟衝突處理"
         @click="emit('openConflict')"
       >
-        Review conflict
+        檢視衝突
       </button>
     </div>
   </section>

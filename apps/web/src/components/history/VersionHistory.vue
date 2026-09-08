@@ -1,18 +1,18 @@
 <template>
   <div class="gq-version-history flex h-full min-h-0" aria-label="Version history">
-    <div class="flex w-72 shrink-0 flex-col border-r border-gray-200">
+    <div class="flex w-72 shrink-0 flex-col border-r border-border">
       <div class="flex items-center justify-between px-3 py-2">
-        <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500">History</h2>
+        <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">History</h2>
         <button
           type="button"
-          class="rounded px-1.5 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-100"
+          class="rounded px-1.5 py-0.5 text-xs font-medium text-muted hover:bg-surface-muted"
           :disabled="!hasValidRevision"
           @click="checkpointOpen = true"
         >
           Checkpoint
         </button>
       </div>
-      <p v-if="store.error" role="alert" class="px-3 pb-2 text-xs text-red-600">
+      <p v-if="store.error" role="alert" class="px-3 pb-2 text-xs text-danger">
         {{ store.error }}
       </p>
       <ul class="min-h-0 flex-1 overflow-y-auto" aria-label="Versions">
@@ -20,24 +20,24 @@
           <button
             type="button"
             class="w-full px-3 py-2 text-left text-sm"
-            :class="version.id === selectedVersionId ? 'bg-gray-200' : 'hover:bg-gray-100'"
+            :class="version.id === selectedVersionId ? 'bg-surface-muted' : 'hover:bg-surface-muted'"
             :aria-current="version.id === selectedVersionId ? 'true' : undefined"
             @click="select(version.id)"
           >
-            <span class="block font-medium text-gray-800">Revision {{ version.revision }}</span>
-            <span class="block text-xs text-gray-500">
+            <span class="block font-medium text-foreground">Revision {{ version.revision }}</span>
+            <span class="block text-xs text-muted">
               {{ describeVersionReason(version.reason) }} · {{ version.createdBy.displayName }}
             </span>
           </button>
         </li>
-        <li v-if="versions.length === 0 && !store.loading" class="px-3 py-4 text-xs text-gray-400">
+        <li v-if="versions.length === 0 && !store.loading" class="px-3 py-4 text-xs text-muted">
           No history yet.
         </li>
       </ul>
       <button
         v-if="hasMore"
         type="button"
-        class="border-t border-gray-200 px-3 py-2 text-xs text-gray-600 hover:bg-gray-50"
+        class="border-t border-border px-3 py-2 text-xs text-muted hover:bg-surface-muted"
         @click="store.loadMore(noteId)"
       >
         Load more
@@ -46,10 +46,10 @@
 
     <div class="flex min-h-0 flex-1 flex-col">
       <VersionPreview :version="selectedVersion" />
-      <div v-if="selectedVersion" class="border-t border-gray-200 px-3 py-2">
+      <div v-if="selectedVersion" class="border-t border-border px-3 py-2">
         <button
           type="button"
-          class="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          class="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted"
           :disabled="!hasValidRevision"
           @click="confirmRestore = true"
         >

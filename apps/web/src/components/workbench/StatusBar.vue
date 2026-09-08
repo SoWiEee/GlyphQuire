@@ -4,8 +4,8 @@
     role="status"
     aria-live="polite"
   >
-    <span class="gq-statusbar__note" aria-label="Active note">
-      {{ noteTitle ?? "No note open" }}
+    <span class="gq-statusbar__note" aria-label="使用中的筆記">
+      {{ noteTitle ?? "尚未開啟筆記" }}
     </span>
     <div class="gq-statusbar__details flex items-center gap-4">
       <StatusIndicator
@@ -14,8 +14,8 @@
         :detail="saveDetail"
         compact
       />
-      <span class="gq-statusbar__mode" aria-label="Editor mode">{{ modeLabel }}</span>
-      <span class="gq-statusbar__word-count" aria-label="Word count">{{ wordCount }} words</span>
+      <span class="gq-statusbar__mode" aria-label="編輯模式">{{ modeLabel }}</span>
+      <span class="gq-statusbar__word-count" aria-label="字數">{{ wordCount }} 字</span>
     </div>
   </footer>
 </template>
@@ -34,9 +34,9 @@ const props = defineProps<{
 }>();
 
 const MODE_LABELS: Record<WorkbenchEditorMode, string> = {
-  source: "Source",
-  visual: "Visual",
-  split: "Split",
+  source: "原始碼",
+  visual: "視覺",
+  split: "分割",
 };
 
 const modeLabel = computed(() => MODE_LABELS[props.mode]);

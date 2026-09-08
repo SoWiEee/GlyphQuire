@@ -6,14 +6,14 @@ describe("StatusIndicator", () => {
   it("does not rely on color alone", () => {
     const wrapper = mount(StatusIndicator, { props: { state: "offline" } });
 
-    expect(wrapper.get('[role="status"]').text()).toContain("Offline");
+    expect(wrapper.get('[role="status"]').text()).toContain("離線");
     expect(wrapper.get('[data-status-icon="offline"]').attributes("aria-hidden")).toBe("true");
   });
 
   it("maps an autosave error to Save failed instead of Saved", () => {
     const wrapper = mount(StatusIndicator, { props: { state: "error" } });
 
-    expect(wrapper.get('[role="status"]').text()).toContain("Save failed");
+    expect(wrapper.get('[role="status"]').text()).toContain("儲存失敗");
   });
 
   it("applies a spin class to the saving icon", () => {
@@ -31,7 +31,7 @@ describe("StatusIndicator", () => {
     expect(icon.attributes("aria-hidden")).toBe("true");
     // No transition into "saved" happened yet, so the pop animation must not play.
     expect(icon.classes()).not.toContain("gq-status-indicator__icon--pop");
-    expect(wrapper.get('[role="status"]').text()).toContain("Saved");
+    expect(wrapper.get('[role="status"]').text()).toContain("已儲存");
   });
 
   it("plays the saved pop-in once when transitioning from saving to saved", async () => {

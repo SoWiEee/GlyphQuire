@@ -37,12 +37,24 @@ describe("LoginPage", () => {
       store.error = "Invalid credentials";
       return false;
     });
-    const wrapper = mount(LoginPage);
+    const wrapper = mount(LoginPage, { attachTo: document.body });
     await wrapper.find("#email").setValue("a@b.co");
     await wrapper.find("#password").setValue("wrong");
     await wrapper.find("form").trigger("submit.prevent");
     await Promise.resolve();
+    await wrapper.vm.$nextTick();
     expect(push).not.toHaveBeenCalled();
-    expect(wrapper.find('[role="alert"]').text()).toContain("Invalid credentials");
+    const errorEl = wrapper.find('[role="alert"]');
+    expect(errorEl.text()).toContain("Invalid credentials");
+    expect(errorEl.attributes("id")).toBe("login-error");
+
+    const emailInput = wrapper.get("#email");
+    const passwordInput = wrapper.get("#password");
+    expect(emailInput.attributes("aria-invalid")).toBe("true");
+    expect(emailInput.attributes("aria-describedby")).toBe("login-error");
+    expect(passwordInput.attributes("aria-invalid")).toBe("true");
+    expect(passwordInput.attributes("aria-describedby")).toBe("login-error");
+    expect(document.activeElement).toBe(emailInput.element);
+    wrapper.unmount();
   });
 });

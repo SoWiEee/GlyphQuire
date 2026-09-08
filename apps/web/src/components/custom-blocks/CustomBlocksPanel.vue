@@ -2,8 +2,8 @@
   <div class="space-y-5">
     <header class="flex items-start justify-between gap-3">
       <div>
-        <h2 class="text-base font-semibold text-gray-900">Custom Blocks</h2>
-        <p class="mt-1 text-xs text-gray-500">
+        <h2 class="text-base font-semibold text-foreground">Custom Blocks</h2>
+        <p class="mt-1 text-xs text-muted">
           Workspace definitions use approved presets and stay safe to share.
         </p>
       </div>
@@ -23,15 +23,15 @@
     >
       {{ store.error }}
     </p>
-    <p v-if="store.loading" class="text-xs text-gray-500" role="status">Loading definitions…</p>
+    <p v-if="store.loading" class="text-xs text-muted" role="status">Loading definitions…</p>
     <CustomBlockPicker :definitions="store.definitions" @insert="onInsert" />
     <section class="border-t pt-4">
       <div class="mb-2 flex items-center justify-between">
-        <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Definitions</h3>
+        <h3 class="text-xs font-semibold uppercase tracking-wide text-muted">Definitions</h3>
         <button
           v-if="!showForm"
           type="button"
-          class="rounded bg-gray-900 px-2 py-1 text-xs font-medium text-white"
+          class="rounded bg-accent px-2 py-1 text-xs font-medium text-accent-contrast"
           @click="showForm = true"
         >
           New block
@@ -51,7 +51,7 @@
         >
           <GqIcon :name="record.definition.icon" size="sm" />
           <span class="min-w-0 flex-1 truncate">{{ record.name }}</span>
-          <span class="text-[10px] uppercase text-gray-500"
+          <span class="text-[10px] uppercase text-muted"
             >{{ record.status }} · v{{ record.version }}</span
           >
           <button type="button" class="rounded border px-2 py-1 text-[11px]" @click="edit(record)">
@@ -68,7 +68,7 @@
           <button
             v-if="record.status === 'draft'"
             type="button"
-            class="rounded border px-2 py-1 text-[11px] text-red-700"
+            class="rounded border px-2 py-1 text-[11px] text-danger"
             @click="onRemove(record.id)"
           >
             Delete

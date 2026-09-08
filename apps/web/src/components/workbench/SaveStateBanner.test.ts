@@ -13,7 +13,7 @@ describe("SaveStateBanner", () => {
       },
     });
 
-    expect(wrapper.get('button[aria-label="Retry save"]').exists()).toBe(true);
+    expect(wrapper.get('button[aria-label="重試儲存"]').exists()).toBe(true);
   });
 
   it("never offers conflict recovery without a validated page context", () => {
@@ -26,6 +26,6 @@ describe("SaveStateBanner", () => {
       },
     });
 
-    expect(wrapper.find('button[aria-label="Open conflict recovery"]').exists()).toBe(false);
+    expect(wrapper.find('button[aria-label="開啟衝突處理"]').exists()).toBe(false);
   });
 });

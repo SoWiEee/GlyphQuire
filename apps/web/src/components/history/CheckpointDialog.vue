@@ -9,20 +9,20 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="checkpoint-dialog-title"
-      class="w-full max-w-sm rounded-lg bg-white p-4 shadow-xl"
+      class="w-full max-w-sm rounded-lg bg-surface p-4 shadow-xl"
     >
-      <h2 id="checkpoint-dialog-title" class="text-sm font-semibold text-gray-900">
+      <h2 id="checkpoint-dialog-title" class="text-sm font-semibold text-foreground">
         Create checkpoint
       </h2>
-      <p class="mt-2 text-sm text-gray-600">
+      <p class="mt-2 text-sm text-muted">
         Saves the note's current content (revision {{ baseRevision }}) as a named point in history
         you can preview or restore later.
       </p>
-      <p v-if="error" role="alert" class="mt-2 text-xs text-red-600">{{ error }}</p>
+      <p v-if="error" role="alert" class="mt-2 text-xs text-danger">{{ error }}</p>
       <div class="mt-4 flex justify-end gap-2">
         <button
           type="button"
-          class="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          class="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted"
           :disabled="creating"
           @click="emit('cancel')"
         >
@@ -31,7 +31,7 @@
         <button
           ref="confirmRef"
           type="button"
-          class="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+          class="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-contrast hover:opacity-90 disabled:opacity-50"
           :disabled="creating"
           @click="onConfirm"
         >

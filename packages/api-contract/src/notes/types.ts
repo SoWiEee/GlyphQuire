@@ -87,11 +87,3 @@ export type NoteEndpointOutput<TName extends NoteEndpointName> = z.output<
 export interface ApiClientTransport {
   request(endpoint: NoteEndpointName, input: unknown): Promise<unknown>;
 }
-
-export interface ApiClient {
-  readonly contract: typeof noteApiContract;
-  request<TName extends NoteEndpointName>(
-    endpoint: TName,
-    input: NoteEndpointInput<TName>,
-  ): Promise<NoteEndpointOutput<TName>>;
-}

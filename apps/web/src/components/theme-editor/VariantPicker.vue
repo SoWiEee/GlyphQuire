@@ -1,6 +1,6 @@
 <template>
   <fieldset class="space-y-2">
-    <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500">
+    <legend class="text-xs font-semibold uppercase tracking-wide text-muted">
       Component Variants
     </legend>
     <ComponentVariantRow

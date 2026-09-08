@@ -7,24 +7,24 @@
       ref="dialogRef"
       role="dialog"
       aria-modal="true"
-      aria-label="Command palette"
-      class="w-full max-w-md rounded-lg bg-white shadow-xl"
+      aria-label="命令面板"
+      class="w-full max-w-md rounded-lg bg-surface shadow-xl"
       @keydown="onDialogKeydown"
     >
       <input
         ref="inputRef"
         v-model="query"
         type="text"
-        class="w-full rounded-t-lg border-b border-gray-200 px-4 py-3 text-sm"
-        placeholder="Type a command…"
-        aria-label="Filter commands"
+        class="w-full rounded-t-lg border-b border-border px-4 py-3 text-sm"
+        placeholder="輸入命令…"
+        aria-label="篩選命令"
         aria-controls="command-palette-options"
         :aria-activedescendant="activeDescendant"
       />
       <ul
         id="command-palette-options"
         role="listbox"
-        aria-label="Commands"
+        aria-label="命令"
         class="max-h-64 overflow-y-auto py-1"
       >
         <li
@@ -34,22 +34,22 @@
           :id="`command-palette-option-${index}`"
           :aria-selected="index === highlightedIndex"
           class="cursor-pointer px-4 py-2 text-sm"
-          :class="index === highlightedIndex ? 'bg-gray-100 text-gray-900' : 'text-gray-700'"
+          :class="index === highlightedIndex ? 'bg-surface-muted text-foreground' : 'text-foreground'"
           @mouseenter="highlightedIndex = index"
           @click="run(command)"
         >
           <div class="flex items-center justify-between">
             <span>{{ command.label }}</span>
-            <span v-if="command.hint" class="text-xs text-gray-600">{{ command.hint }}</span>
+            <span v-if="command.hint" class="text-xs text-muted">{{ command.hint }}</span>
           </div>
         </li>
         <li
           v-if="filtered.length === 0"
           data-testid="command-palette-empty"
           role="status"
-          class="px-4 py-2 text-sm text-gray-600"
+          class="px-4 py-2 text-sm text-muted"
         >
-          No matching commands.
+          沒有符合的命令
         </li>
       </ul>
     </div>

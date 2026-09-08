@@ -4,17 +4,17 @@
       class="gq-editor-pane gq-editor-pane--source min-w-0 flex-1 overflow-auto border-r"
       :class="{ 'gq-editor-pane--readonly': sourceReadOnly }"
       role="group"
-      :aria-label="sourceReadOnly ? 'Source pane, read-only preview' : 'Source pane, editing'"
+      :aria-label="sourceReadOnly ? '原始碼窗格，唯讀預覽' : '原始碼窗格，編輯中'"
     >
       <div class="gq-editor-pane__header" data-testid="source-pane-header">
-        <span class="gq-editor-pane__name">Source</span>
+        <span class="gq-editor-pane__name">原始碼</span>
         <span
           v-if="!sourceReadOnly"
           class="gq-editor-pane__status gq-editor-pane__status--editing"
           data-testid="source-pane-status"
         >
           <span class="gq-editor-pane__status-dot" aria-hidden="true"></span>
-          Editing
+          編輯中
         </span>
         <span
           v-else
@@ -22,7 +22,7 @@
           data-testid="source-pane-status"
         >
           <GqIcon name="info" size="sm" decorative />
-          Preview
+          預覽
         </span>
       </div>
       <SourceEditor
@@ -38,17 +38,17 @@
       class="gq-editor-pane gq-editor-pane--visual min-w-0 flex-1 overflow-auto"
       :class="{ 'gq-editor-pane--readonly': visualReadOnly }"
       role="group"
-      :aria-label="visualReadOnly ? 'Visual pane, read-only preview' : 'Visual pane, editing'"
+      :aria-label="visualReadOnly ? '視覺窗格，唯讀預覽' : '視覺窗格，編輯中'"
     >
       <div class="gq-editor-pane__header" data-testid="visual-pane-header">
-        <span class="gq-editor-pane__name">Visual</span>
+        <span class="gq-editor-pane__name">視覺</span>
         <span
           v-if="!visualReadOnly"
           class="gq-editor-pane__status gq-editor-pane__status--editing"
           data-testid="visual-pane-status"
         >
           <span class="gq-editor-pane__status-dot" aria-hidden="true"></span>
-          Editing
+          編輯中
         </span>
         <span
           v-else
@@ -56,7 +56,7 @@
           data-testid="visual-pane-status"
         >
           <GqIcon name="info" size="sm" decorative />
-          Preview
+          預覽
         </span>
       </div>
       <VisualEditor

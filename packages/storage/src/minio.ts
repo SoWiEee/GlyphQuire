@@ -8,20 +8,20 @@ export interface S3EnvLike {
   S3_REGION: string;
 }
 
-/**
- * MinIO always requires path-style addressing (bucket-in-path rather than
- * bucket-as-subdomain), since local/self-hosted endpoints rarely have
- * per-bucket DNS entries.
- */
-export function createMinioObjectStorage(env: S3EnvLike): S3ObjectStorage {
+function createObjectStorage(env: S3EnvLike, forcePathStyle: boolean): S3ObjectStorage {
   return new S3ObjectStorage({
     endpoint: env.S3_ENDPOINT,
     region: env.S3_REGION,
     accessKeyId: env.S3_ACCESS_KEY,
     secretAccessKey: env.S3_SECRET_KEY,
     bucket: env.S3_BUCKET,
-    forcePathStyle: true,
+    forcePathStyle,
   });
+}
+
+/** MinIO requires path-style addressing for local/self-hosted endpoints. */
+export function createMinioObjectStorage(env: S3EnvLike): S3ObjectStorage {
+  return createObjectStorage(env, true);
 }
 
 /**
@@ -29,12 +29,5 @@ export function createMinioObjectStorage(env: S3EnvLike): S3ObjectStorage {
  * addressing by default.
  */
 export function createS3ObjectStorage(env: S3EnvLike): S3ObjectStorage {
-  return new S3ObjectStorage({
-    endpoint: env.S3_ENDPOINT,
-    region: env.S3_REGION,
-    accessKeyId: env.S3_ACCESS_KEY,
-    secretAccessKey: env.S3_SECRET_KEY,
-    bucket: env.S3_BUCKET,
-    forcePathStyle: false,
-  });
+  return createObjectStorage(env, false);
 }

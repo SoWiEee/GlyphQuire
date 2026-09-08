@@ -1,7 +1,7 @@
 <template>
   <form class="space-y-3" @submit.prevent="submit">
     <div class="grid grid-cols-2 gap-2">
-      <label class="text-xs font-medium text-gray-700"
+      <label class="text-xs font-medium text-foreground"
         >Name
         <input
           v-model.trim="name"
@@ -12,7 +12,7 @@
           placeholder="reading-score"
         />
       </label>
-      <label class="text-xs font-medium text-gray-700"
+      <label class="text-xs font-medium text-foreground"
         >Version
         <input
           v-model.number="version"
@@ -24,13 +24,13 @@
       </label>
     </div>
     <div class="grid grid-cols-2 gap-2">
-      <label class="text-xs font-medium text-gray-700"
+      <label class="text-xs font-medium text-foreground"
         >Preset
         <select v-model="preset" class="mt-1 w-full rounded border px-2 py-1.5 text-sm">
           <option v-for="value in presets" :key="value" :value="value">{{ value }}</option>
         </select>
       </label>
-      <label class="text-xs font-medium text-gray-700"
+      <label class="text-xs font-medium text-foreground"
         >Icon
         <select v-model="icon" class="mt-1 w-full rounded border px-2 py-1.5 text-sm">
           <option v-for="value in icons" :key="value" :value="value">{{ value }}</option>
@@ -38,7 +38,7 @@
       </label>
     </div>
     <div class="grid grid-cols-2 gap-2">
-      <label class="text-xs font-medium text-gray-700"
+      <label class="text-xs font-medium text-foreground"
         >Kind
         <select v-model="kind" class="mt-1 w-full rounded border px-2 py-1.5 text-sm">
           <option value="container">Container</option>
@@ -46,7 +46,7 @@
           <option value="text">Text</option>
         </select>
       </label>
-      <label class="text-xs font-medium text-gray-700"
+      <label class="text-xs font-medium text-foreground"
         >Content
         <select v-model="contentPolicy" class="mt-1 w-full rounded border px-2 py-1.5 text-sm">
           <option value="none">No nested content</option>
@@ -54,7 +54,7 @@
           <option value="required">Required content</option>
         </select>
       </label>
-      <label class="text-xs font-medium text-gray-700"
+      <label class="text-xs font-medium text-foreground"
         >Capability
         <select v-model="capability" class="mt-1 w-full rounded border px-2 py-1.5 text-sm">
           <option value="static">Static</option>
@@ -62,7 +62,7 @@
         </select>
       </label>
     </div>
-    <label class="block text-xs font-medium text-gray-700"
+    <label class="block text-xs font-medium text-foreground"
       >Props schema (JSON)
       <textarea
         v-model="propsJson"
@@ -72,12 +72,12 @@
         placeholder='{"label":{"type":"string","required":true,"maxLength":120}}'
       />
     </label>
-    <p v-if="error" class="text-xs text-red-600" role="alert">{{ error }}</p>
+    <p v-if="error" class="text-xs text-danger" role="alert">{{ error }}</p>
     <div class="flex justify-end gap-2">
       <button type="button" class="rounded border px-3 py-1.5 text-xs" @click="emit('cancel')">
         Cancel
       </button>
-      <button type="submit" class="rounded bg-gray-900 px-3 py-1.5 text-xs font-medium text-white">
+      <button type="submit" class="rounded bg-accent px-3 py-1.5 text-xs font-medium text-accent-contrast">
         Save draft
       </button>
     </div>

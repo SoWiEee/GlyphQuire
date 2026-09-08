@@ -1,7 +1,7 @@
 <template>
   <nav
-    class="gq-editor-toolbar flex items-center gap-1 border-b border-gray-200 px-3 py-1.5"
-    aria-label="Editor toolbar"
+    class="gq-editor-toolbar flex items-center gap-1 border-b border-border px-3 py-1.5"
+    aria-label="編輯工具列"
   >
     <template v-for="(group, groupIndex) in groups" :key="group.id">
       <span
@@ -13,13 +13,13 @@
         v-for="action in group.actions"
         :key="action.id"
         type="button"
-        class="rounded border border-transparent p-1.5 text-gray-700 hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        class="rounded border border-transparent p-1.5 text-foreground hover:border-border hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
         :aria-label="action.label"
         :disabled="disabled"
         :title="action.label"
         @click="emit('action', action.id)"
       >
-        <GqIcon :name="action.icon" :label="action.label" :decorative="false" />
+        <GqIcon :name="action.icon" decorative />
       </button>
     </template>
   </nav>
@@ -51,23 +51,23 @@ const groups: readonly ToolbarActionGroup[] = [
   {
     id: "text",
     actions: [
-      { id: "bold", label: "Bold (⌘B)", icon: "bold" },
-      { id: "italic", label: "Italic (⌘I)", icon: "italic" },
-      { id: "strikethrough", label: "Strikethrough (⌘⇧X)", icon: "strikethrough" },
-      { id: "code", label: "Inline code (⌘E)", icon: "code" },
+      { id: "bold", label: "粗體 (⌘B)", icon: "bold" },
+      { id: "italic", label: "斜體 (⌘I)", icon: "italic" },
+      { id: "strikethrough", label: "刪除線 (⌘⇧X)", icon: "strikethrough" },
+      { id: "code", label: "行內程式碼 (⌘E)", icon: "code" },
     ],
   },
   {
     id: "paragraph",
     actions: [
-      { id: "heading", label: "Heading (⌘⌥2)", icon: "heading-2" },
-      { id: "bulletList", label: "Bullet list (⌘⇧8)", icon: "list" },
-      { id: "blockquote", label: "Blockquote (⌘⇧.)", icon: "quote" },
+      { id: "heading", label: "標題 (⌘⌥2)", icon: "heading-2" },
+      { id: "bulletList", label: "項目符號清單 (⌘⇧8)", icon: "list" },
+      { id: "blockquote", label: "引用 (⌘⇧.)", icon: "quote" },
     ],
   },
   {
     id: "insert",
-    actions: [{ id: "link", label: "Link (⌘K)", icon: "link-2" }],
+    actions: [{ id: "link", label: "連結 (⌘K)", icon: "link-2" }],
   },
 ];
 </script>

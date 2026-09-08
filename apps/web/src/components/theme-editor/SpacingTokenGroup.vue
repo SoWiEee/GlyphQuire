@@ -1,8 +1,8 @@
 <template>
   <fieldset class="space-y-2">
-    <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500">Spacing</legend>
+    <legend class="text-xs font-semibold uppercase tracking-wide text-muted">Spacing</legend>
     <div v-for="key in spacingKeys" :key="key" class="flex items-center gap-2">
-      <label :for="`spacing-${key}`" class="w-24 text-xs text-gray-600">{{ key }}</label>
+      <label :for="`spacing-${key}`" class="w-24 text-xs text-muted">{{ key }}</label>
       <input
         :id="`spacing-${key}`"
         type="range"
@@ -16,7 +16,7 @@
         class="flex-1"
         @input="emit('update:spacing', key, ($event.target as HTMLInputElement).value + 'rem')"
       />
-      <span class="w-14 text-right text-xs text-gray-500">{{ spacing[key] }}</span>
+      <span class="w-14 text-right text-xs text-muted">{{ spacing[key] }}</span>
     </div>
   </fieldset>
 </template>

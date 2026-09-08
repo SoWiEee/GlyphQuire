@@ -22,7 +22,7 @@ describe("CommandPalette", () => {
     });
 
     await wrapper.vm.$nextTick();
-    expect(wrapper.get('input[aria-label="Filter commands"]').element).toHaveProperty(
+    expect(wrapper.get('input[aria-label="篩選命令"]').element).toHaveProperty(
       "value",
       "head",
     );
@@ -38,7 +38,7 @@ describe("CommandPalette", () => {
     const wrapper = mount(CommandPalette, {
       props: { commands: [command("first", "First", "format"), throwing] },
     });
-    const input = wrapper.get('input[aria-label="Filter commands"]');
+    const input = wrapper.get('input[aria-label="篩選命令"]');
 
     await input.trigger("keydown", { key: "End" });
     expect(input.attributes("aria-activedescendant")).toBe("command-palette-option-1");

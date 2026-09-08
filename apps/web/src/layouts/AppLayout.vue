@@ -1,6 +1,6 @@
 <template>
-  <div class="bg-white" :class="isFullBleed ? 'flex h-screen flex-col' : 'min-h-screen'">
-    <header v-if="!isFullBleed" class="border-b border-gray-200 px-6 py-4">
+  <div class="bg-surface" :class="isFullBleed ? 'flex h-screen flex-col' : 'min-h-screen'">
+    <header v-if="!isFullBleed" class="border-b border-border px-6 py-4">
       <h1 class="text-xl font-semibold">GlyphQuire</h1>
     </header>
     <main :class="isFullBleed ? 'min-h-0 flex-1' : 'p-6'">

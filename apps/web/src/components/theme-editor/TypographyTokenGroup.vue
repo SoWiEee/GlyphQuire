@@ -1,12 +1,12 @@
 <template>
   <fieldset class="space-y-2">
-    <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500">Typography</legend>
+    <legend class="text-xs font-semibold uppercase tracking-wide text-muted">Typography</legend>
     <div v-for="key in typographyKeys" :key="key" class="flex items-center gap-2">
-      <label :for="`typo-${key}`" class="w-24 text-xs text-gray-600">{{ key }}</label>
+      <label :for="`typo-${key}`" class="w-24 text-xs text-muted">{{ key }}</label>
       <select
         :id="`typo-${key}`"
         :value="typography[key]"
-        class="flex-1 rounded border border-gray-300 px-1.5 py-0.5 text-xs"
+        class="flex-1 rounded border border-border px-1.5 py-0.5 text-xs"
         @change="emit('update:typography', key, ($event.target as HTMLSelectElement).value)"
       >
         <option v-for="font in fontOptions" :key="font" :value="font">{{ font }}</option>

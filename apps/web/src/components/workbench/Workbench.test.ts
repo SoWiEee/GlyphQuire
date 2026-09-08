@@ -211,17 +211,17 @@ describe("Workbench EditorSession composition", () => {
 
     const errorBanner = wrapper.get('[data-save-state="error"]');
     expect(errorBanner.attributes("role")).toBe("alert");
-    expect(errorBanner.text()).toContain("couldn't save");
-    await errorBanner.get('button[aria-label="Retry save"]').trigger("click");
+    expect(errorBanner.text()).toContain("無法儲存");
+    await errorBanner.get('button[aria-label="重試儲存"]').trigger("click");
     expect(authority.session.saveNow).toHaveBeenCalledOnce();
 
     authority.emit(state({ saveStatus: "conflict", conflict: conflictFixture() }));
     await nextTick();
 
     const conflictBanner = wrapper.get('[data-save-state="conflict"]');
-    expect(conflictBanner.text()).toContain("Another version was saved");
-    expect(conflictBanner.find('button[aria-label="Open conflict recovery"]').exists()).toBe(false);
-    expect(conflictBanner.find('button[aria-label="Retry save"]').exists()).toBe(false);
+    expect(conflictBanner.text()).toContain("已有另一個版本被儲存");
+    expect(conflictBanner.find('button[aria-label="開啟衝突處理"]').exists()).toBe(false);
+    expect(conflictBanner.find('button[aria-label="重試儲存"]').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -241,7 +241,7 @@ describe("Workbench EditorSession composition", () => {
 
     const activeTab = wrapper.get('.gq-editor-tabs [role="tab"][aria-selected="true"]');
     expect(activeTab.get(".gq-editor-tabs__dirty-dot").attributes("aria-label")).toBe(
-      "unsaved changes",
+      "未儲存的變更",
     );
 
     authority.emit(state({ saveStatus: "clean" }));
@@ -263,7 +263,7 @@ describe("Workbench EditorSession composition", () => {
     });
     await flushPromises();
 
-    await wrapper.get('button[aria-label="Open conflict recovery"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟衝突處理"]').trigger("click");
 
     expect(wrapper.emitted("request-conflict-recovery")?.[0]?.[0]).toMatchObject({
       userId: USER_ID,
@@ -358,7 +358,7 @@ describe("Workbench EditorSession composition", () => {
     await nextTick();
 
     expect(wrapper.get('[role="dialog"]').text()).toContain("Code block");
-    expect(wrapper.get('[role="dialog"]').text()).not.toContain("Switch to Visual mode");
+    expect(wrapper.get('[role="dialog"]').text()).not.toContain("切換到視覺模式");
     await wrapper.get('[role="option"]:last-child').trigger("click");
 
     expect(authority.edit).toHaveBeenCalledWith("before\n```\n\n```\nnext");
@@ -444,7 +444,7 @@ describe("Workbench EditorSession composition", () => {
     });
     await nextTick();
 
-    await wrapper.findAll('nav[aria-label="Notes explorer"] button')[1]?.trigger("click");
+    await wrapper.findAll('nav[aria-label="筆記側欄"] button')[1]?.trigger("click");
     await nextTick();
     currentActivation.resolve(currentAuthority.session);
     await flushPromises();
@@ -497,8 +497,8 @@ describe("Workbench EditorSession composition", () => {
     });
     await flushPromises();
 
-    await wrapper.get('button[aria-label="Open context tools"]').trigger("click");
-    await wrapper.get('button[aria-label="Open version history"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟工具面板"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟版本歷史"]').trigger("click");
     await wrapper
       .findAll("button")
       .find((button) => button.text() === "restore")!
@@ -544,8 +544,8 @@ describe("Workbench EditorSession composition", () => {
     });
     await flushPromises();
 
-    await wrapper.get('button[aria-label="Open context tools"]').trigger("click");
-    await wrapper.get('button[aria-label="Open version history"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟工具面板"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟版本歷史"]').trigger("click");
     await wrapper
       .findAll("button")
       .find((button) => button.text() === "restore")!
@@ -601,8 +601,8 @@ describe("Workbench EditorSession composition", () => {
     });
     await flushPromises();
 
-    await wrapper.get('button[aria-label="Open context tools"]').trigger("click");
-    await wrapper.get('button[aria-label="Open version history"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟工具面板"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟版本歷史"]').trigger("click");
     await wrapper
       .findAll("button")
       .find((button) => button.text() === "restore")!
@@ -610,7 +610,7 @@ describe("Workbench EditorSession composition", () => {
     await nextTick();
     expect(sessionFactory).toHaveBeenCalledTimes(2);
 
-    await wrapper.findAll('nav[aria-label="Notes explorer"] button')[1]!.trigger("click");
+    await wrapper.findAll('nav[aria-label="筆記側欄"] button')[1]!.trigger("click");
     await flushPromises();
     expect(wrapper.get('[data-testid="session-source"]').text()).toBe("# Other current");
 
@@ -669,8 +669,8 @@ describe("Workbench EditorSession composition", () => {
     });
     await flushPromises();
 
-    await wrapper.get('button[aria-label="Open context tools"]').trigger("click");
-    await wrapper.get('button[aria-label="Open version history"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟工具面板"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟版本歷史"]').trigger("click");
     await wrapper
       .findAll("button")
       .find((button) => button.text() === "restore")!
@@ -680,7 +680,7 @@ describe("Workbench EditorSession composition", () => {
     await nextTick();
     expect(staleReplacement.session.attachModeAdapters).toHaveBeenCalledOnce();
 
-    await wrapper.findAll('nav[aria-label="Notes explorer"] button')[1]!.trigger("click");
+    await wrapper.findAll('nav[aria-label="筆記側欄"] button')[1]!.trigger("click");
     await flushPromises();
     expect(wrapper.get('[data-testid="session-source"]').text()).toBe("# Other current");
 
@@ -744,8 +744,8 @@ describe("Workbench EditorSession composition", () => {
     });
     await flushPromises();
 
-    await wrapper.get('button[aria-label="Open context tools"]').trigger("click");
-    await wrapper.get('button[aria-label="Open version history"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟工具面板"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟版本歷史"]').trigger("click");
     const restoreButton = () =>
       wrapper.findAll("button").find((button) => button.text() === "restore")!;
     await restoreButton().trigger("click");
@@ -836,8 +836,8 @@ describe("Workbench EditorSession composition", () => {
     });
     await flushPromises();
 
-    await wrapper.get('button[aria-label="Open context tools"]').trigger("click");
-    await wrapper.get('button[aria-label="Open version history"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟工具面板"]').trigger("click");
+    await wrapper.get('button[aria-label="開啟版本歷史"]').trigger("click");
     await wrapper
       .findAll("button")
       .find((button) => button.text() === "restore")!
@@ -897,7 +897,7 @@ describe("Workbench EditorSession composition", () => {
     await flushPromises();
     expect(wrapper.text()).toContain("Real note");
     const openButton = wrapper
-      .findAll('nav[aria-label="Notes explorer"] button')
+      .findAll('nav[aria-label="筆記側欄"] button')
       .find((button) => button.text().includes("Real note"));
     if (!openButton) throw new Error("expected a NoteExplorer open button for the real note");
     await openButton.trigger("click");

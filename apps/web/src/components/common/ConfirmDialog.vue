@@ -10,16 +10,16 @@
       aria-modal="true"
       :aria-labelledby="titleId"
       :aria-describedby="descriptionId"
-      class="w-full max-w-sm rounded-lg bg-white p-4 shadow-xl"
+      class="w-full max-w-sm rounded-lg bg-surface p-4 shadow-xl"
     >
-      <h2 :id="titleId" class="text-sm font-semibold text-gray-900">{{ title }}</h2>
-      <p :id="descriptionId" class="mt-2 text-sm text-gray-600">
+      <h2 :id="titleId" class="text-sm font-semibold text-foreground">{{ title }}</h2>
+      <p :id="descriptionId" class="mt-2 text-sm text-muted">
         <slot>{{ description }}</slot>
       </p>
       <div class="mt-4 flex justify-end gap-2">
         <button
           type="button"
-          class="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          class="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-muted"
           @click="emit('cancel')"
         >
           {{ cancelLabel }}
@@ -27,8 +27,8 @@
         <button
           ref="confirmRef"
           type="button"
-          class="rounded-md px-3 py-1.5 text-xs font-medium text-white"
-          :class="destructive ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-900 hover:bg-gray-800'"
+          class="rounded-md px-3 py-1.5 text-xs font-medium text-accent-contrast"
+          :class="destructive ? 'bg-danger hover:opacity-90' : 'bg-accent hover:opacity-90'"
           @click="emit('confirm')"
         >
           {{ confirmLabel }}

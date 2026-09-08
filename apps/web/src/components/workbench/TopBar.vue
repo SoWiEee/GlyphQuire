@@ -5,10 +5,10 @@
       <span class="gq-topbar__separator text-sm" aria-hidden="true">/</span>
       <span v-if="workspaceName" class="gq-topbar__workspace text-sm">{{ workspaceName }}</span>
       <span v-if="workspaceName" class="gq-topbar__separator text-sm" aria-hidden="true">/</span>
-      <span class="gq-topbar__note text-sm">{{ noteTitle ?? "No note open" }}</span>
+      <span class="gq-topbar__note text-sm">{{ noteTitle ?? "尚未開啟筆記" }}</span>
     </div>
 
-    <nav class="gq-topbar__pages" role="tablist" aria-label="Workspace pages">
+    <nav class="gq-topbar__pages" role="tablist" aria-label="工作區頁面">
       <button
         v-for="page in primaryPages"
         :key="page.id"
@@ -32,7 +32,7 @@
         v-if="activePage === 'editor'"
         class="gq-topbar__modes flex items-center rounded-md border p-0.5"
         role="radiogroup"
-        aria-label="Editor mode"
+        aria-label="編輯模式"
       >
         <button
           type="button"
@@ -43,7 +43,7 @@
           :data-active="mode === 'source' ? 'true' : undefined"
           @click="emit('update:mode', 'source')"
         >
-          Source
+          原始碼
         </button>
         <button
           type="button"
@@ -54,7 +54,7 @@
           :data-active="mode === 'visual' ? 'true' : undefined"
           @click="emit('update:mode', 'visual')"
         >
-          Visual
+          視覺
         </button>
         <button
           type="button"
@@ -65,7 +65,7 @@
           :data-active="mode === 'split' ? 'true' : undefined"
           @click="emit('update:mode', 'split')"
         >
-          Split
+          分割
         </button>
       </div>
 
@@ -74,18 +74,18 @@
           ref="toolsButtonRef"
           type="button"
           class="gq-topbar__action flex items-center gap-1 rounded-md border px-3 py-1 text-xs font-medium"
-          aria-label="Open tools menu"
+          aria-label="開啟工具選單"
           :aria-expanded="toolsMenuOpen"
           aria-haspopup="menu"
           @click="toggleToolsMenu"
         >
           <GqIcon name="settings" size="sm" />
-          Tools
+          工具
         </button>
         <div
           v-if="toolsMenuOpen"
           role="menu"
-          aria-label="Tools menu"
+          aria-label="工具選單"
           class="gq-topbar__menu absolute right-0 z-20 mt-2 grid min-w-48 gap-1 rounded-md border p-1 shadow-lg"
           @keydown.esc="closeToolsMenu"
         >
@@ -93,45 +93,45 @@
             ref="firstToolsMenuItemRef"
             type="button"
             role="menuitem"
-            aria-label="Open version history"
+            aria-label="開啟版本歷史"
             class="gq-topbar__menu-item flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm"
             :disabled="!workspaceAvailable"
             @click="onToolAction('history')"
           >
             <GqIcon name="rotate-ccw" size="sm" />
-            History
+            歷史
           </button>
           <button
             type="button"
             role="menuitem"
-            aria-label="Manage assets"
+            aria-label="管理素材"
             class="gq-topbar__menu-item flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm"
             :disabled="!workspaceAvailable"
             @click="onToolAction('assets')"
           >
             <GqIcon name="layout-panel-top" size="sm" />
-            Assets
+            素材
           </button>
           <button
             type="button"
             role="menuitem"
-            aria-label="Manage custom blocks"
+            aria-label="管理自訂區塊"
             class="gq-topbar__menu-item flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm"
             :disabled="!workspaceAvailable"
             @click="onToolAction('custom-blocks')"
           >
             <GqIcon name="columns-3" size="sm" />
-            Custom Blocks
+            自訂區塊
           </button>
           <button
             type="button"
             role="menuitem"
-            aria-label="Open theme editor"
+            aria-label="開啟主題編輯器"
             class="gq-topbar__menu-item flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm"
             @click="onToolAction('theme')"
           >
             <GqIcon name="palette" size="sm" />
-            Theme
+            主題
           </button>
         </div>
       </div>
@@ -139,10 +139,10 @@
       <button
         type="button"
         class="gq-topbar__action rounded-md border px-3 py-1 text-xs font-medium"
-        aria-label="Open command palette"
+        aria-label="開啟命令面板"
         @click="emit('open-palette')"
       >
-        Commands
+        命令
         <kbd class="gq-topbar__key ml-1 rounded px-1 text-[10px]">⌘K</kbd>
       </button>
 
@@ -150,7 +150,7 @@
         <button
           type="button"
           class="gq-topbar__action rounded-md border px-2 py-1 text-xs font-medium"
-          aria-label="Open account menu"
+          aria-label="開啟帳號選單"
           :aria-expanded="accountMenuOpen"
           aria-haspopup="menu"
           ref="accountButtonRef"
@@ -161,7 +161,7 @@
         <div
           v-if="accountMenuOpen"
           role="menu"
-          aria-label="Account menu"
+          aria-label="帳號選單"
           class="gq-topbar__menu absolute right-0 z-20 mt-2 grid min-w-36 gap-1 rounded-md border p-1 shadow-lg"
           @keydown.esc="closeAccountMenu"
         >
@@ -169,20 +169,20 @@
             ref="firstAccountMenuItemRef"
             type="button"
             role="menuitem"
-            aria-label="Sign out"
+            aria-label="登出"
             class="gq-topbar__menu-item rounded px-2 py-1.5 text-left text-sm"
             @click="onAccountAction('sign-out')"
           >
-            Sign out
+            登出
           </button>
           <button
             type="button"
             role="menuitem"
-            aria-label="Close menu"
+            aria-label="關閉選單"
             class="gq-topbar__menu-item rounded px-2 py-1.5 text-left text-sm"
             @click="closeAccountMenu"
           >
-            Close menu
+            關閉選單
           </button>
         </div>
       </div>

@@ -138,7 +138,7 @@ describe("WorkbenchPage", () => {
     });
     await flushPromises();
 
-    expect(wrapper.find('button[aria-label="Open account menu"]').exists()).toBe(false);
+    expect(wrapper.find('button[aria-label="開啟帳號選單"]').exists()).toBe(false);
     expect(wrapper.get('button[role="tab"][aria-label="Search"]').isDisabled()).toBe(true);
 
     wrapper.unmount();

@@ -1,10 +1,10 @@
 <template>
   <nav
     class="gq-explorer gq-explorer-pane w-56 shrink-0 overflow-y-auto border-r"
-    aria-label="Notes explorer"
+    aria-label="筆記側欄"
   >
     <h2 class="gq-explorer__heading px-3 pt-3 pb-2 text-xs font-semibold uppercase tracking-wide">
-      Notes
+      筆記
     </h2>
     <ul class="pb-3">
       <li v-for="note in notes" :key="note.id">
